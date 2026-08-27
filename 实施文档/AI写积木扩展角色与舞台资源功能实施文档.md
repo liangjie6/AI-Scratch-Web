@@ -1209,7 +1209,7 @@ Phase 0 和最终验收均需执行全部命令，不能只运行新增测试。
 4. project_ready 和 program_ready 互斥；流中收到两种 ready 事件时抛出 STREAM_PROTOCOL_ERROR。缺少目标 ready 事件分别抛出 PROJECT_PLAN_MISSING 或 PROGRAM_MISSING。
 5. 旧单测和调用方不通过兼容返回维持，而是迁移到联合结果断言和显式 output contract。这样后续资源 Prepare/Commit 可以直接复用同一条管线。
 
-本轮已完成：前后端 ProjectPlan 基础模型、严格资源来源和 scope 校验、created target 向后引用校验、library_asset 模型输入拒绝、前端 SSE 联合输出、默认积木调用点迁移，以及后端 project prompt/route 分流和 project_ready 回归测试。本轮另外完成本地 Scratch manifest matcher、中文别名扩展、候选评分、资源标识校验和离线资源预加载，并完成素材库 v2 的 IndexedDB 升级、旧记录迁移、tags/origin/groupId/derivedFrom 元数据保存和编辑 API；本轮新增不写入 VM 的 ScratchLibraryPickerDialog 和 ResourcePlanReview 资源审查组件及响应式样式。尚未完成的项目资源 runner、主面板接入、生图确认和资源 UI 完整闭环继续按 Phase 1 至 Phase 3 实施。
+本轮已完成：前后端 ProjectPlan 基础模型、严格资源来源和 scope 校验、created target 向后引用校验、library_asset 模型输入拒绝、前端 SSE 联合输出、默认积木调用点迁移，以及后端 project prompt/route 分流和 project_ready 回归测试。本轮另外完成本地 Scratch manifest matcher、中文别名扩展、候选评分、资源标识校验和离线资源预加载，并完成素材库 v2 的 IndexedDB 升级、旧记录迁移、tags/origin/groupId/derivedFrom 元数据保存和编辑 API；本轮新增不写入 VM 的 ScratchLibraryPickerDialog 和 ResourcePlanReview 资源审查组件及响应式样式，并实现 project-resource-runner：统一执行前快照校验、SB3 backup、资源/积木顺序提交、失败恢复和 revision-safe undo；资源具体 VM 操作通过受控 executor 回调注入。尚未完成的 bridge 资源方法、主面板接入、生图确认和资源 UI 完整闭环继续按 Phase 1 至 Phase 3 实施。
 
 ## 19. 安全、性能与可观测性
 
