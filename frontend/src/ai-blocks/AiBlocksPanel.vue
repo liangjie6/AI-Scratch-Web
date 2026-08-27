@@ -121,6 +121,7 @@ const sessionId = ref(createId());
 const chatLog = ref<HTMLElement | null>(null);
 const reasoningLog = ref<HTMLElement | null>(null);
 const requestBusy = ref(false);
+const lockMessage = ref('AI 生成中，请稍等');
 let controller: AbortController | null = null;
 let unsubscribeTargets: (() => void) | null = null;
 
@@ -229,6 +230,7 @@ function localGreeting(name: string, isStage: boolean): AiBlocksMessage {
 
 function setLocked(locked: boolean, message = 'AI 生成中，请稍等') {
   requestBusy.value = locked;
+  lockMessage.value = message;
   emit('lockChange', locked, message);
   emit('busyChange', locked);
 }
@@ -558,6 +560,7 @@ onBeforeUnmount(() => {
       </label>
     </fieldset>
 
+    <div v-if="isBusy" class="scratch-generation-lock" role="status">{{ lockMessage }}</div>
     <div v-if="errorMessage" class="ai-blocks-alert ai-blocks-alert--error" role="alert">{{ errorMessage }}</div>
     <div v-if="noticeMessage" class="ai-blocks-alert" role="status">{{ noticeMessage }}</div>
 
