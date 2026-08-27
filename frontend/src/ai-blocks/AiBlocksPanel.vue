@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
 import {
   Blocks,
   Bot,
@@ -38,6 +38,7 @@ import {requestsGenerationNow} from './generation-intent';
 import ResourcePlanReview from './ResourcePlanReview.vue';
 import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
 import {prepareProjectResources} from './project-resource-preparer';
+import type {PreparedResource} from './project-resource-runner';
 import {applyProjectPlan, undoProjectPlan, type ProjectApplyResult} from './project-resource-runner';
 import {createProjectResourceExecutor} from './project-resource-executor';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
@@ -118,6 +119,7 @@ const progress = ref({current: 0, total: 0, label: ''});
 const result = ref<AiGenerationResult | null>(null);
 const projectPlan = ref<ProjectPlan | null>(null);
 const projectApplyResult = ref<ProjectApplyResult | null>(null);
+const preparedResources = shallowRef(new Map<string, PreparedResource>());
 const errorMessage = ref('');
 const noticeMessage = ref('');
 const sessionId = ref(createId());
@@ -474,7 +476,8 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
     const plan = projectPlan.value;
     if (!plan || !snapshot.value || !props.bridge) return;
     const prepared = await prepareProjectResources({plan, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
-    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: prepared.prepared, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    preparedResources.value = prepared.prepared;
+    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: preparedResources.value, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
     projectApplyResult.value = applied;
     projectPlan.value = null;
     state.value = 'chat';
@@ -484,6 +487,18 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
     errorMessage.value = error instanceof Error ? error.message : '资源准备失败';
   }
 }
+
+function acceptCanvasPrepared(opId: string, payload: {kind: 'sprite' | 'backdrop'; costumes?: unknown[]; backdrop?: unknown}) {
+  const current = preparedResources.value.get(opId);
+  if (!current) throw new Error('找不到待回填的资源操作：' + opId);
+  const value = payload.kind === 'sprite' ? payload.costumes : payload.backdrop;
+  if (!value) throw new Error('画布没有可提交的导出结果');
+  const next = new Map(preparedResources.value);
+  next.set(opId, {...current, value});
+  preparedResources.value = next;
+}
+
+defineExpose({acceptCanvasPrepared});
 
 function runProject() {
   props.bridge?.run();

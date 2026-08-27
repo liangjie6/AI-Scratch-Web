@@ -24,6 +24,8 @@ const editorError = ref('');
 const canvasInput = shallowRef<CanvasInput | null>(null);
 const canvasOpen = ref(false);
 const pendingCanvasHandoff = shallowRef<CanvasPreparedAsset | null>(null);
+const pendingCanvasOpId = ref<string | null>(null);
+const aiBlocksPanel = ref<{acceptCanvasPrepared: (opId: string, payload: CanvasPreparedAsset) => void} | null>(null);
 const assetLibraryOpen = ref(false);
 const assetLibraryTrigger = ref<HTMLButtonElement | null>(null);
 const assets = shallowRef<GeneratedAsset[]>([]);
@@ -130,7 +132,10 @@ async function importLibraryAsset(asset: GeneratedAsset, target: ImageTarget | '
 }
 
 function onCanvasPrepared(payload: CanvasPreparedAsset) {
-  pendingCanvasHandoff.value = payload;
+  if (pendingCanvasOpId.value && aiBlocksPanel.value) {
+    aiBlocksPanel.value.acceptCanvasPrepared(pendingCanvasOpId.value, payload);
+    pendingCanvasOpId.value = null;
+  } else pendingCanvasHandoff.value = payload;
   void closeCanvas();
 }
 
@@ -258,6 +263,7 @@ onMounted(() => void refreshAssetCount());
           v-else-if="activePanel === 'blocks'"
           id="ai-blocks-panel"
           :bridge="bridge"
+          ref="aiBlocksPanel"
           @lock-change="onScratchLockChange"
           @busy-change="onAiBlocksBusyChange"
         />
