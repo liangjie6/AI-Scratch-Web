@@ -15,6 +15,8 @@ from ..prompts_ai_blocks import (
     build_plan_repair_messages,
     build_program_messages,
     build_program_repair_messages,
+    build_project_plan_messages,
+    build_project_plan_repair_messages,
     build_requirements_messages,
     build_requirements_repair_messages,
 )
@@ -24,6 +26,7 @@ from ..schemas.ai_blocks import (
     GenerateRequest,
     Plan,
     ProgramIR,
+    ProjectPlan,
     RequirementsRequest,
     RequirementsResponse,
     ThinkingSettings,
@@ -345,6 +348,69 @@ async def generate_program(
                     raise RuntimeError('AI plan generation produced no result')
                 yield _sse('plan_ready', {'request_id': body.request_id, 'steps': plan.steps})
                 if await request.is_disconnected():
+                    return
+                if body.output_contract == 'project_plan':
+                    yield _sse('phase', {
+                        'request_id': body.request_id,
+                        'phase': 'generating',
+                        'message': '正在生成项目资源计划',
+                    })
+                    project_raw, project_reasoning = await _collect_resilient(
+                        provider,
+                        build_project_plan_messages(body, plan.steps),
+                        body.thinking,
+                        json_output=body.model_tier == 'advanced',
+                    )
+                    if project_reasoning:
+                        yield _sse('reasoning_delta', {
+                            'request_id': body.request_id,
+                            'phase': 'generating',
+                            'text': project_reasoning,
+                        })
+                    project: ProjectPlan | None = None
+                    project_failed_attempts: list[tuple[str, str]] = []
+                    for attempt in range(3):
+                        try:
+                            project = ProjectPlan.model_validate(extract_single_json(project_raw))
+                            if project.scope != body.scope:
+                                raise ValueError('project scope does not match request scope')
+                            if body.asset_policy == 'existing_only' and any(
+                                operation.source is not None and operation.source.kind == 'image_generation'
+                                for operation in project.resource_ops
+                            ):
+                                raise ValueError('existing_only cannot use image_generation')
+                            break
+                        except (ValidationError, ValueError) as validation_error:
+                            if attempt == 2:
+                                raise
+                            error_detail = _error_summary(validation_error, 12_000)
+                            project_failed_attempts.append((project_raw, error_detail))
+                            yield _sse('phase', {
+                                'request_id': body.request_id,
+                                'phase': 'repairing',
+                                'message': '正在校正项目计划',
+                            })
+                            project_raw, repair_reasoning = await _collect_resilient(
+                                provider,
+                                build_project_plan_repair_messages(body, plan.steps, project_failed_attempts),
+                                body.thinking,
+                                json_output=body.model_tier == 'advanced',
+                            )
+                            if repair_reasoning:
+                                yield _sse('reasoning_delta', {
+                                    'request_id': body.request_id,
+                                    'phase': 'repairing',
+                                    'text': repair_reasoning,
+                                })
+                    if project is None:
+                        raise RuntimeError('AI ProjectPlan generation produced no result')
+                    if await request.is_disconnected():
+                        return
+                    yield _sse('project_ready', {
+                        'request_id': body.request_id,
+                        'project': project.model_dump(mode='json', exclude_none=True),
+                    })
+                    yield _sse('message_complete', {'request_id': body.request_id})
                     return
                 yield _sse('phase', {
                     'request_id': body.request_id,

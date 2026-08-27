@@ -185,3 +185,29 @@ def build_program_repair_messages(
     return _append_repair_context(
         build_program_messages(request, steps), 'ProgramIR', failed_attempts,
     )
+
+def build_project_plan_messages(request: GenerateRequest, steps: list[str]) -> list[dict[str, str]]:
+    system = (
+        '你是 Scratch 项目资源与积木计划生成器。只输出符合 ProjectPlan v1 的严格 JSON。'
+        'scope 必须与请求一致；single_sprite 只能对 current_target 添加造型，project 才能创建角色、添加或切换背景。'
+        '资源 source 只能是 scratch_library 或 image_generation，禁止 library_asset、URL、base64、图片数据、VM target ID、JavaScript 和 VM API。'
+        'image_generation 只表示待用户确认，不代表已经调用生图。created_sprite 只能引用前面已经出现的 add_sprite op_id。'
+        'block_programs 必须绑定逻辑 target，并且每个 mode 遵守现有 ProgramIR 规则。'
+    )
+    content = chr(10).join([
+        f'计划步骤：{json.dumps(steps, ensure_ascii=False)}',
+        f'需求：{json.dumps(request.requirements.model_dump(mode="json"), ensure_ascii=False)}',
+        f'请求范围：{request.scope}；素材策略：{request.asset_policy}',
+        f'候选证据：{json.dumps([item.model_dump(mode="json") for item in request.asset_match_evidence], ensure_ascii=False)}',
+        '只输出完整 JSON，不要 markdown 或解释。',
+    ])
+    return [{'role': 'system', 'content': system}, {'role': 'user', 'content': content}]
+
+
+def build_project_plan_repair_messages(
+    request: GenerateRequest, steps: list[str], failed_attempts: list[tuple[str, str]]
+) -> list[dict[str, str]]:
+    return _append_repair_context(
+        build_project_plan_messages(request, steps), 'ProjectPlan', failed_attempts
+    )
+

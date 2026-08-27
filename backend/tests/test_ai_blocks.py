@@ -698,3 +698,30 @@ async def test_ai_blocks_request_size_limit():
         )
     assert response.status_code == 413
     assert response.json()['detail']['code'] == 'REQUEST_TOO_LARGE'
+
+@pytest.mark.asyncio
+async def test_generate_project_plan_streams_project_ready():
+    plan = json.dumps({'steps': ['选择已有背景']}, ensure_ascii=False)
+    project = json.dumps({
+        'schema_version': 1,
+        'scope': 'project',
+        'summary': '选择已有背景',
+        'resource_ops': [{'op': 'select_backdrop', 'op_id': 'select_1', 'name': '舞台'}],
+        'block_programs': [],
+    }, ensure_ascii=False)
+    provider = MockProvider([[plan], [project]])
+    app.dependency_overrides[get_ai_blocks_provider] = lambda: provider
+    request = payload()
+    request['requirements'] = requirements()
+    request['output_contract'] = 'project_plan'
+    request['scope'] = 'project'
+    try:
+        response = await post('/api/ai-blocks/generate', request)
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    events = [line for line in response.text.splitlines() if line.startswith('event:')]
+    assert events == ['event: phase', 'event: plan_ready', 'event: phase', 'event: project_ready', 'event: message_complete']
+    assert '"scope":"project"' in response.text
+    assert 'project_ready' in response.text
+
