@@ -451,12 +451,12 @@ async function undoGeneration() {
   }
 }
 
-async function confirmProjectPlan(confirmedGenerationIds: string[]) {
+async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRecord: Record<string, import('../ai/scratch-library').ScratchSpriteItem | import('../ai/scratch-library').ScratchLibraryItem>) {
   if (!projectPlan.value) return;
   state.value = 'injecting';
   errorMessage.value = '';
   try {
-    const prepared = await prepareProjectResources({plan: projectPlan.value, confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    const prepared = await prepareProjectResources({plan: projectPlan.value, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
     projectPlan.value = null;
     state.value = 'chat';
     noticeMessage.value = '资源已准备 ' + prepared.prepared.size + ' 项，原图已保存到素材库；等待 Commit executor 接入。';
