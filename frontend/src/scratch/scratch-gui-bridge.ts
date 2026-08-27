@@ -1,4 +1,4 @@
-import type {ImportedSpriteResult, SpriteImportExpectation} from './asset-adapter';
+import type {CostumeExport, ImportedSpriteResult, SpriteImportExpectation} from './asset-adapter';
 
 type Listener = () => void;
 
@@ -189,6 +189,68 @@ export class ScratchGuiBridge {
     } finally {
       this.importing = false;
     }
+  }
+
+
+  async addCostumeToTarget(targetId: string, costume: CostumeExport, selectAfter = true) {
+    const vm = this.requireVm();
+    const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
+    if (!target || target.isStage) throw new Error('只能向已有角色添加造型');
+    const oldIndex = target.currentCostume ?? 0;
+    const asset = await this.createVisualAsset(costume);
+    await vm.addCostume(asset.md5ext, asset.costume, targetId);
+    const installed = target.getCostumes?.() ?? [];
+    if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装造型');
+    if (!selectAfter) {
+      target.setCostume?.(oldIndex);
+      if (target.currentCostume !== oldIndex) target.currentCostume = oldIndex;
+      vm.runtime.emitProjectChanged?.();
+    }
+    return {assetId: asset.assetId, name: costume.name};
+  }
+
+  async addBackdropToStage(costume: CostumeExport, selectAfter = true) {
+    const vm = this.requireVm();
+    const stage = vm.runtime.getTargetForStage?.() ?? vm.runtime.targets.find(item => item.isStage);
+    if (!stage) throw new Error('Scratch 舞台尚未就绪');
+    const oldIndex = stage.currentCostume ?? 0;
+    const asset = await this.createVisualAsset(costume);
+    await vm.addBackdrop(asset.md5ext, asset.costume);
+    const installed = stage.getCostumes?.() ?? [];
+    if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装背景');
+    if (!selectAfter) {
+      stage.setCostume?.(oldIndex);
+      if (stage.currentCostume !== oldIndex) stage.currentCostume = oldIndex;
+      vm.runtime.emitProjectChanged?.();
+    }
+    return {assetId: asset.assetId, name: costume.name};
+  }
+
+  selectBackdropByName(name: string) {
+    const vm = this.requireVm();
+    const stage = vm.runtime.getTargetForStage?.() ?? vm.runtime.targets.find(item => item.isStage);
+    const wanted = name.trim().toLocaleLowerCase();
+    const index = stage?.getCostumes?.().findIndex(costume => String(costume.name ?? '').trim().toLocaleLowerCase() === wanted) ?? -1;
+    if (!stage || index < 0) throw new Error('找不到已有背景：' + name);
+    stage.setCostume?.(index);
+    if (stage.currentCostume !== index) stage.currentCostume = index;
+    vm.runtime.emitProjectChanged?.();
+    return {assetId: String(stage.getCostumes?.()[index]?.assetId ?? ''), name: String(stage.getCostumes?.()[index]?.name ?? name)};
+  }
+
+  private async createVisualAsset(costume: CostumeExport) {
+    const storage = this.currentStorage;
+    if (!storage?.createAsset) throw new Error('Scratch 素材存储尚未就绪');
+    const bytes = new Uint8Array(await costume.blob.arrayBuffer());
+    const vector = costume.dataFormat === 'svg';
+    if (vector && costume.bitmapResolution !== 1) throw new Error('SVG 造型必须使用 1 倍分辨率');
+    if (!vector && costume.bitmapResolution !== 2) throw new Error('PNG 造型必须使用 2 倍分辨率');
+    const type = vector ? storage.AssetType.ImageVector : storage.AssetType.ImageBitmap;
+    const format = vector ? storage.DataFormat.SVG : storage.DataFormat.PNG;
+    const asset = storage.createAsset(type, format, bytes, null, true);
+    const assetId = String(asset?.assetId ?? '');
+    if (!assetId) throw new Error('无法创建 Scratch 素材');
+    return {assetId, md5ext: assetId + '.' + costume.dataFormat, costume: {asset, assetId, md5ext: assetId + '.' + costume.dataFormat, dataFormat: costume.dataFormat, name: costume.name, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY, bitmapResolution: costume.bitmapResolution}};
   }
 
   async saveProject() {

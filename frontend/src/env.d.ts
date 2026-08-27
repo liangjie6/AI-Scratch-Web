@@ -88,6 +88,7 @@ declare global {
     y?: number;
     size?: number;
     currentCostume?: number;
+    setCostume?: (index: number) => void;
     blocks?: ScratchBlocksLike;
     comments?: Record<string, ScratchCommentLike>;
     variables?: Record<string, ScratchVariableLike>;
