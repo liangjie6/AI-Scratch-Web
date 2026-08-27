@@ -3,9 +3,15 @@ import type {ImageGenerationRequest, ImageGenerationResponse} from './image-gene
 
 const DB_NAME = 'ai-scratch-assets';
 const STORE_NAME = 'generatedAssets';
+export type AssetOrigin = 'ai_generated' | 'scratch_library' | 'canvas_derived' | 'imported';
+export interface AssetSaveOptions {tags?: string[]; origin?: AssetOrigin; groupId?: string; derivedFrom?: string;}
 
 export interface GeneratedAsset {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  origin: AssetOrigin;
+  tags: string[];
+  groupId?: string;
+  derivedFrom?: string;
   id: string;
   createdAt: number;
   name: string;
@@ -17,10 +23,19 @@ export interface GeneratedAsset {
 }
 
 async function database() {
-  return openDB(DB_NAME, 1, {
-    upgrade(db) {
+  return openDB(DB_NAME, 2, {
+    upgrade(db, oldVersion, _newVersion, transaction) {
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, {keyPath: 'id'});
+      }
+      if (oldVersion < 2) {
+        const store = transaction.objectStore(STORE_NAME);
+        store.openCursor().then(cursor => {
+          if (!cursor) return;
+          const value = cursor.value as Partial<GeneratedAsset>;
+          cursor.update({...value, schemaVersion: 2, origin: value.origin ?? 'ai_generated', tags: value.tags ?? []});
+          cursor.continue();
+        });
       }
     }
   });
@@ -46,12 +61,17 @@ function createAssetName(request: ImageGenerationRequest, createdAt: number) {
 
 export async function saveGeneratedAsset(
   result: ImageGenerationResponse,
-  request: ImageGenerationRequest
+  request: ImageGenerationRequest,
+  options: AssetSaveOptions = {}
 ): Promise<GeneratedAsset> {
   const createdAt = Date.now();
   const id = createLocalAssetId(result.request_id, createdAt);
   const asset: GeneratedAsset = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    origin: options.origin ?? 'ai_generated',
+    tags: [...new Set(options.tags ?? [])].slice(0, 20),
+    groupId: options.groupId,
+    derivedFrom: options.derivedFrom,
     id,
     createdAt,
     name: `${createAssetName(request, createdAt)} ${id.slice(-4).toUpperCase()}`,
@@ -70,9 +90,18 @@ export async function listGeneratedAssets(): Promise<GeneratedAsset[]> {
   const db = await database();
   const assets = await db.getAll(STORE_NAME) as GeneratedAsset[];
   return assets
-    .filter(asset => asset?.schemaVersion === 1 && Boolean(asset.result?.image_base64))
-    .map(asset => ({...asset, name: asset.name || asset.prompt || '未命名素材'}))
+    .filter(asset => (asset?.schemaVersion === 2 || asset?.schemaVersion === 1) && Boolean(asset.result?.image_base64))
+    .map(asset => ({...asset, schemaVersion: 2 as const, origin: asset.origin ?? 'ai_generated', tags: asset.tags ?? [], name: asset.name || asset.prompt || '未命名素材'}))
     .sort((left, right) => right.createdAt - left.createdAt);
+}
+
+export async function updateGeneratedAsset(id: string, patch: Pick<AssetSaveOptions, 'tags' | 'groupId'> & {name?: string}): Promise<GeneratedAsset | undefined> {
+  const db = await database();
+  const asset = await db.get(STORE_NAME, id) as GeneratedAsset | undefined;
+  if (!asset) return undefined;
+  const updated = {...asset, ...patch, tags: patch.tags ? [...new Set(patch.tags)].slice(0, 20) : asset.tags};
+  await db.put(STORE_NAME, updated);
+  return updated;
 }
 
 export async function countGeneratedAssets(): Promise<number> {

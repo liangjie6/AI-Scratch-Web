@@ -5,7 +5,8 @@ import {
   countGeneratedAssets,
   deleteGeneratedAsset,
   listGeneratedAssets,
-  saveGeneratedAsset
+  saveGeneratedAsset,
+  updateGeneratedAsset
 } from '../src/ai/asset-library-store';
 import type {ImageGenerationRequest, ImageGenerationResponse} from '../src/ai/image-generation-types';
 
@@ -48,6 +49,13 @@ describe('asset library store', () => {
     expect(assets.every(asset => asset.name.startsWith('背景素材 '))).toBe(true);
     expect(new Set(assets.map(asset => asset.id)).size).toBe(2);
     expect(await countGeneratedAssets()).toBe(2);
+  });
+
+  it('stores and edits v2 tags and origin metadata', async () => {
+    const asset = await saveGeneratedAsset(response('tagged'), request, {tags: ['forest', 'forest', 'night'], origin: 'canvas_derived', groupId: 'group-1', derivedFrom: 'source-1'});
+    expect(asset).toMatchObject({schemaVersion: 2, tags: ['forest', 'night'], origin: 'canvas_derived', groupId: 'group-1', derivedFrom: 'source-1'});
+    const updated = await updateGeneratedAsset(asset.id, {tags: ['updated'], name: '新名称'});
+    expect(updated).toMatchObject({name: '新名称', tags: ['updated']});
   });
 
   it('keeps duplicate request ids as separate assets and supports deletion', async () => {

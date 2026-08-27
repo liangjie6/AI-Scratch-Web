@@ -1209,7 +1209,7 @@ Phase 0 和最终验收均需执行全部命令，不能只运行新增测试。
 4. project_ready 和 program_ready 互斥；流中收到两种 ready 事件时抛出 STREAM_PROTOCOL_ERROR。缺少目标 ready 事件分别抛出 PROJECT_PLAN_MISSING 或 PROGRAM_MISSING。
 5. 旧单测和调用方不通过兼容返回维持，而是迁移到联合结果断言和显式 output contract。这样后续资源 Prepare/Commit 可以直接复用同一条管线。
 
-本轮已完成：前后端 ProjectPlan 基础模型、严格资源来源和 scope 校验、created target 向后引用校验、library_asset 模型输入拒绝、前端 SSE 联合输出、默认积木调用点迁移，以及后端 project prompt/route 分流和 project_ready 回归测试。本轮另外完成本地 Scratch manifest matcher、中文别名扩展、候选评分、资源标识校验和离线资源预加载；尚未完成的项目资源 runner、资源选择器、生图确认、素材库 v2 和资源 UI 继续按 Phase 1 至 Phase 3 实施。
+本轮已完成：前后端 ProjectPlan 基础模型、严格资源来源和 scope 校验、created target 向后引用校验、library_asset 模型输入拒绝、前端 SSE 联合输出、默认积木调用点迁移，以及后端 project prompt/route 分流和 project_ready 回归测试。本轮另外完成本地 Scratch manifest matcher、中文别名扩展、候选评分、资源标识校验和离线资源预加载，并完成素材库 v2 的 IndexedDB 升级、旧记录迁移、tags/origin/groupId/derivedFrom 元数据保存和编辑 API；尚未完成的项目资源 runner、资源选择器、生图确认和资源 UI 继续按 Phase 1 至 Phase 3 实施。
 
 ## 19. 安全、性能与可观测性
 
