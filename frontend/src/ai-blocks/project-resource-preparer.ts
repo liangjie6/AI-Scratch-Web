@@ -19,6 +19,13 @@ function targetFor(op: ResourceOp): 'sprite' | 'backdrop' {return op.op === 'add
 
 async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, generatedAssets: GeneratedAsset[]): Promise<PreparedResource> {
   const source = sourceOf(op);
+  if (op.op === 'add_sprite' || op.op === 'add_builtin_sprite') {
+    const selected = options.selections?.get(op.op_id);
+    if (!selected || !('costumes' in selected)) throw new Error('请先为新增角色选择本地角色素材：' + op.name);
+    const costumes = [];
+    for (const item of selected.costumes) costumes.push(costumeFromLibrary(item, await preloadScratchAsset(item)));
+    return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, costumes}};
+  }
   if (op.op === 'select_backdrop') return {op_id: op.op_id, kind: 'backdrop_selection', value: {name: op.name}};
   if (source?.kind === 'scratch_library') {
     const selected = options.selections?.get(op.op_id);
