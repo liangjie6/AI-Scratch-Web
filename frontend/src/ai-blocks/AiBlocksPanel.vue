@@ -38,6 +38,8 @@ import {requestsGenerationNow} from './generation-intent';
 import ResourcePlanReview from './ResourcePlanReview.vue';
 import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
 import {prepareProjectResources} from './project-resource-preparer';
+import {applyProjectPlan, undoProjectPlan, type ProjectApplyResult} from './project-resource-runner';
+import {createProjectResourceExecutor} from './project-resource-executor';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
 import {createId} from '../shared/create-id';
 
@@ -112,6 +114,7 @@ const phaseMessage = ref('');
 const progress = ref({current: 0, total: 0, label: ''});
 const result = ref<AiGenerationResult | null>(null);
 const projectPlan = ref<ProjectPlan | null>(null);
+const projectApplyResult = ref<ProjectApplyResult | null>(null);
 const errorMessage = ref('');
 const noticeMessage = ref('');
 const sessionId = ref(createId());
@@ -416,6 +419,7 @@ async function generate() {
     state.value = 'chat';
   } catch (error: unknown) {
     result.value = null;
+    projectApplyResult.value = null;
     const message = error instanceof DOMException && error.name === 'AbortError'
       ? '已取消生成，项目已恢复到生成前状态。'
       : `生成失败：${error instanceof Error ? error.message : 'AI 积木生成失败'}`;
@@ -433,12 +437,13 @@ function cancel() {
 }
 
 async function undoGeneration() {
-  if (!props.bridge || !result.value || isBusy.value) return;
+  if (!props.bridge || (!result.value && !projectApplyResult.value) || isBusy.value) return;
   setLocked(true, '正在撤销 AI 生成');
   errorMessage.value = '';
   let succeeded = false;
   try {
-    await undoAiGeneration(props.bridge, result.value);
+    if (projectApplyResult.value) await undoProjectPlan(props.bridge, projectApplyResult.value);
+    else if (result.value) await undoAiGeneration(props.bridge, result.value);
     succeeded = true;
   } catch (error: unknown) {
     errorMessage.value = error instanceof Error ? error.message : '撤销失败';
@@ -454,12 +459,17 @@ async function undoGeneration() {
 async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRecord: Record<string, import('../ai/scratch-library').ScratchSpriteItem | import('../ai/scratch-library').ScratchLibraryItem>) {
   if (!projectPlan.value) return;
   state.value = 'injecting';
+  setLocked(true, '正在准备并提交项目资源');
   errorMessage.value = '';
   try {
-    const prepared = await prepareProjectResources({plan: projectPlan.value, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    const plan = projectPlan.value;
+    if (!plan || !snapshot.value || !props.bridge) return;
+    const prepared = await prepareProjectResources({plan, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: prepared.prepared, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    projectApplyResult.value = applied;
     projectPlan.value = null;
     state.value = 'chat';
-    noticeMessage.value = '资源已准备 ' + prepared.prepared.size + ' 项，原图已保存到素材库；等待 Commit executor 接入。';
+    noticeMessage.value = '项目资源与积木已提交：' + applied.addedTargets.length + ' 个角色、' + applied.addedCostumes.length + ' 个造型、' + applied.addedBackdrops.length + ' 个背景。';
   } catch (error: unknown) {
     state.value = 'chat';
     errorMessage.value = error instanceof Error ? error.message : '资源准备失败';
@@ -586,7 +596,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </article>
-        <div v-if="result" class="ai-blocks-generation-actions" role="group" aria-label="本次生成操作">
+        <div v-if="result || projectApplyResult" class="ai-blocks-generation-actions" role="group" aria-label="本次生成操作">
           <button class="button button--primary" type="button" @click="runProject"><Play :size="15" />运行查看</button>
           <button class="button button--quiet" type="button" @click="undoGeneration"><Undo2 :size="15" />撤销生成</button>
         </div>
