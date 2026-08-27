@@ -14,7 +14,7 @@ import {
   listGeneratedAssets,
   type GeneratedAsset
 } from '../ai/asset-library-store';
-import CanvasWorkspace from '../canvas/CanvasWorkspace.vue';
+import CanvasWorkspace, {type CanvasPreparedAsset} from '../canvas/CanvasWorkspace.vue';
 import type {CanvasInput} from '../canvas/model/canvas-types';
 import type {ImageGenerationResponse} from '../ai/image-generation-types';
 import AiBlocksPanel from '../ai-blocks/AiBlocksPanel.vue';
@@ -23,6 +23,7 @@ const bridge = shallowRef<ScratchGuiBridge | null>(null);
 const editorError = ref('');
 const canvasInput = shallowRef<CanvasInput | null>(null);
 const canvasOpen = ref(false);
+const pendingCanvasHandoff = shallowRef<CanvasPreparedAsset | null>(null);
 const assetLibraryOpen = ref(false);
 const assetLibraryTrigger = ref<HTMLButtonElement | null>(null);
 const assets = shallowRef<GeneratedAsset[]>([]);
@@ -126,6 +127,11 @@ async function importLibraryAsset(asset: GeneratedAsset, target: ImageTarget | '
   } finally {
     libraryImportingId.value = null;
   }
+}
+
+function onCanvasPrepared(payload: CanvasPreparedAsset) {
+  pendingCanvasHandoff.value = payload;
+  void closeCanvas();
 }
 
 async function closeCanvas() {
@@ -258,7 +264,7 @@ onMounted(() => void refreshAssetCount());
       </aside>
     </main>
 
-    <CanvasWorkspace v-if="canvasOpen" :initial-input="canvasInput" :bridge="bridge" @close="closeCanvas" />
+    <CanvasWorkspace v-if="canvasOpen" :initial-input="canvasInput" :bridge="bridge" @close="closeCanvas" @prepared="onCanvasPrepared" />
     <AssetLibraryDialog
       :open="assetLibraryOpen"
       :assets="assets"
