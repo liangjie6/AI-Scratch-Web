@@ -223,7 +223,7 @@ onMounted(() => void refreshAssetCount());
           <Bot :size="18" aria-hidden="true" />
           <span class="header-tool__content" aria-hidden="true"><span class="header-tool__label">生成素材</span></span>
         </button>
-        <button class="panel-toggle--header" :class="{'is-active': activePanel === 'blocks', 'is-hovered': hoveredHeaderTool === 'blocks'}" @pointerenter="updateHeaderHover('blocks')" @pointerleave="updateHeaderHover(null)" type="button" :disabled="scratchLocked" :title="activePanel === 'blocks' ? '收起 AI 写积木' : '打开 AI 写积木'" :aria-label="activePanel === 'blocks' ? '收起 AI 写积木' : '打开 AI 写积木'" :aria-expanded="activePanel === 'blocks'" aria-controls="ai-blocks-panel" @click="togglePanel('blocks')">
+        <button class="panel-toggle--header" :class="{'is-active': activePanel === 'blocks', 'is-hovered': hoveredHeaderTool === 'blocks'}" @pointerenter="updateHeaderHover('blocks')" @pointerleave="updateHeaderHover(null)" type="button" :disabled="scratchLocked" :title="scratchLocked ? '打开 AI 写积木' : activePanel === 'blocks' ? '收起 AI 写积木' : '打开 AI 写积木'" :aria-label="scratchLocked ? '打开 AI 写积木' : activePanel === 'blocks' ? '收起 AI 写积木' : '打开 AI 写积木'" :aria-expanded="activePanel === 'blocks'" aria-controls="ai-blocks-panel" @click="togglePanel('blocks')">
           <BlocksIcon :size="18" aria-hidden="true" />
           <span class="header-tool__content" aria-hidden="true"><span class="header-tool__label">AI 写积木</span></span>
         </button>

@@ -560,7 +560,7 @@ onBeforeUnmount(() => {
       </label>
     </fieldset>
 
-    <div v-if="isBusy" class="scratch-generation-lock" role="status">{{ lockMessage }}</div>
+    <div v-if="isBusy" class="ai-blocks-panel-lock" role="status">{{ lockMessage }}</div>
     <div v-if="errorMessage" class="ai-blocks-alert ai-blocks-alert--error" role="alert">{{ errorMessage }}</div>
     <div v-if="noticeMessage" class="ai-blocks-alert" role="status">{{ noticeMessage }}</div>
 

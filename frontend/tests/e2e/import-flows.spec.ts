@@ -6,13 +6,15 @@ test('offers explicit asset and Scratch import targets without restoring canvas 
   await page.goto('/');
   await page.evaluate(async imageBase64 => {
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open('ai-scratch-assets', 1);
+      const request = indexedDB.open('ai-scratch-assets', 2);
       request.onupgradeneeded = () => request.result.createObjectStore('generatedAssets', {keyPath: 'id'});
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const transaction = request.result.transaction('generatedAssets', 'readwrite');
         transaction.objectStore('generatedAssets').put({
-          schemaVersion: 1,
+          schemaVersion: 2,
+           origin: 'ai_generated',
+           tags: ['e2e'],
           id: 'e2e-asset',
           createdAt: Date.now(),
           prompt: '测试素材',
