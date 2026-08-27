@@ -63,6 +63,8 @@ interface StoredConversation {
   targetName: string;
   isStage: boolean;
   mode: AiBlocksMode;
+  scope?: AiBlocksScope;
+  assetPolicy?: AssetPolicy;
   messages: AiBlocksMessage[];
   updatedAt: number;
 }
@@ -174,6 +176,8 @@ function saveCurrentConversation() {
     targetName: snapshot.value.targetName,
     isStage: snapshot.value.isStage,
     mode: mode.value,
+    scope: scope.value,
+    assetPolicy: assetPolicy.value,
     messages: messages.value.map(message => ({...message})),
     updatedAt: Date.now()
   };
@@ -193,6 +197,8 @@ function restoreConversation(conversation: StoredConversation) {
   if (!snapshot.value || isBusy.value) return;
   sessionId.value = conversation.id;
   mode.value = conversation.mode;
+  scope.value = conversation.scope === 'project' ? 'project' : 'single_sprite';
+  assetPolicy.value = ['builtin_first', 'existing_only', 'allow_generation'].includes(conversation.assetPolicy ?? '') ? conversation.assetPolicy as AssetPolicy : 'builtin_first';
   messages.value = conversation.messages.map(message => ({...message}));
   requirements.value = null;
   planSteps.value = [];
