@@ -487,6 +487,8 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
   } catch (error: unknown) {
     state.value = 'chat';
     errorMessage.value = error instanceof Error ? error.message : '资源准备失败';
+  } finally {
+    setLocked(false);
   }
 }
 
