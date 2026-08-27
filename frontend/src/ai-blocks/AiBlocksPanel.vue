@@ -355,14 +355,17 @@ async function generate() {
   setLocked(true, 'AI 正在规划代码，请稍等');
 
   try {
-    const program = await streamAiBlocksGeneration({
+    const output = await streamAiBlocksGeneration({
       model_tier: modelTier.value,
       session_id: sessionId.value,
       request_id: createId(),
       messages: messages.value,
       target: current.context,
       thinking: thinkingSettings(),
-      requirements: requirements.value
+      requirements: requirements.value,
+      output_contract: 'program_ir',
+      scope: 'single_sprite',
+      asset_policy: 'builtin_first'
     }, {
       onPhase: phase => {
         phaseMessage.value = phase.message || '正在生成积木代码';
@@ -378,11 +381,12 @@ async function generate() {
     assertSnapshotIsCurrent(bridge, current);
     state.value = 'injecting';
     setLocked(true, 'AI 生成中，请稍等');
+    if (output.kind !== 'program') throw new Error('当前积木执行器尚未接入项目计划');
     const generated = await applyAiProgram({
       bridge,
       snapshot: current,
       mode: mode.value,
-      program,
+      program: output.program,
       signal: controller.signal,
       onProgress: value => {
         progress.value = value;

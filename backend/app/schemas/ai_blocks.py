@@ -88,6 +88,11 @@ class RequirementsResponse(StrictModel):
 
 class GenerateRequest(AIBlocksRequestBase):
     requirements: RequirementsResponse
+    protocol_version: Literal[1, 2] = 1
+    output_contract: Literal['program_ir', 'project_plan'] = 'program_ir'
+    scope: Literal['single_sprite', 'project'] = 'single_sprite'
+    asset_policy: Literal['builtin_first', 'existing_only', 'allow_generation'] = 'builtin_first'
+    asset_match_evidence: list[AssetMatchEvidence] = Field(default_factory=list, max_length=40)
 
 
 class Plan(StrictModel):
@@ -350,3 +355,131 @@ def extract_single_json(text: str) -> Any:
 
 BlockInput.model_rebuild()
 Block.model_rebuild()
+
+class AssetMatchCandidate(StrictModel):
+    name: ShortString
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
+
+
+class AssetMatchEvidence(StrictModel):
+    requirement_id: ShortString
+    asset_type: Literal['sprite', 'costume', 'backdrop']
+    manifest_version: Literal['scratch-gui-15.0.1']
+    match_count: int = Field(ge=0, le=1000)
+    candidates: list[AssetMatchCandidate] = Field(default_factory=list, max_length=5)
+
+    @model_validator(mode='after')
+    def validate_count(self) -> AssetMatchEvidence:
+        if self.match_count < len(self.candidates):
+            raise ValueError('match_count cannot be smaller than candidates length')
+        return self
+
+
+class TargetRef(StrictModel):
+    kind: Literal['current_target', 'stage', 'existing_sprite', 'created_sprite']
+    name: ShortString | None = None
+    op_id: ShortString | None = None
+
+    @model_validator(mode='after')
+    def validate_reference(self) -> TargetRef:
+        if self.kind == 'existing_sprite' and not self.name:
+            raise ValueError('existing_sprite requires name')
+        if self.kind == 'created_sprite' and not self.op_id:
+            raise ValueError('created_sprite requires op_id')
+        if self.kind in {'current_target', 'stage'} and (self.name or self.op_id):
+            raise ValueError(f'{self.kind} cannot contain name or op_id')
+        return self
+
+
+class ScratchLibrarySource(StrictModel):
+    kind: Literal['scratch_library']
+    asset_type: Literal['sprite', 'costume', 'backdrop']
+    search_terms: list[ShortString] = Field(min_length=1, max_length=12)
+
+
+class ImageGenerationSource(StrictModel):
+    kind: Literal['image_generation']
+    reason: ShortString
+    prompt: LongString
+    style: ShortString
+    custom_style: ShortString | None = None
+    width: Literal[512, 768, 1024]
+    height: Literal[512, 768, 1024]
+    sheet_layout: Literal['1x1']
+
+
+ProjectPlanResourceSource = Annotated[ScratchLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
+
+
+class ResourceOp(StrictModel):
+    op: Literal['add_builtin_sprite', 'add_sprite', 'add_costume', 'add_backdrop', 'select_backdrop']
+    op_id: ShortString
+    target: TargetRef | None = None
+    name: ShortString
+    source: ProjectPlanResourceSource | None = None
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
+    x: int | None = Field(default=None, ge=-10000, le=10000)
+    y: int | None = Field(default=None, ge=-10000, le=10000)
+    size: int | None = Field(default=None, ge=1, le=1000)
+    select_after: bool | None = None
+    costumes: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode='after')
+    def validate_operation(self) -> ResourceOp:
+        if self.op == 'select_backdrop':
+            if self.source is not None or self.target is not None:
+                raise ValueError('select_backdrop cannot prepare a source or target')
+        elif self.source is None:
+            raise ValueError(f'{self.op} requires source')
+        if self.op == 'add_builtin_sprite' and (self.source is None or self.source.kind != 'scratch_library' or self.source.asset_type != 'sprite'):
+            raise ValueError('add_builtin_sprite requires a sprite scratch_library source')
+        if self.op == 'add_costume' and self.target and self.target.kind == 'stage':
+            raise ValueError('add_costume cannot target stage')
+        if self.op == 'add_backdrop' and self.source and self.source.kind == 'scratch_library' and self.source.asset_type != 'backdrop':
+            raise ValueError('add_backdrop requires a backdrop source')
+        if self.op in {'add_costume', 'add_sprite'} and self.source and self.source.kind == 'scratch_library' and self.source.asset_type == 'sprite':
+            raise ValueError('costume source cannot be a sprite')
+        return self
+
+
+class BlockProgramPlan(StrictModel):
+    target: TargetRef
+    mode: Literal['append', 'modify', 'rewrite']
+    program: ProgramIR
+
+
+class ProjectPlan(StrictModel):
+    schema_version: Literal[1]
+    scope: Literal['single_sprite', 'project']
+    summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
+    resource_ops: list[ResourceOp] = Field(default_factory=list, max_length=24)
+    block_programs: list[BlockProgramPlan] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode='after')
+    def validate_operations(self) -> ProjectPlan:
+        ids: set[str] = set()
+        created: set[str] = set()
+        for operation in self.resource_ops:
+            if operation.op_id in ids:
+                raise ValueError('resource op_id values must be unique')
+            ids.add(operation.op_id)
+            if operation.op == 'add_sprite':
+                created.add(operation.op_id)
+            target = operation.target
+            if target and target.kind == 'created_sprite' and target.op_id not in created:
+                raise ValueError('created_sprite must reference a prior add_sprite operation')
+        if self.scope == 'single_sprite':
+            if len(self.block_programs) > 1:
+                raise ValueError('single_sprite permits at most one block program')
+            if any(item.op != 'add_costume' for item in self.resource_ops):
+                raise ValueError('single_sprite only permits add_costume')
+            if any(item.target is None or item.target.kind != 'current_target' for item in self.resource_ops):
+                raise ValueError('single_sprite resources must target current_target')
+            if any(item.target.kind != 'current_target' for item in self.block_programs):
+                raise ValueError('single_sprite blocks must target current_target')
+        return self
+
+
+GenerateRequest.model_rebuild()
+ProjectPlan.model_rebuild()
+

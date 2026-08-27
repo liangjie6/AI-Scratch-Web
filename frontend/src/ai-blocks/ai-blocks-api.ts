@@ -1,4 +1,5 @@
 import type {ProgramIR} from './program-ir';
+import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
 import {createSseParser} from '../ai/text-expansion-api';
 
 export type AiBlocksMode = 'modify' | 'append' | 'rewrite';
@@ -53,7 +54,16 @@ export interface SummarizeAiBlocksRequest extends BaseRequest {
 
 export interface GenerateAiBlocksRequest extends BaseRequest {
   requirements: AiBlocksRequirements;
+  protocol_version?: 1 | 2;
+  output_contract?: 'program_ir' | 'project_plan';
+  scope?: AiBlocksScope;
+  asset_policy?: AssetPolicy;
+  asset_match_evidence?: Array<{requirement_id: string; asset_type: 'sprite' | 'costume' | 'backdrop'; manifest_version: 'scratch-gui-15.0.1'; match_count: number; candidates: Array<{name: string; tags: string[]}>}>;
 }
+
+export type AiGenerationOutput =
+  | {kind: 'program'; program: ProgramIR}
+  | {kind: 'project'; project: ProjectPlan};
 
 export interface GenerationPhase {
   phase: string;
@@ -167,19 +177,22 @@ export async function streamAiBlocksGeneration(
     onPhase?: (phase: GenerationPhase) => void;
     onPlan?: (steps: string[]) => void;
     onProgram?: (program: ProgramIR) => void;
+    onProject?: (project: ProjectPlan) => void;
     onReasoning?: (text: string, phase: string) => void;
   },
   signal?: AbortSignal
-): Promise<ProgramIR> {
+): Promise<AiGenerationOutput> {
   const body = await fetchSse('/api/ai-blocks/generate', request, signal);
   let completed = false;
   let program: ProgramIR | null = null;
+  let project: ProjectPlan | null = null;
   await consumeSse(body, (event, data) => {
     const payload = data as {
       phase?: unknown;
       message?: string;
       steps?: unknown;
       program?: unknown;
+      project?: unknown;
       text?: unknown;
       code?: string;
     };
@@ -193,6 +206,10 @@ export async function streamAiBlocksGeneration(
     } else if (event === 'program_ready' && payload?.program && typeof payload.program === 'object') {
       program = payload.program as ProgramIR;
       handlers.onProgram?.(program);
+    } else if (event === 'project_ready' && payload?.project && typeof payload.project === 'object') {
+      if (program) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '服务端同时返回了两种生成结果');
+      project = payload.project as ProjectPlan;
+      handlers.onProject?.(project);
     } else if (event === 'message_complete') {
       completed = true;
     } else if (event === 'message_error') {
@@ -203,6 +220,10 @@ export async function streamAiBlocksGeneration(
     }
   });
   if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', 'AI 积木生成连接意外中断');
+  if (request.output_contract === 'project_plan') {
+    if (!project) throw new AiBlocksApiError('PROJECT_PLAN_MISSING', 'AI 未返回可用的项目计划');
+    return {kind: 'project', project};
+  }
   if (!program) throw new AiBlocksApiError('PROGRAM_MISSING', 'AI 未返回可用的积木程序');
-  return program;
+  return {kind: 'program', program};
 }

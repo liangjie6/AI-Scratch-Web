@@ -72,6 +72,7 @@ def build_requirements_messages(request: RequirementsRequest) -> list[dict[str, 
         '先判断用户是否确实在描述可由 Scratch 原生积木实现的角色或舞台行为，不要使用关键词匹配。'
         '如果无法理解用户意图，或请求与 Scratch 积木逻辑无关，设置 ready=false 且 missing_questions=[]；这表示前端应直接回复“无法帮到你”。'
         '只有确定是积木需求但缺少一个核心条件时才设置 ready=false，并在 missing_questions 中给出最多一个关键问题。'
+        'missing_questions 最多包含一个关键问题。'
         + proceed_rule +
         '只输出一个 JSON 对象，不得输出解释或额外文本。'
         '对象必须且只能包含 ready,title,goal,behavior_steps,triggers,controls,success_criteria,missing_questions。'

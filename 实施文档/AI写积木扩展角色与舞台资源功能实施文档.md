@@ -1199,6 +1199,18 @@ npm --prefix frontend run test:e2e
 
 Phase 0 和最终验收均需执行全部命令，不能只运行新增测试。
 
+## 18.5 当前实现增量：统一输出管线
+
+本轮实现按当前“需求整理 -> 计划 -> ready 事件 -> 前端执行”的流程管线重新收敛协议，不再保留默认返回旧版 ProgramIR 的兼容分支：
+
+1. streamAiBlocksGeneration 始终返回判别联合 AiGenerationOutput，结果必须是 {kind:'program', program} 或 {kind:'project', project}。
+2. GenerateRequest.output_contract 必须由调用方显式设置为 program_ir 或 project_plan；不能根据模型输出猜测合同。
+3. 前端调用点必须先按 kind 收窄，再进入对应执行器。当前积木执行器发送 program_ir 并只允许 program 分支；项目资源执行器接入后发送 project_plan，不得把项目计划强转为单 target 程序。
+4. project_ready 和 program_ready 互斥；流中收到两种 ready 事件时抛出 STREAM_PROTOCOL_ERROR。缺少目标 ready 事件分别抛出 PROJECT_PLAN_MISSING 或 PROGRAM_MISSING。
+5. 旧单测和调用方不通过兼容返回维持，而是迁移到联合结果断言和显式 output contract。这样后续资源 Prepare/Commit 可以直接复用同一条管线。
+
+本轮已完成：前后端 ProjectPlan 基础模型、严格资源来源和 scope 校验、created target 向后引用校验、library_asset 模型输入拒绝、前端 SSE 联合输出，以及默认积木调用点迁移。尚未完成的项目资源 runner、后端 project prompt/route 分流和资源 UI 继续按 Phase 1 至 Phase 3 实施。
+
 ## 19. 安全、性能与可观测性
 
 ### 19.1 安全
@@ -1227,7 +1239,7 @@ Phase 0 和最终验收均需执行全部命令，不能只运行新增测试。
 
 发布顺序：
 
-1. 后端先上线兼容 schema：接受 protocol v2，但旧请求默认走 ProgramIR。
+1. 后端先上线显式合同 schema：protocol v2 请求必须声明 output_contract，禁止依赖默认返回类型。
 2. 上线前端基础 validator/runner，功能入口先受 feature flag 控制。
 3. 开启内部固定 plan 测试。
 4. 开启项目范围与内置素材；生图继续单独开关。

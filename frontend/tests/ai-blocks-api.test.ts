@@ -107,13 +107,16 @@ describe('AI blocks API', () => {
       requirements: {
         ready: true, title: '移动', goal: '移动', behavior_steps: ['移动'],
         triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []
-      }
+      },
+      output_contract: 'program_ir',
+      scope: 'single_sprite',
+      asset_policy: 'builtin_first'
     }, {
       onPhase: phase => phases.push(phase.message),
       onPlan: steps => plans.push(steps),
       onReasoning: (text, phase) => reasoning.push(`${phase}:${text}`)
     });
-    expect(result).toEqual(program);
+    expect(result).toEqual({kind: 'program', program});
     expect(phases).toEqual(['正在规划']);
     expect(plans).toEqual([['添加绿旗事件']]);
     expect(reasoning).toEqual(['planning:先选择绿旗事件']);
