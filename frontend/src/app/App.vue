@@ -25,6 +25,7 @@ const canvasInput = shallowRef<CanvasInput | null>(null);
 const canvasOpen = ref(false);
 const pendingCanvasHandoff = shallowRef<CanvasPreparedAsset | null>(null);
 const pendingCanvasOpId = ref<string | null>(null);
+const canvasHandoffMode = ref<'direct-import' | 'return-prepared-asset'>('direct-import');
 const aiBlocksPanel = ref<{acceptCanvasPrepared: (opId: string, payload: CanvasPreparedAsset) => void} | null>(null);
 const assetLibraryOpen = ref(false);
 const assetLibraryTrigger = ref<HTMLButtonElement | null>(null);
@@ -131,6 +132,10 @@ async function importLibraryAsset(asset: GeneratedAsset, target: ImageTarget | '
   }
 }
 
+function openCanvasHandoff(opId: string, input: CanvasInput) {
+  pendingCanvasOpId.value = opId; canvasHandoffMode.value = 'return-prepared-asset'; canvasInput.value = input; canvasOpen.value = true;
+}
+
 function onCanvasPrepared(payload: CanvasPreparedAsset) {
   if (pendingCanvasOpId.value && aiBlocksPanel.value) {
     aiBlocksPanel.value.acceptCanvasPrepared(pendingCanvasOpId.value, payload);
@@ -142,6 +147,7 @@ function onCanvasPrepared(payload: CanvasPreparedAsset) {
 async function closeCanvas() {
   canvasOpen.value = false;
   canvasInput.value = null;
+  canvasHandoffMode.value = 'direct-import';
   await nextTick();
   canvasTrigger?.focus();
   window.requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
@@ -266,11 +272,12 @@ onMounted(() => void refreshAssetCount());
           ref="aiBlocksPanel"
           @lock-change="onScratchLockChange"
           @busy-change="onAiBlocksBusyChange"
+          @open-canvas="openCanvasHandoff"
         />
       </aside>
     </main>
 
-    <CanvasWorkspace v-if="canvasOpen" :initial-input="canvasInput" :bridge="bridge" @close="closeCanvas" @prepared="onCanvasPrepared" />
+    <CanvasWorkspace v-if="canvasOpen" :initial-input="canvasInput" :bridge="bridge" :handoff-mode="canvasHandoffMode" @close="closeCanvas" @prepared="onCanvasPrepared" />
     <AssetLibraryDialog
       :open="assetLibraryOpen"
       :assets="assets"

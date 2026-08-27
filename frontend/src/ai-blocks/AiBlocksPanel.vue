@@ -39,6 +39,7 @@ import ResourcePlanReview from './ResourcePlanReview.vue';
 import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
 import {prepareProjectResources} from './project-resource-preparer';
 import type {PreparedResource} from './project-resource-runner';
+import type {CanvasInput} from '../canvas/model/canvas-types';
 import {applyProjectPlan, undoProjectPlan, type ProjectApplyResult} from './project-resource-runner';
 import {createProjectResourceExecutor} from './project-resource-executor';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
@@ -48,6 +49,7 @@ const props = defineProps<{bridge: ScratchGuiBridge | null}>();
 const emit = defineEmits<{
   lockChange: [locked: boolean, message: string];
   busyChange: [busy: boolean];
+  openCanvas: [opId: string, input: CanvasInput];
 }>();
 
 type ViewState = 'chat' | 'summarizing' | 'review' | 'planning' | 'injecting';
@@ -120,6 +122,7 @@ const result = ref<AiGenerationResult | null>(null);
 const projectPlan = ref<ProjectPlan | null>(null);
 const projectApplyResult = ref<ProjectApplyResult | null>(null);
 const preparedResources = shallowRef(new Map<string, PreparedResource>());
+const preparedPlan = ref<ProjectPlan | null>(null);
 const errorMessage = ref('');
 const noticeMessage = ref('');
 const sessionId = ref(createId());
@@ -477,21 +480,39 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
     if (!plan || !snapshot.value || !props.bridge) return;
     const prepared = await prepareProjectResources({plan, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
     preparedResources.value = prepared.prepared;
-    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: preparedResources.value, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
-    projectApplyResult.value = applied;
+    preparedPlan.value = plan;
     projectPlan.value = null;
     state.value = 'chat';
-    noticeMessage.value = '项目资源与积木已提交：' + applied.addedTargets.length + ' 个角色、' + applied.addedCostumes.length + ' 个造型、' + applied.addedBackdrops.length + ' 个背景。';
+    noticeMessage.value = '资源已准备 ' + prepared.prepared.size + ' 项，可选择画布处理后再提交。';
   } catch (error: unknown) {
     state.value = 'chat';
     errorMessage.value = error instanceof Error ? error.message : '资源准备失败';
   }
 }
 
+async function commitPreparedPlan() {
+  const plan = preparedPlan.value;
+  if (!plan || !snapshot.value || !props.bridge || isBusy.value) return;
+  setLocked(true, '正在提交项目资源'); state.value = 'injecting'; errorMessage.value = '';
+  try {
+    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: preparedResources.value, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    projectApplyResult.value = applied; preparedPlan.value = null; state.value = 'chat';
+    noticeMessage.value = '项目资源与积木已提交：' + applied.addedTargets.length + ' 个角色、' + applied.addedCostumes.length + ' 个造型、' + applied.addedBackdrops.length + ' 个背景。';
+  } catch (error: unknown) {state.value = 'chat'; errorMessage.value = error instanceof Error ? error.message : '项目提交失败';}
+  finally {setLocked(false);}
+}
+
+function openPreparedCanvas(opId: string) {
+  const prepared = preparedResources.value.get(opId);
+  if (!prepared || !('blob' in (prepared.value as object))) throw new Error('该资源当前不可在画布中处理');
+  const blob = (prepared.value as {blob: Blob}).blob;
+  emit('openCanvas', opId, {kind: 'blob', blob, fileName: opId + '.png', source: 'upload'});
+}
+
 function acceptCanvasPrepared(opId: string, payload: {kind: 'sprite' | 'backdrop'; costumes?: unknown[]; backdrop?: unknown}) {
   const current = preparedResources.value.get(opId);
   if (!current) throw new Error('找不到待回填的资源操作：' + opId);
-  const value = payload.kind === 'sprite' ? payload.costumes : payload.backdrop;
+  const value = current.kind === 'costume' ? (payload.kind === 'sprite' ? payload.costumes?.[0] : payload.backdrop) : payload.kind === 'sprite' ? {name: current.op_id, costumes: payload.costumes} : payload.backdrop;
   if (!value) throw new Error('画布没有可提交的导出结果');
   const next = new Map(preparedResources.value);
   next.set(opId, {...current, value});
@@ -585,6 +606,12 @@ onBeforeUnmount(() => {
     <div v-if="isBusy" class="ai-blocks-panel-lock" role="status">{{ lockMessage }}</div>
     <div v-if="errorMessage" class="ai-blocks-alert ai-blocks-alert--error" role="alert">{{ errorMessage }}</div>
     <div v-if="noticeMessage" class="ai-blocks-alert" role="status">{{ noticeMessage }}</div>
+    <div v-if="preparedPlan" class="ai-blocks-prepared-actions" role="group" aria-label="项目资源操作">
+      <template v-for="op in preparedPlan.resource_ops" :key="op.op_id">
+        <button v-if="'source' in op && op.source.kind === 'image_generation'" class="button button--quiet" type="button" @click="openPreparedCanvas(op.op_id)">转到画布：{{ op.name }}</button>
+      </template>
+      <button class="button button--primary" type="button" @click="commitPreparedPlan">提交项目</button>
+    </div>
 
     <template v-if="['chat', 'summarizing', 'planning', 'injecting'].includes(state)">
       <div ref="chatLog" class="ai-blocks-chat" role="log" aria-live="polite">
