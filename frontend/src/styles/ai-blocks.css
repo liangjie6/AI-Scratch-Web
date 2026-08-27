@@ -149,6 +149,7 @@
 .resource-review__notice { display: flex; gap: 8px; margin: 16px 20px 8px; padding: 10px 12px; border-left: 3px solid #d28c37; background: #fff8eb; color: #725124; font-size: 13px; }
 .resource-review__list { display: grid; gap: 8px; padding: 8px 20px 20px; }
 .resource-review__item { display: flex; gap: 12px; padding: 12px; border: 1px solid #e0e8e5; border-radius: 6px; }
+.resource-review__check { display: flex; align-items: center; gap: 4px; flex: 0 0 42px; align-self: flex-start; color: #53635e; font-size: 11px; }
 .resource-review__icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: #e8f3ef; color: #2f7865; }
 .resource-review__item strong, .resource-review__item span, .resource-review__item p { display: block; }
 .resource-review__item span { margin-top: 3px; color: #2f7865; font-size: 12px; }

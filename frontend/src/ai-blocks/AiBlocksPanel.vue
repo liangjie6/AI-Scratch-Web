@@ -37,6 +37,7 @@ import {
 import {requestsGenerationNow} from './generation-intent';
 import ResourcePlanReview from './ResourcePlanReview.vue';
 import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
+import {prepareProjectResources} from './project-resource-preparer';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
 import {createId} from '../shared/create-id';
 
@@ -450,6 +451,21 @@ async function undoGeneration() {
   }
 }
 
+async function confirmProjectPlan(confirmedGenerationIds: string[]) {
+  if (!projectPlan.value) return;
+  state.value = 'injecting';
+  errorMessage.value = '';
+  try {
+    const prepared = await prepareProjectResources({plan: projectPlan.value, confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    projectPlan.value = null;
+    state.value = 'chat';
+    noticeMessage.value = '资源已准备 ' + prepared.prepared.size + ' 项，原图已保存到素材库；等待 Commit executor 接入。';
+  } catch (error: unknown) {
+    state.value = 'chat';
+    errorMessage.value = error instanceof Error ? error.message : '资源准备失败';
+  }
+}
+
 function runProject() {
   props.bridge?.run();
 }
@@ -647,6 +663,6 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <ResourcePlanReview :open="Boolean(projectPlan)" :plan="projectPlan" @cancel="projectPlan = null" @confirm="noticeMessage = '资源准备执行器尚未接入，当前未修改 Scratch 项目。'" />
+    <ResourcePlanReview :open="Boolean(projectPlan)" :plan="projectPlan" @cancel="projectPlan = null" @confirm="confirmProjectPlan" />
   </section>
 </template>
