@@ -35,6 +35,8 @@ import {
   type AiGenerationResult
 } from './generation-runner';
 import {requestsGenerationNow} from './generation-intent';
+import ResourcePlanReview from './ResourcePlanReview.vue';
+import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
 import {createId} from '../shared/create-id';
 
@@ -92,6 +94,8 @@ function loadThinkingSettings(): AiBlocksThinkingSettings {
 const initialThinking = loadThinkingSettings();
 const state = ref<ViewState>('chat');
 const mode = ref<AiBlocksMode>('append');
+const scope = ref<AiBlocksScope>('single_sprite');
+const assetPolicy = ref<AssetPolicy>('builtin_first');
 const modelTier = ref<AiBlocksModelTier>('normal');
 const thinkingEnabled = ref(initialThinking.enabled);
 const thinkingStrength = ref<AiBlocksThinkingStrength>(initialThinking.strength);
@@ -106,6 +110,7 @@ const planSteps = ref<string[]>([]);
 const phaseMessage = ref('');
 const progress = ref({current: 0, total: 0, label: ''});
 const result = ref<AiGenerationResult | null>(null);
+const projectPlan = ref<ProjectPlan | null>(null);
 const errorMessage = ref('');
 const noticeMessage = ref('');
 const sessionId = ref(createId());
@@ -363,9 +368,9 @@ async function generate() {
       target: current.context,
       thinking: thinkingSettings(),
       requirements: requirements.value,
-      output_contract: 'program_ir',
-      scope: 'single_sprite',
-      asset_policy: 'builtin_first'
+      output_contract: scope.value === 'project' ? 'project_plan' : 'program_ir',
+      scope: scope.value,
+      asset_policy: assetPolicy.value
     }, {
       onPhase: phase => {
         phaseMessage.value = phase.message || '正在生成积木代码';
@@ -379,6 +384,12 @@ async function generate() {
     }, controller.signal);
 
     assertSnapshotIsCurrent(bridge, current);
+    if (output.kind === 'project') {
+      projectPlan.value = output.project;
+      state.value = 'chat';
+      noticeMessage.value = '项目资源计划已生成，请逐项确认后再准备资源。';
+      return;
+    }
     state.value = 'injecting';
     setLocked(true, 'AI 生成中，请稍等');
     if (output.kind !== 'program') throw new Error('当前积木执行器尚未接入项目计划');
@@ -502,8 +513,11 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <fieldset v-if="snapshot?.hasScripts && ['chat', 'review'].includes(state)" class="ai-blocks-modes">
-      <legend>生成模式</legend>
+    <fieldset v-if="['chat', 'review'].includes(state)" class="ai-blocks-modes">
+      <legend>生成范围与模式</legend>
+      <label :class="{'is-active': scope === 'single_sprite'}"><input v-model="scope" type="radio" value="single_sprite" /><span>当前角色</span></label>
+      <label :class="{'is-active': scope === 'project'}"><input v-model="scope" type="radio" value="project" /><span>整个项目</span></label>
+      <label v-if="scope === 'project'" class="ai-blocks-policy"><span>素材策略</span><select v-model="assetPolicy" aria-label="素材策略"><option value="builtin_first">内置素材优先</option><option value="existing_only">仅已有素材</option><option value="allow_generation">允许生图</option></select></label>
       <label :class="{'is-active': mode === 'modify'}">
         <input v-model="mode" type="radio" value="modify" />
         <span>修改当前代码</span>
@@ -633,5 +647,6 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
+    <ResourcePlanReview :open="Boolean(projectPlan)" :plan="projectPlan" @cancel="projectPlan = null" @confirm="noticeMessage = '资源准备执行器尚未接入，当前未修改 Scratch 项目。'" />
   </section>
 </template>
