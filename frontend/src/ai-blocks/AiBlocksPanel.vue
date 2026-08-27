@@ -99,6 +99,7 @@ function loadThinkingSettings(): AiBlocksThinkingSettings {
 const initialThinking = loadThinkingSettings();
 const state = ref<ViewState>('chat');
 const mode = ref<AiBlocksMode>('append');
+const projectAssetsEnabled = import.meta.env.VITE_AI_PROJECT_ASSETS_ENABLED !== 'false';
 const scope = ref<AiBlocksScope>('single_sprite');
 const assetPolicy = ref<AssetPolicy>('builtin_first');
 const modelTier = ref<AiBlocksModelTier>('normal');
@@ -197,7 +198,7 @@ function restoreConversation(conversation: StoredConversation) {
   if (!snapshot.value || isBusy.value) return;
   sessionId.value = conversation.id;
   mode.value = conversation.mode;
-  scope.value = conversation.scope === 'project' ? 'project' : 'single_sprite';
+  scope.value = projectAssetsEnabled && conversation.scope === 'project' ? 'project' : 'single_sprite';
   assetPolicy.value = ['builtin_first', 'existing_only', 'allow_generation'].includes(conversation.assetPolicy ?? '') ? conversation.assetPolicy as AssetPolicy : 'builtin_first';
   messages.value = conversation.messages.map(message => ({...message}));
   requirements.value = null;
@@ -550,7 +551,7 @@ onBeforeUnmount(() => {
     <fieldset v-if="['chat', 'review'].includes(state)" class="ai-blocks-modes">
       <legend>生成范围与模式</legend>
       <label :class="{'is-active': scope === 'single_sprite'}"><input v-model="scope" type="radio" value="single_sprite" /><span>当前角色</span></label>
-      <label :class="{'is-active': scope === 'project'}"><input v-model="scope" type="radio" value="project" /><span>整个项目</span></label>
+      <label v-if="projectAssetsEnabled" :class="{'is-active': scope === 'project'}"><input v-model="scope" type="radio" value="project" /><span>整个项目</span></label>
       <label v-if="scope === 'project'" class="ai-blocks-policy"><span>素材策略</span><select v-model="assetPolicy" aria-label="素材策略"><option value="builtin_first">内置素材优先</option><option value="existing_only">仅已有素材</option><option value="allow_generation">允许生图</option></select></label>
       <label :class="{'is-active': mode === 'modify'}">
         <input v-model="mode" type="radio" value="modify" />
