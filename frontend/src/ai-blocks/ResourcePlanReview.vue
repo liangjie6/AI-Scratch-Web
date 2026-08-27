@@ -15,6 +15,7 @@ function sourceOf(op: ResourceOp) {return 'source' in op ? op.source : undefined
 function tagsOf(op: ResourceOp) {return 'tags' in op ? op.tags : [];}
 const generated = computed(() => resources.value.filter(op => sourceOf(op)?.kind === 'image_generation'));
 const allGeneratedSelected = computed(() => generated.value.every(op => selectedGenerationIds.value.has(op.op_id)));
+const canConfirm = computed(() => allGeneratedSelected.value && !resources.value.some(op => sourceOf(op)?.kind === 'scratch_library' && !selections.value.has(op.op_id)));
 watch(() => props.open, open => {if (open) selectedGenerationIds.value = new Set(generated.value.map(op => op.op_id));});
 function toggleGeneration(id: string) {const next = new Set(selectedGenerationIds.value); if (next.has(id)) next.delete(id); else next.add(id); selectedGenerationIds.value = next;}
 function openPicker(op: ResourceOp) {pickerOp.value = op;}
@@ -44,7 +45,7 @@ function detail(op: ResourceOp) {
         <div class="resource-review__list">
           <article v-for="op in resources" :key="op.op_id" class="resource-review__item"><button v-if="sourceOf(op)?.kind === 'scratch_library'" class="button button--quiet resource-review__choose" type="button" @click="openPicker(op)">{{ selections.has(op.op_id) ? '已选择' : '选择素材' }}</button><label v-if="sourceOf(op)?.kind === 'image_generation'" class="resource-review__check"><input type="checkbox" :checked="selectedGenerationIds.has(op.op_id)" :aria-label="'确认生成 ' + op.name" @click="toggleGeneration(op.op_id)" /><span>确认</span></label><div class="resource-review__icon"><Sparkles v-if="sourceLabel(op) === '待确认生图'" :size="18" /><Check v-else :size="18" /></div><div><strong>{{ op.name }}</strong><span>{{ sourceLabel(op) }}</span><p>{{ detail(op) }}</p><small v-if="tagsOf(op).length">#{{ tagsOf(op).join(' #') }}</small></div></article>
         </div>
-        <footer class="resource-review__footer"><span>{{ resources.length }} 项资源<span v-if="generated.length">，其中 {{ generated.length }} 项需要确认生成</span></span><div><button class="button" type="button" @click="emit('cancel')">取消</button><button class="button button--primary" type="button" :disabled="!allGeneratedSelected" @click="confirm">确认并准备</button></div></footer>
+        <footer class="resource-review__footer"><span>{{ resources.length }} 项资源<span v-if="generated.length">，其中 {{ generated.length }} 项需要确认生成</span></span><div><button class="button" type="button" @click="emit('cancel')">取消</button><button class="button button--primary" type="button" :disabled="!canConfirm" @click="confirm">确认并准备</button></div></footer>
       </section>
       <ScratchLibraryPickerDialog v-if="pickerOp" :open="Boolean(pickerOp)" :type="pickerType" :initial-terms="pickerTerms" @close="pickerOp = null" @select="selectAsset" />
     </div>
