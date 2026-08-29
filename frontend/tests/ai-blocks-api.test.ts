@@ -47,9 +47,7 @@ describe('AI blocks API', () => {
     await streamAiBlocksChat(base, delta => { answer += delta; });
     expect(answer).toBe('请说明操作方式');
     expect(fetchMock).toHaveBeenCalledWith('/api/ai-blocks/chat', expect.objectContaining({method: 'POST'}));
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
-      thinking: {enabled: true, strength: 'medium'}
-    });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({thinking: {enabled: true, strength: 'medium'}});
   });
 
   it('returns structured requirements', async () => {
@@ -66,16 +64,10 @@ describe('AI blocks API', () => {
     let requestBody = '';
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       requestBody = String(init?.body ?? '');
-      return new Response(JSON.stringify(requirements), {
-        status: 200,
-        headers: {'Content-Type': 'application/json'}
-      });
+      return new Response(JSON.stringify(requirements), {status: 200, headers: {'Content-Type': 'application/json'}});
     });
     vi.stubGlobal('fetch', fetchMock);
-    await expect(summarizeAiBlocksRequirements({
-      ...base,
-      proceed_with_defaults: true
-    })).resolves.toEqual(requirements);
+    await expect(summarizeAiBlocksRequirements({...base, proceed_with_defaults: true})).resolves.toEqual(requirements);
     expect(JSON.parse(requestBody)).toMatchObject({proceed_with_defaults: true});
   });
 
@@ -87,10 +79,7 @@ describe('AI blocks API', () => {
       variables: [],
       lists: [],
       broadcasts: [],
-      scripts: [{
-        id: 'script_move', purpose: '移动', x: 40, y: 40,
-        blocks: [{opcode: 'event_whenflagclicked'}]
-      }]
+      scripts: [{id: 'script_move', purpose: '移动', x: 40, y: 40, blocks: [{opcode: 'event_whenflagclicked'}]}]
     };
     vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
       'event: phase\ndata: {"phase":"planning","message":"正在规划"}\n\n',
@@ -104,17 +93,14 @@ describe('AI blocks API', () => {
     const reasoning: string[] = [];
     const result = await streamAiBlocksGeneration({
       ...base,
-      requirements: {
-        ready: true, title: '移动', goal: '移动', behavior_steps: ['移动'],
-        triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []
-      },
+      requirements: {ready: true, title: '移动', goal: '移动', behavior_steps: ['移动'], triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []},
       output_contract: 'program_ir',
       scope: 'single_sprite',
       asset_policy: 'builtin_first'
     }, {
       onPhase: phase => phases.push(phase.message),
       onPlan: steps => plans.push(steps),
-      onReasoning: (text, phase) => reasoning.push(`${phase}:${text}`)
+      onReasoning: (text, phase) => reasoning.push(phase + ':' + text)
     });
     expect(result).toEqual({kind: 'program', program});
     expect(phases).toEqual(['正在规划']);
@@ -122,10 +108,36 @@ describe('AI blocks API', () => {
     expect(reasoning).toEqual(['planning:先选择绿旗事件']);
   });
 
-  it('rejects a stream that ends without completion', async () => {
+  it('returns a single project program target from the new protocol', async () => {
+    const program = {
+      schema_version: 1,
+      summary: '移动新角色',
+      remove_script_ids: [],
+      variables: [],
+      lists: [],
+      broadcasts: [],
+      scripts: [{id: 'script_created', purpose: '移动', x: 0, y: 0, blocks: [{opcode: 'event_whenflagclicked'}]}]
+    };
+    const targetRef = {target: {kind: 'created_sprite' as const, op_id: 'sprite_1'}, mode: 'append' as const, intent: '移动新角色'};
     vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
-      'event: assistant_delta\ndata: {"text":"未完成"}\n\n'
+      'event: plan_ready\ndata: {"plan":{"steps":["移动"]}}\n\n',
+      'event: project_program_ready\ndata: ' + JSON.stringify({program, target: targetRef}) + '\n\n',
+      'event: message_complete\ndata: {}\n\n'
     ])));
+    const result = await streamAiBlocksGeneration({
+      ...base,
+      requirements: {ready: true, title: '项目', goal: '项目', behavior_steps: ['移动'], triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []},
+      output_contract: 'project_program',
+      scope: 'project',
+      asset_policy: 'builtin_first',
+      project_manifest: {schema_version: 1, scope: 'project', summary: '项目', resource_ops: [], program_targets: [targetRef], shared_state: {variables: [], lists: [], broadcasts: []}},
+      program_target: targetRef
+    }, {onPlan: steps => expect(steps).toEqual(['移动'])});
+    expect(result).toEqual({kind: 'program', program, target: targetRef});
+  });
+
+  it('rejects a stream that ends without completion', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => sseResponse(['event: assistant_delta\ndata: {"text":"未完成"}\n\n'])));
     await expect(streamAiBlocksChat(base, () => undefined)).rejects.toMatchObject({code: 'STREAM_INCOMPLETE'});
   });
 });

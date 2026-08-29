@@ -9,6 +9,7 @@ export interface InputSpec {
   shadow?: Exclude<InputKind, 'block'>;
   shadowOpcode?: string;
   shadowField?: string;
+  shadowResolver?: FieldResolverKind;
 }
 
 export interface FieldSpec {
@@ -37,18 +38,18 @@ export const BLOCK_CATALOG = {
   event_whenbackdropswitchesto: {shape: 'hat', targets: both, fields: fields('BACKDROP')},
   event_whengreaterthan: {shape: 'hat', targets: both, fields: fields('WHENGREATERTHANMENU'), inputs: {VALUE: input('number', 'number')}},
   event_whenbroadcastreceived: {shape: 'hat', targets: both, fields: {BROADCAST_OPTION: {required: true, resolver: 'broadcast'}}},
-  event_broadcast: {shape: 'stack', targets: both, inputs: {BROADCAST_INPUT: input('text', 'text')}},
-  event_broadcastandwait: {shape: 'stack', targets: both, inputs: {BROADCAST_INPUT: input('text', 'text')}},
+  event_broadcast: {shape: 'stack', targets: both, inputs: {BROADCAST_INPUT: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'event_broadcast_menu', shadowField: 'BROADCAST_OPTION', shadowResolver: 'broadcast'}}},
+  event_broadcastandwait: {shape: 'stack', targets: both, inputs: {BROADCAST_INPUT: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'event_broadcast_menu', shadowField: 'BROADCAST_OPTION', shadowResolver: 'broadcast'}}},
 
   motion_movesteps: {shape: 'stack', targets: sprite, inputs: {STEPS: input('number', 'number')}},
   motion_turnright: {shape: 'stack', targets: sprite, inputs: {DEGREES: input('number', 'number')}},
   motion_turnleft: {shape: 'stack', targets: sprite, inputs: {DEGREES: input('number', 'number')}},
-  motion_goto: {shape: 'stack', targets: sprite, inputs: {TO: input('text', 'text')}},
+  motion_goto: {shape: 'stack', targets: sprite, inputs: {TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_goto_menu', shadowField: 'TO'}}},
   motion_gotoxy: {shape: 'stack', targets: sprite, inputs: {X: input('number', 'number'), Y: input('number', 'number')}},
-  motion_glideto: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), TO: input('text', 'text')}},
+  motion_glideto: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_glideto_menu', shadowField: 'TO'}}},
   motion_glidesecstoxy: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), X: input('number', 'number'), Y: input('number', 'number')}},
   motion_pointindirection: {shape: 'stack', targets: sprite, inputs: {DIRECTION: input('angle', 'angle')}},
-  motion_pointtowards: {shape: 'stack', targets: sprite, inputs: {TOWARDS: input('text', 'text')}},
+  motion_pointtowards: {shape: 'stack', targets: sprite, inputs: {TOWARDS: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_pointtowards_menu', shadowField: 'TOWARDS'}}},
   motion_changexby: {shape: 'stack', targets: sprite, inputs: {DX: input('number', 'number')}},
   motion_setx: {shape: 'stack', targets: sprite, inputs: {X: input('number', 'number')}},
   motion_changeyby: {shape: 'stack', targets: sprite, inputs: {DY: input('number', 'number')}},
@@ -63,9 +64,9 @@ export const BLOCK_CATALOG = {
   looks_say: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text')}},
   looks_thinkforsecs: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text'), SECS: input('number', 'number')}},
   looks_think: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text')}},
-  looks_switchcostumeto: {shape: 'stack', targets: sprite, inputs: {COSTUME: input('text', 'text')}},
+  looks_switchcostumeto: {shape: 'stack', targets: sprite, inputs: {COSTUME: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_costume', shadowField: 'COSTUME'}}},
   looks_nextcostume: {shape: 'stack', targets: sprite},
-  looks_switchbackdropto: {shape: 'stack', targets: both, inputs: {BACKDROP: input('text', 'text')}},
+  looks_switchbackdropto: {shape: 'stack', targets: both, inputs: {BACKDROP: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_backdrops', shadowField: 'BACKDROP'}}},
   looks_nextbackdrop: {shape: 'stack', targets: both},
   looks_changesizeby: {shape: 'stack', targets: sprite, inputs: {CHANGE: input('number', 'number')}},
   looks_setsizeto: {shape: 'stack', targets: sprite, inputs: {SIZE: input('number', 'number')}},
@@ -80,8 +81,8 @@ export const BLOCK_CATALOG = {
   looks_backdropnumbername: {shape: 'reporter', targets: both, fields: fields('NUMBER_NAME')},
   looks_size: {shape: 'reporter', targets: sprite},
 
-  sound_playuntildone: {shape: 'stack', targets: both, inputs: {SOUND_MENU: input('text', 'text')}},
-  sound_play: {shape: 'stack', targets: both, inputs: {SOUND_MENU: input('text', 'text')}},
+  sound_playuntildone: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU'}}},
+  sound_play: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU'}}},
   sound_stopallsounds: {shape: 'stack', targets: both},
   sound_changeeffectby: {shape: 'stack', targets: both, fields: fields('EFFECT'), inputs: {VALUE: input('number', 'number')}},
   sound_seteffectto: {shape: 'stack', targets: both, fields: fields('EFFECT'), inputs: {VALUE: input('number', 'number')}},
@@ -99,13 +100,13 @@ export const BLOCK_CATALOG = {
   control_repeat_until: {shape: 'stack', targets: both, inputs: {CONDITION: input('boolean')}, substacks: ['SUBSTACK']},
   control_stop: {shape: 'cap', targets: both, fields: fields('STOP_OPTION')},
   control_start_as_clone: {shape: 'hat', targets: sprite},
-  control_create_clone_of: {shape: 'stack', targets: both, inputs: {CLONE_OPTION: input('text', 'text')}},
+  control_create_clone_of: {shape: 'stack', targets: both, inputs: {CLONE_OPTION: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'control_create_clone_of_menu', shadowField: 'CLONE_OPTION'}}},
   control_delete_this_clone: {shape: 'cap', targets: sprite},
 
   sensing_touchingobject: {shape: 'boolean', targets: sprite, inputs: {TOUCHINGOBJECTMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_touchingobjectmenu', shadowField: 'TOUCHINGOBJECTMENU'}}},
   sensing_touchingcolor: {shape: 'boolean', targets: sprite, inputs: {COLOR: input('color', 'color')}},
   sensing_coloristouchingcolor: {shape: 'boolean', targets: sprite, inputs: {COLOR: input('color', 'color'), COLOR2: input('color', 'color')}},
-  sensing_distanceto: {shape: 'reporter', targets: sprite, inputs: {DISTANCETOMENU: input('text', 'text')}},
+  sensing_distanceto: {shape: 'reporter', targets: sprite, inputs: {DISTANCETOMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_distancetomenu', shadowField: 'DISTANCETOMENU'}}},
   sensing_askandwait: {shape: 'stack', targets: both, inputs: {QUESTION: input('text', 'text')}},
   sensing_answer: {shape: 'reporter', targets: both},
   sensing_keypressed: {shape: 'boolean', targets: both, inputs: {KEY_OPTION: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_keyoptions', shadowField: 'KEY_OPTION'}}},

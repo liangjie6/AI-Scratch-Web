@@ -253,8 +253,10 @@ export class ScratchGuiBridge {
     return {assetId, md5ext: assetId + '.' + costume.dataFormat, costume: {asset, assetId, md5ext: assetId + '.' + costume.dataFormat, dataFormat: costume.dataFormat, name: costume.name, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY, bitmapResolution: costume.bitmapResolution}};
   }
 
-  async saveProject() {
-    return this.requireVm().saveProjectSb3();
+  async saveProject(): Promise<Uint8Array> {
+    const output = await this.requireVm().saveProjectSb3();
+    if (output instanceof Uint8Array) return new Uint8Array(output);
+    return new Uint8Array(await (output as Blob).arrayBuffer());
   }
 
   async loadProject(input: ArrayBuffer | Uint8Array | string) {

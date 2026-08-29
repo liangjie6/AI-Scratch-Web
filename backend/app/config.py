@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     sui_xiang_api_key: str | None = Field(default=None, validation_alias='SUI_XIANG_API_KEY')
     agnes_api_key: str | None = Field(default=None, validation_alias='AGNES_API_KEY')
     deepseek_api_key: str | None = Field(default=None, validation_alias='DEEPSEEK_API_KEY')
+    gpt_api_key: str | None = Field(default=None, validation_alias='GPT_API_KEY')
     image_request_timeout_seconds: float = Field(default=90, ge=5, le=180, validation_alias='IMAGE_REQUEST_TIMEOUT_SECONDS')
     image_max_download_bytes: int = Field(default=12_582_912, ge=1_048_576, le=50_000_000, validation_alias='IMAGE_MAX_DOWNLOAD_BYTES')
     image_max_request_bytes: int = Field(default=16_384, ge=2_048, le=1_048_576, validation_alias='IMAGE_MAX_REQUEST_BYTES')
@@ -21,8 +22,10 @@ class Settings(BaseSettings):
     ai_blocks_max_request_bytes: int = Field(default=262_144, ge=16_384, le=1_048_576, validation_alias='AI_BLOCKS_MAX_REQUEST_BYTES')
     ai_blocks_max_concurrency: int = Field(default=2, ge=1, le=8, validation_alias='AI_BLOCKS_MAX_CONCURRENCY')
     ai_blocks_provider_timeout_seconds: float = Field(
-        default=180, ge=10, le=360, validation_alias='AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS',
+        default=360, ge=10, le=360, validation_alias='AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS',
     )
+    ai_blocks_retry_attempts: int = Field(default=3, ge=1, le=5, validation_alias='AI_BLOCKS_RETRY_ATTEMPTS')
+    ai_blocks_retry_delay_seconds: float = Field(default=0.5, ge=0, le=10, validation_alias='AI_BLOCKS_RETRY_DELAY_SECONDS')
     max_prompt_length: int = Field(default=800, ge=10, le=2_000)
 
     provider_base_url: str = 'https://sui-xiang.com/v1'
@@ -31,6 +34,9 @@ class Settings(BaseSettings):
     agnes_chat_model: str = 'agnes-2.5-flash'
     deepseek_api_base: str = 'https://api.deepseek.com'
     deepseek_chat_model: str = 'deepseek-v4-flash'
+    gpt_api_base: str = 'https://apexapi.roixw.com'
+    gpt_chat_model: str = 'gpt-5.6-sol'
+    gpt_reasoning_effort: str = Field(default='high', validation_alias='GPT_REASONING_EFFORT')
 
     def require_api_key(self) -> str:
         if not self.sui_xiang_api_key:
@@ -46,6 +52,11 @@ class Settings(BaseSettings):
         if not self.deepseek_api_key:
             raise RuntimeError('DEEPSEEK_API_KEY is required for advanced AI block generation')
         return self.deepseek_api_key
+
+    def require_gpt_api_key(self) -> str:
+        if not self.gpt_api_key:
+            raise RuntimeError('GPT_API_KEY is required for super AI block generation')
+        return self.gpt_api_key
 
 
 @lru_cache(maxsize=1)

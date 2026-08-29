@@ -5,7 +5,7 @@ import type {ScratchGuiBridge} from './scratch-gui-bridge';
 export interface CroppedImage { blob: Blob; width: number; height: number; assetId?: string }
 export interface InlineAssetWire { assetType: {contentType: 'image/png' | 'image/svg+xml'; name: 'ImageBitmap' | 'ImageVector'; runtimeFormat: 'png' | 'svg'; immutable: true}; dataFormat: 'png' | 'svg'; data: number[] }
 export interface CostumeExport { name: string; blob: Blob; dataFormat: 'png' | 'svg'; assetWidth: number; assetHeight: number; rotationCenterX: number; rotationCenterY: number; bitmapResolution: 1 | 2 }
-export interface SpriteExport { name: string; costumes: CostumeExport[]; initialSize: number }
+export interface SpriteExport { name: string; costumes: CostumeExport[]; initialSize: number; x?: number; y?: number }
 export interface ImportedSpriteResult { targetId: string; costumeAssetIds: string[] }
 export interface SpriteImportExpectation {name: string; assetId: string; bitmapResolution: 1 | 2; rotationCenterX: number; rotationCenterY: number}
 
@@ -31,7 +31,7 @@ export async function buildSpriteImport(sprite: SpriteExport) {
     costumes.push({asset, assetId, md5ext: assetId + '.'+dataFormat, dataFormat, name, bitmapResolution: costume.bitmapResolution, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY});
     expectations.push({name, assetId, bitmapResolution: costume.bitmapResolution, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY});
   }
-  const spriteJson = {isStage: false, name: sprite.name || '画布角色', variables: {}, lists: {}, broadcasts: {}, blocks: {}, currentCostume: 0, costumes, sounds: [], volume: 100, visible: true, x: 0, y: 0, size: Math.min(100, Math.max(1, sprite.initialSize)), direction: 90, draggable: false, rotationStyle: 'all around'};
+  const spriteJson = {isStage: false, name: sprite.name || '画布角色', variables: {}, lists: {}, broadcasts: {}, blocks: {}, currentCostume: 0, costumes, sounds: [], volume: 100, visible: true, x: sprite.x ?? 0, y: sprite.y ?? 0, size: Math.min(100, Math.max(1, sprite.initialSize)), direction: 90, draggable: false, rotationStyle: 'all around'};
   return {spriteJson, expectations};
 }
 

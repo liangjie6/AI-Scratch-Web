@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -55,11 +56,11 @@ class TargetContext(StrictModel):
 
 class ThinkingSettings(StrictModel):
     enabled: bool = True
-    strength: Literal['low', 'medium', 'high'] = 'medium'
+    strength: Literal['low', 'medium', 'high', 'xhigh', 'max'] = 'medium'
 
 
 class AIBlocksRequestBase(StrictModel):
-    model_tier: Literal['normal', 'advanced'] = 'normal'
+    model_tier: Literal['normal', 'advanced', 'super'] = 'normal'
     session_id: ShortString
     request_id: ShortString
     messages: list[ChatMessage] = Field(min_length=1, max_length=40)
@@ -88,15 +89,79 @@ class RequirementsResponse(StrictModel):
 
 class GenerateRequest(AIBlocksRequestBase):
     requirements: RequirementsResponse
+    plan: Plan | None = None
     protocol_version: Literal[1, 2] = 1
-    output_contract: Literal['program_ir', 'project_plan'] = 'program_ir'
+    output_contract: Literal['program_ir', 'project_manifest', 'project_program'] = 'program_ir'
     scope: Literal['single_sprite', 'project'] = 'single_sprite'
+    project_manifest: ProjectManifest | None = None
+    program_target: ProjectProgramTarget | None = None
     asset_policy: Literal['builtin_first', 'existing_only', 'allow_generation'] = 'builtin_first'
     asset_match_evidence: list[AssetMatchEvidence] = Field(default_factory=list, max_length=40)
 
 
 class Plan(StrictModel):
     steps: list[ShortString] = Field(min_length=1, max_length=40)
+
+
+class ProjectProgramTarget(StrictModel):
+    target: TargetRef
+    mode: Literal['append', 'modify', 'rewrite']
+    intent: ShortString
+
+
+class ProjectSharedState(StrictModel):
+    variables: list[VariableDefinition] = Field(default_factory=list, max_length=100)
+    lists: list[ListDefinition] = Field(default_factory=list, max_length=50)
+    broadcasts: list[ShortString] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode='after')
+    def validate_shared_state(self) -> ProjectSharedState:
+        for values, label in ((self.variables, 'variables'), (self.lists, 'lists')):
+            names = [item.name for item in values]
+            if len(names) != len(set(names)):
+                raise ValueError(f'{label} names must be unique')
+            if any(item.scope != 'global' for item in values):
+                raise ValueError(f'shared {label} must use global scope')
+        if len(self.broadcasts) != len(set(self.broadcasts)):
+            raise ValueError('broadcast names must be unique')
+        return self
+
+
+class ProjectManifest(StrictModel):
+    schema_version: Literal[1]
+    scope: Literal['project']
+    summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
+    resource_ops: list[ResourceOp] = Field(default_factory=list, max_length=24)
+    program_targets: list[ProjectProgramTarget] = Field(default_factory=list, max_length=12)
+    shared_state: ProjectSharedState = Field(default_factory=ProjectSharedState)
+
+    @model_validator(mode='after')
+    def validate_manifest(self) -> ProjectManifest:
+        ids: set[str] = set()
+        created: set[str] = set()
+        for operation in self.resource_ops:
+            if operation.op_id in ids:
+                raise ValueError('resource op_id values must be unique')
+            ids.add(operation.op_id)
+            if operation.op in {'add_sprite', 'add_builtin_sprite'}:
+                created.add(operation.op_id)
+            target = operation.target
+            if target and target.kind == 'created_sprite' and target.op_id not in created:
+                raise ValueError('created_sprite must reference a prior add_sprite or add_builtin_sprite operation')
+        keys = [(item.target.kind, item.target.name, item.target.op_id) for item in self.program_targets]
+        if len(keys) != len(set(keys)):
+            raise ValueError('program targets must be unique')
+        for item in self.program_targets:
+            if item.target.kind == 'created_sprite' and item.target.op_id not in created:
+                raise ValueError('created_sprite must reference a prior add_sprite or add_builtin_sprite operation')
+        if any(item.target.kind in {'stage', 'existing_sprite', 'created_sprite'} and item.mode != 'append' for item in self.program_targets):
+            raise ValueError('stage, existing_sprite and created_sprite programs must use append')
+        return self
+
+
+class ProjectProgramResponse(StrictModel):
+    target: ProjectProgramTarget
+    program: ProgramIR
 
 
 class LiteralInput(StrictModel):
@@ -408,78 +473,90 @@ class ImageGenerationSource(StrictModel):
     sheet_layout: Literal['1x1']
 
 
-ProjectPlanResourceSource = Annotated[ScratchLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
+ProjectManifestResourceSource = Annotated[ScratchLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
+
+
+class CostumeResource(StrictModel):
+    name: ShortString
+    source: ProjectManifestResourceSource
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
 
 
 class ResourceOp(StrictModel):
-    op: Literal['add_builtin_sprite', 'add_sprite', 'add_costume', 'add_backdrop', 'select_backdrop']
+    op: Literal['add_builtin_sprite', 'add_sprite', 'delete_sprite', 'add_costume', 'add_backdrop', 'select_backdrop']
     op_id: ShortString
     target: TargetRef | None = None
     name: ShortString
-    source: ProjectPlanResourceSource | None = None
+    source: ProjectManifestResourceSource | None = None
     tags: list[ShortString] = Field(default_factory=list, max_length=20)
     x: int | None = Field(default=None, ge=-10000, le=10000)
     y: int | None = Field(default=None, ge=-10000, le=10000)
     size: int | None = Field(default=None, ge=1, le=1000)
     select_after: bool | None = None
-    costumes: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+    costumes: list[CostumeResource] = Field(default_factory=list, max_length=12)
 
     @model_validator(mode='after')
     def validate_operation(self) -> ResourceOp:
+        positional = (self.x, self.y, self.size)
         if self.op == 'select_backdrop':
-            if self.source is not None or self.target is not None:
-                raise ValueError('select_backdrop cannot prepare a source or target')
-        elif self.source is None:
+            if self.source is not None or self.target is not None or any(v is not None for v in positional) or self.tags or self.select_after is not None or self.costumes:
+                raise ValueError('select_backdrop only permits op, op_id and name')
+            return self
+        if self.op == 'delete_sprite':
+            if self.source is not None or self.target is None or self.target.kind != 'existing_sprite' or any(v is not None for v in positional) or self.tags or self.select_after is not None or self.costumes:
+                raise ValueError('delete_sprite requires an existing_sprite target and no resource fields')
+            return self
+        if self.source is None:
             raise ValueError(f'{self.op} requires source')
-        if self.op == 'add_builtin_sprite' and (self.source is None or self.source.kind != 'scratch_library' or self.source.asset_type != 'sprite'):
+        if self.op in {'add_builtin_sprite', 'add_sprite'}:
+            if self.target is not None or any(v is None for v in positional) or self.select_after is not None:
+                raise ValueError(f'{self.op} requires x, y, size and no target/select_after')
+        elif self.op == 'add_costume':
+            if self.target is None or self.target.kind == 'stage' or any(v is not None for v in positional) or self.select_after is None:
+                raise ValueError('add_costume requires a non-stage target and select_after')
+        elif self.op == 'add_backdrop':
+            if self.target is not None or any(v is not None for v in positional) or self.select_after is None:
+                raise ValueError('add_backdrop requires select_after and no target/placement fields')
+        if self.op == 'add_builtin_sprite' and (self.source.kind != 'scratch_library' or self.source.asset_type != 'sprite'):
             raise ValueError('add_builtin_sprite requires a sprite scratch_library source')
-        if self.op == 'add_costume' and self.target and self.target.kind == 'stage':
-            raise ValueError('add_costume cannot target stage')
-        if self.op == 'add_backdrop' and self.source and self.source.kind == 'scratch_library' and self.source.asset_type != 'backdrop':
+        if self.op == 'add_backdrop' and self.source.kind == 'scratch_library' and self.source.asset_type != 'backdrop':
             raise ValueError('add_backdrop requires a backdrop source')
-        if self.op in {'add_costume', 'add_sprite'} and self.source and self.source.kind == 'scratch_library' and self.source.asset_type == 'sprite':
+        if self.op in {'add_costume', 'add_sprite'} and self.source.kind == 'scratch_library' and self.source.asset_type == 'sprite':
             raise ValueError('costume source cannot be a sprite')
+        if self.op == 'add_sprite' and any(item.source.kind == 'scratch_library' and item.source.asset_type == 'sprite' for item in self.costumes):
+            raise ValueError('nested costume source cannot be a sprite')
         return self
 
 
-class BlockProgramPlan(StrictModel):
-    target: TargetRef
-    mode: Literal['append', 'modify', 'rewrite']
-    program: ProgramIR
-
-
-class ProjectPlan(StrictModel):
-    schema_version: Literal[1]
-    scope: Literal['single_sprite', 'project']
-    summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
-    resource_ops: list[ResourceOp] = Field(default_factory=list, max_length=24)
-    block_programs: list[BlockProgramPlan] = Field(default_factory=list, max_length=12)
-
-    @model_validator(mode='after')
-    def validate_operations(self) -> ProjectPlan:
-        ids: set[str] = set()
-        created: set[str] = set()
-        for operation in self.resource_ops:
-            if operation.op_id in ids:
-                raise ValueError('resource op_id values must be unique')
-            ids.add(operation.op_id)
-            if operation.op == 'add_sprite':
-                created.add(operation.op_id)
-            target = operation.target
-            if target and target.kind == 'created_sprite' and target.op_id not in created:
-                raise ValueError('created_sprite must reference a prior add_sprite operation')
-        if self.scope == 'single_sprite':
-            if len(self.block_programs) > 1:
-                raise ValueError('single_sprite permits at most one block program')
-            if any(item.op != 'add_costume' for item in self.resource_ops):
-                raise ValueError('single_sprite only permits add_costume')
-            if any(item.target is None or item.target.kind != 'current_target' for item in self.resource_ops):
-                raise ValueError('single_sprite resources must target current_target')
-            if any(item.target.kind != 'current_target' for item in self.block_programs):
-                raise ValueError('single_sprite blocks must target current_target')
-        return self
+def normalize_project_manifest_input(value: object) -> object:
+    """Remove only harmless legacy aliases before strict manifest validation."""
+    if not isinstance(value, dict):
+        return value
+    normalized = deepcopy(value)
+    for operation in normalized.get('resource_ops', []):
+        if not isinstance(operation, dict):
+            continue
+        op = operation.get('op')
+        if op in {'add_builtin_sprite', 'add_sprite', 'add_backdrop', 'select_backdrop'}:
+            operation.pop('target', None)
+        if op in {'add_costume', 'add_backdrop'}:
+            if operation.get('select_after') == 'true': operation['select_after'] = True
+            elif operation.get('select_after') == 'false': operation['select_after'] = False
+        if op == 'add_costume':
+            source = operation.get('source')
+            if isinstance(source, dict) and source.get('kind') == 'scratch_library' and source.get('asset_type') == 'sprite':
+                source['asset_type'] = 'costume'
+        costumes = operation.get('costumes')
+        if isinstance(costumes, list):
+            for costume in costumes:
+                if isinstance(costume, dict) and isinstance(costume.get('source'), dict) and costume['source'].get('kind') == 'scratch_library' and costume['source'].get('asset_type') == 'sprite':
+                    costume['source']['asset_type'] = 'costume'
+    for target in normalized.get('program_targets', []):
+        if isinstance(target, dict) and isinstance(target.get('target'), dict) and target['target'].get('kind') in {'stage', 'current_target'}:
+            target['target'].pop('name', None)
+            target['target'].pop('op_id', None)
+    return normalized
 
 
 GenerateRequest.model_rebuild()
-ProjectPlan.model_rebuild()
 

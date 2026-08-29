@@ -17,4 +17,15 @@ describe('ProjectPlan resource executor', () => {
     await createProjectResourceExecutor({bridge, currentTargetId: 'target-1'}).apply({op: 'select_backdrop', op_id: 'backdrop-1', name: '森林'}, {op_id: 'backdrop-1', kind: 'backdrop_selection', value: {name: '森林'}}, contextValue);
     expect(bridge.selectBackdropByName).toHaveBeenCalledWith('森林'); expect(contextValue.result.selectedBackdrop.asset_id).toBe('asset-2');
   });
+  it('resolves a created sprite when adding a later costume', async () => {
+    const bridge = {addCostumeToTarget: vi.fn(async () => ({assetId: 'asset-3', name: '帽子'})), currentVm: {runtime: {targets: []}}} as any;
+    const contextValue = context();
+    contextValue.result.addedTargets.push({op_id: 'sprite-1', target_id: 'created-target', name: '角色'});
+    await createProjectResourceExecutor({bridge, currentTargetId: 'target-1'}).apply({
+      op: 'add_costume', op_id: 'costume-2', target: {kind: 'created_sprite', op_id: 'sprite-1'}, name: '帽子',
+      source: {kind: 'image_generation', reason: 'x', prompt: 'x', style: 'cartoon', width: 512, height: 512, sheet_layout: '1x1'}, tags: [], select_after: false
+    }, {...prepared, op_id: 'costume-2'}, contextValue);
+    expect(bridge.addCostumeToTarget).toHaveBeenCalledWith('created-target', costume, false);
+    expect(contextValue.result.addedCostumes[0].target_id).toBe('created-target');
+  });
 });

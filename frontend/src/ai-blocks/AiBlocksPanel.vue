@@ -15,7 +15,11 @@ import {
   Send,
   Sparkles,
   Trash2,
-  Undo2
+  Undo2,
+  ChevronDown,
+  Pencil,
+  LayoutGrid,
+  RefreshCw
 } from 'lucide-vue-next';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
@@ -36,14 +40,15 @@ import {
 } from './generation-runner';
 import {requestsGenerationNow} from './generation-intent';
 import ResourcePlanReview from './ResourcePlanReview.vue';
-import type {ProjectPlan, AiBlocksScope, AssetPolicy} from './project-plan';
+import {assertProjectManifest, type ProjectManifest, type ProjectProgramTarget, type TargetRef, type ProjectSharedState, type AiBlocksScope, type AssetPolicy} from './project-plan';
 import {prepareProjectResources} from './project-resource-preparer';
 import type {PreparedResource} from './project-resource-runner';
 import type {CanvasInput} from '../canvas/model/canvas-types';
-import {applyProjectPlan, undoProjectPlan, type ProjectApplyResult} from './project-resource-runner';
+import {applyProjectManifest, undoProjectManifest, type ProjectApplyResult} from './project-resource-runner';
 import {createProjectResourceExecutor} from './project-resource-executor';
 import {BLOCK_ONLY_MESSAGE} from './block-only-policy';
 import {createId} from '../shared/create-id';
+import {searchScratchLibrary, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
 
 const props = defineProps<{bridge: ScratchGuiBridge | null}>();
 const emit = defineEmits<{
@@ -90,7 +95,7 @@ function loadThinkingSettings(): AiBlocksThinkingSettings {
   try {
     const value = JSON.parse(localStorage.getItem(THINKING_STORAGE_KEY) ?? 'null');
     const strength = value?.strength as AiBlocksThinkingStrength;
-    if (typeof value?.enabled === 'boolean' && ['low', 'medium', 'high'].includes(strength)) {
+    if (typeof value?.enabled === 'boolean' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(strength)) {
       return {enabled: value.enabled, strength};
     }
   } catch {
@@ -113,16 +118,17 @@ const snapshot = ref<AiTargetSnapshot | null>(null);
 const messages = ref<AiBlocksMessage[]>([]);
 const conversations = ref<StoredConversation[]>(loadConversations());
 const historyOpen = ref(false);
+const modesExpanded = ref(true);
 const draft = ref('');
 const requirements = ref<AiBlocksRequirements | null>(null);
 const planSteps = ref<string[]>([]);
 const phaseMessage = ref('');
 const progress = ref({current: 0, total: 0, label: ''});
 const result = ref<AiGenerationResult | null>(null);
-const projectPlan = ref<ProjectPlan | null>(null);
+const projectPlan = ref<ProjectManifest | null>(null);
 const projectApplyResult = ref<ProjectApplyResult | null>(null);
 const preparedResources = shallowRef(new Map<string, PreparedResource>());
-const preparedPlan = ref<ProjectPlan | null>(null);
+const preparedPlan = ref<ProjectManifest | null>(null);
 const errorMessage = ref('');
 const noticeMessage = ref('');
 const sessionId = ref(createId());
@@ -136,9 +142,8 @@ let unsubscribeTargets: (() => void) | null = null;
 const isBusy = computed(() => requestBusy.value || ['summarizing', 'planning', 'injecting'].includes(state.value));
 const canSend = computed(() => draft.value.trim().length > 0 && !isBusy.value && Boolean(snapshot.value));
 const canSummarize = computed(() => messages.value.some(message => message.role === 'user') && !isBusy.value);
-const targetLabel = computed(() => snapshot.value
-  ? (snapshot.value.isStage ? '舞台 · ' : '角色 · ') + snapshot.value.targetName
-  : '等待 Scratch');
+const scopeSummary = computed(() => scope.value === 'project' ? '项目' : '角色');
+const modeSummary = computed(() => ({modify: '修改', append: '新增', rewrite: '重写'}[mode.value]));
 const progressPercent = computed(() => progress.value.total
   ? Math.round((progress.value.current / progress.value.total) * 100)
   : 0);
@@ -328,21 +333,11 @@ async function summarize(options: SummarizeOptions = {}) {
       messages: messages.value,
       target: current.context,
       thinking: thinkingSettings(),
-      proceed_with_defaults: Boolean(options.proceedWithDefaults)
+      proceed_with_defaults: true
     }, controller.signal);
-    requirements.value = summary;
-    if (!summary.ready) {
-      const missing = summary.missing_questions.find(Boolean);
-      messages.value.push({
-        role: 'assistant',
-        content: missing || BLOCK_ONLY_MESSAGE
-      });
-      state.value = 'chat';
-      await scrollToLatest();
-    } else {
-      state.value = 'review';
-      shouldGenerate = Boolean(options.generateWhenReady);
-    }
+    requirements.value = {...summary, ready: true, missing_questions: []};
+    state.value = 'review';
+    shouldGenerate = Boolean(options.generateWhenReady);
   } catch (error: unknown) {
     if (!(error instanceof DOMException && error.name === 'AbortError')) {
       errorMessage.value = error instanceof Error ? error.message : '需求整理失败';
@@ -386,7 +381,7 @@ async function generate() {
       target: current.context,
       thinking: thinkingSettings(),
       requirements: requirements.value,
-      output_contract: scope.value === 'project' ? 'project_plan' : 'program_ir',
+      output_contract: scope.value === 'project' ? 'project_manifest' : 'program_ir',
       scope: scope.value,
       asset_policy: assetPolicy.value
     }, {
@@ -402,15 +397,28 @@ async function generate() {
     }, controller.signal);
 
     assertSnapshotIsCurrent(bridge, current);
-    if (output.kind === 'project') {
-      projectPlan.value = output.project;
-      state.value = 'chat';
-      noticeMessage.value = '项目资源计划已生成，请逐项确认后再准备资源。';
+    if (output.kind === 'manifest') {
+      assertProjectManifest(output.manifest, current.context.sprite_names);
+      const manifest = output.manifest;
+      const needsGeneration = manifest.resource_ops.some(op =>
+        ('source' in op && op.source?.kind === 'image_generation') ||
+        (op.op === 'add_sprite' && op.costumes.some(costume => costume.source.kind === 'image_generation'))
+      );
+      if (needsGeneration) {
+        projectPlan.value = manifest;
+        state.value = 'chat';
+        noticeMessage.value = '项目清单已生成，请确认需要生成的素材。';
+        return;
+      }
+      const selections = await autoSelectBuiltInResources(manifest);
+      projectPlan.value = manifest;
+      await confirmProjectPlan([], selections);
+      await commitPreparedPlan();
       return;
     }
     state.value = 'injecting';
     setLocked(true, 'AI 生成中，请稍等');
-    if (output.kind !== 'program') throw new Error('当前积木执行器尚未接入项目计划');
+    if (output.kind !== 'program') throw new Error('项目清单未返回可执行的积木程序');
     const generated = await applyAiProgram({
       bridge,
       snapshot: current,
@@ -456,7 +464,7 @@ async function undoGeneration() {
   errorMessage.value = '';
   let succeeded = false;
   try {
-    if (projectApplyResult.value) await undoProjectPlan(props.bridge, projectApplyResult.value);
+    if (projectApplyResult.value) await undoProjectManifest(props.bridge, projectApplyResult.value);
     else if (result.value) await undoAiGeneration(props.bridge, result.value);
     succeeded = true;
   } catch (error: unknown) {
@@ -470,7 +478,125 @@ async function undoGeneration() {
   }
 }
 
-async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRecord: Record<string, import('../ai/scratch-library').ScratchSpriteItem | import('../ai/scratch-library').ScratchLibraryItem>) {
+
+function targetIdForManifestRef(target: TargetRef, applied: ProjectApplyResult, bridge: ScratchGuiBridge): string {
+  if (target.kind === 'current_target') return applied.original_target_id;
+  if (target.kind === 'created_sprite') {
+    const created = applied.addedTargets.find(item => item.op_id === target.op_id);
+    if (!created) throw new Error('找不到清单创建的角色：' + target.op_id);
+    return created.target_id;
+  }
+  const targets = bridge.currentVm?.runtime.targets ?? [];
+  if (target.kind === 'stage') {
+    const stage = targets.find(item => item.isStage);
+    if (!stage) throw new Error('Scratch 舞台尚未就绪');
+    return stage.id;
+  }
+  const wanted = target.name.trim().toLocaleLowerCase();
+  const existing = targets.find(item => !item.isStage && String(item.getName?.() ?? item.sprite?.name ?? '').trim().toLocaleLowerCase() === wanted);
+  if (!existing) throw new Error('找不到已有角色：' + target.name);
+  return existing.id;
+}
+
+function applyProjectSharedState(bridge: ScratchGuiBridge, shared: ProjectSharedState | undefined) {
+  if (!shared) return;
+  const stage = bridge.currentVm?.runtime.getTargetForStage?.() ?? bridge.currentVm?.runtime.targets.find(item => item.isStage);
+  const createVariable = stage?.createVariable;
+  if (!createVariable) throw new Error('Scratch 舞台变量接口尚未就绪');
+  const values = stage.variables ?? {};
+  const ensure = (name: string, type: '' | 'list' | 'broadcast_msg', value: unknown) => {
+    const existing = Object.values(values).find(item => item.name === name && item.type === type);
+    if (existing) {
+      if (value !== undefined) existing.value = value as typeof existing.value;
+      return;
+    }
+    const id = createId();
+    createVariable.call(stage, id, name, type, false);
+    const created = stage.variables?.[id];
+    if (created && value !== undefined) created.value = value as typeof created.value;
+  };
+  shared.variables.forEach(item => ensure(item.name, '', item.value));
+  shared.lists.forEach(item => ensure(item.name, 'list', item.value ?? []));
+  shared.broadcasts.forEach(name => ensure(name, 'broadcast_msg', ''));
+  bridge.currentVm?.runtime.emitProjectChanged?.();
+}
+
+async function applyProjectPrograms(manifest: ProjectManifest, applied: ProjectApplyResult, bridge: ScratchGuiBridge) {
+  applyProjectSharedState(bridge, manifest.shared_state);
+  let expectedRevision = bridge.projectRevision;
+  for (const target of manifest.program_targets) {
+    if (bridge.projectRevision !== expectedRevision) throw new Error('项目在生成期间发生了外部修改，已停止本次项目生成');
+    const targetId = targetIdForManifestRef(target.target, applied, bridge);
+    bridge.currentVm?.setEditingTarget?.(targetId);
+    const targetSnapshot = readAiTargetSnapshot(bridge, target.mode);
+    const output = await streamAiBlocksGeneration({
+      model_tier: modelTier.value,
+      session_id: sessionId.value,
+      request_id: createId(),
+      messages: messages.value,
+      target: targetSnapshot.context,
+      thinking: thinkingSettings(),
+      requirements: requirements.value!,
+      plan: planSteps.value.length ? {steps: [...planSteps.value]} : undefined,
+      output_contract: 'project_program',
+      scope: 'project',
+      asset_policy: assetPolicy.value,
+      project_manifest: manifest,
+      program_target: target
+    }, {
+      onPhase: phase => { phaseMessage.value = phase.message || '正在生成目标积木'; },
+      onPlan: steps => { planSteps.value = steps; },
+      onReasoning: text => { reasoning.value = (reasoning.value + text).slice(-24_000); }
+    }, controller?.signal);
+    if (output.kind !== 'program') throw new Error('项目目标未返回可执行的积木程序');
+    const generated = await applyAiProgram({
+      bridge,
+      snapshot: targetSnapshot,
+      mode: target.mode,
+      program: output.program,
+      signal: controller?.signal,
+      onProgress: value => { progress.value = value; }
+    });
+    applied.appliedPrograms.push({target_id: generated.targetId, added_blocks: generated.addedBlocks, added_scripts: generated.addedScripts, removed_scripts: generated.removedScripts});
+    expectedRevision = bridge.projectRevision;
+  }
+}
+
+async function autoSelectBuiltInResources(plan: ProjectManifest) {
+  const selections: Record<string, ScratchSpriteItem | ScratchLibraryItem> = {};
+  const skipped = new Set<string>();
+  for (const op of plan.resource_ops) {
+    if (op.op === 'add_builtin_sprite') {
+      const matches = await searchScratchLibrary('sprite', op.source.search_terms, 1);
+      if (!matches[0]) throw new Error('找不到内置角色素材：' + op.name);
+      selections[op.op_id] = matches[0];
+    } else if (op.op === 'add_costume' && op.source.kind === 'scratch_library') {
+      const matches = await searchScratchLibrary('costume', op.source.search_terms, 1);
+      if (!matches[0]) { skipped.add(op.op_id); continue; }
+      selections[op.op_id] = matches[0];
+    } else if (op.op === 'add_backdrop' && op.source.kind === 'scratch_library') {
+      const matches = await searchScratchLibrary('backdrop', op.source.search_terms, 1);
+      if (!matches[0]) throw new Error('找不到内置背景素材：' + op.name);
+      selections[op.op_id] = matches[0];
+    } else if (op.op === 'add_sprite') {
+      if (!op.costumes.length && op.source.kind === 'scratch_library') {
+        const matches = await searchScratchLibrary('costume', op.source.search_terms, 1);
+        if (!matches[0]) throw new Error('找不到内置造型素材：' + op.name);
+        selections[op.op_id] = matches[0];
+      }
+      for (const costume of op.costumes) {
+        if (costume.source.kind !== 'scratch_library') continue;
+        const matches = await searchScratchLibrary('costume', costume.source.search_terms, 1);
+        if (!matches[0]) continue;
+        selections[op.op_id + ':' + costume.name] = matches[0];
+      }
+    }
+  }
+  plan.resource_ops = plan.resource_ops.filter(op => !skipped.has(op.op_id));
+  return selections;
+}
+
+async function confirmProjectPlan(confirmedGenerationKeys: string[], selectionRecord: Record<string, ScratchSpriteItem | ScratchLibraryItem>) {
   if (!projectPlan.value) return;
   state.value = 'injecting';
   setLocked(true, '正在准备并提交项目资源');
@@ -478,7 +604,7 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
   try {
     const plan = projectPlan.value;
     if (!plan || !snapshot.value || !props.bridge) return;
-    const prepared = await prepareProjectResources({plan, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationIds.includes(confirmation.op.op_id), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
+    const prepared = await prepareProjectResources({plan, assetPolicy: assetPolicy.value, selections: new Map(Object.entries(selectionRecord)), confirmGeneration: confirmation => confirmedGenerationKeys.includes(confirmation.resource_key), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
     preparedResources.value = prepared.prepared;
     preparedPlan.value = plan;
     projectPlan.value = null;
@@ -493,15 +619,47 @@ async function confirmProjectPlan(confirmedGenerationIds: string[], selectionRec
 }
 
 async function commitPreparedPlan() {
-  const plan = preparedPlan.value;
-  if (!plan || !snapshot.value || !props.bridge || isBusy.value) return;
-  setLocked(true, '正在提交项目资源'); state.value = 'injecting'; errorMessage.value = '';
+  const manifest = preparedPlan.value;
+  if (!manifest || !snapshot.value || !props.bridge || isBusy.value) return;
+  const bridge = props.bridge;
+  setLocked(true, '正在提交项目资源');
+  state.value = 'injecting';
+  errorMessage.value = '';
+  controller = new AbortController();
+  let applied: ProjectApplyResult | null = null;
   try {
-    const applied = await applyProjectPlan({bridge: props.bridge, plan, snapshot: snapshot.value, prepared: preparedResources.value, executor: createProjectResourceExecutor({bridge: props.bridge, currentTargetId: snapshot.value.targetId}), onProgress: (current, total, label) => {progress.value = {current, total, label};}});
-    projectApplyResult.value = applied; preparedPlan.value = null; state.value = 'chat';
-    noticeMessage.value = '项目资源与积木已提交：' + applied.addedTargets.length + ' 个角色、' + applied.addedCostumes.length + ' 个造型、' + applied.addedBackdrops.length + ' 个背景。';
-  } catch (error: unknown) {state.value = 'chat'; errorMessage.value = error instanceof Error ? error.message : '项目提交失败';}
-  finally {setLocked(false);}
+    applied = await applyProjectManifest({
+      bridge,
+      manifest,
+      snapshot: snapshot.value,
+      prepared: preparedResources.value,
+      executor: createProjectResourceExecutor({bridge, currentTargetId: snapshot.value.targetId}),
+      signal: controller.signal,
+      onProgress: (current, total, label) => { progress.value = {current, total, label}; }
+    });
+    await applyProjectPrograms(manifest, applied, bridge);
+    applied.revision_at_complete = bridge.projectRevision;
+    bridge.currentVm?.setEditingTarget?.(applied.original_target_id);
+    bridge.refreshWorkspace();
+    projectApplyResult.value = applied;
+    preparedPlan.value = null;
+    state.value = 'chat';
+    noticeMessage.value = '项目提交完成：新增 ' + applied.addedTargets.length + ' 个角色、' + applied.addedCostumes.length + ' 个造型、' + applied.addedBackdrops.length + ' 个背景，写入 ' + applied.appliedPrograms.length + ' 段程序。';
+  } catch (error: unknown) {
+    if (applied) {
+      try {
+        await bridge.loadProject(applied.backup);
+        bridge.currentVm?.setEditingTarget?.(applied.original_target_id);
+      } catch (restoreError) {
+        errorMessage.value = '项目提交失败且无法恢复备份：' + (restoreError instanceof Error ? restoreError.message : '未知错误');
+      }
+    }
+    state.value = 'chat';
+    if (!errorMessage.value) errorMessage.value = error instanceof DOMException && error.name === 'AbortError' ? '已取消项目生成，项目已恢复到提交前状态。' : error instanceof Error ? error.message : '项目提交失败';
+  } finally {
+    controller = null;
+    setLocked(false);
+  }
 }
 
 function openPreparedCanvas(opId: string) {
@@ -529,8 +687,9 @@ function runProject() {
 
 watch(() => props.bridge, attachBridge);
 watch([state, reasoning, phaseMessage, planSteps, progress], followGenerationProcess);
-watch(mode, () => {
+watch([mode, scope, assetPolicy], () => {
   if (!props.bridge || !snapshot.value || isBusy.value) return;
+  planSteps.value = [];
   snapshot.value = readAiTargetSnapshot(props.bridge, mode.value);
 });
 watch([thinkingEnabled, thinkingStrength], () => {
@@ -556,7 +715,6 @@ onBeforeUnmount(() => {
     <header class="ai-blocks-panel__header">
       <div>
         <h2><Blocks :size="18" aria-hidden="true" />AI 写积木</h2>
-        <span class="ai-blocks-target">{{ targetLabel }}</span>
       </div>
       <div class="ai-blocks-panel__header-actions">
         <button class="icon-button" type="button" :class="{'is-active': historyOpen}" :disabled="isBusy" title="查看历史对话" aria-label="查看历史对话" :aria-expanded="historyOpen" @click="historyOpen = !historyOpen">
@@ -586,31 +744,29 @@ onBeforeUnmount(() => {
       </div>
     </section>
 
-    <fieldset v-if="['chat', 'review'].includes(state)" class="ai-blocks-modes">
-      <legend>生成范围与模式</legend>
-      <label :class="{'is-active': scope === 'single_sprite'}"><input v-model="scope" type="radio" value="single_sprite" /><span>当前角色</span></label>
-      <label v-if="projectAssetsEnabled" :class="{'is-active': scope === 'project'}"><input v-model="scope" type="radio" value="project" /><span>整个项目</span></label>
-      <label v-if="scope === 'project'" class="ai-blocks-policy"><span>素材策略</span><select v-model="assetPolicy" aria-label="素材策略"><option value="builtin_first">内置素材优先</option><option value="existing_only">仅已有素材</option><option value="allow_generation">允许生图</option></select></label>
-      <label :class="{'is-active': mode === 'modify'}">
-        <input v-model="mode" type="radio" value="modify" />
-        <span>修改当前代码</span>
-      </label>
-      <label :class="{'is-active': mode === 'append'}">
-        <input v-model="mode" type="radio" value="append" />
-        <span>旁路新增</span>
-      </label>
-      <label :class="{'is-active': mode === 'rewrite'}">
-        <input v-model="mode" type="radio" value="rewrite" />
-        <span>清空重写</span>
-      </label>
+    <fieldset v-if="['chat', 'review', 'summarizing', 'planning', 'injecting'].includes(state)" class="ai-blocks-modes" :class="{'is-collapsed': isBusy || !modesExpanded}">
+      <legend>
+        <button class="ai-blocks-modes__toggle" type="button" :aria-expanded="!isBusy && modesExpanded" :disabled="isBusy" aria-controls="ai-blocks-mode-options" @click="modesExpanded = !modesExpanded">
+          <span>模式</span>
+          <span class="ai-blocks-modes__summary"><span class="ai-blocks-modes__tag">{{ scopeSummary }}</span><span class="ai-blocks-modes__tag">{{ modeSummary }}</span></span>
+          <ChevronDown class="ai-blocks-modes__chevron" :size="18" aria-hidden="true" />
+        </button>
+      </legend>
+      <div id="ai-blocks-mode-options" class="ai-blocks-mode-options">
+        <label class="ai-blocks-mode-card ai-blocks-scope-card" :class="{'is-active': scope === 'single_sprite'}"><input v-model="scope" type="radio" value="single_sprite" /><span><LayoutGrid :size="20" aria-hidden="true" /><strong>当前角色</strong><small>只编写当前角色的积木</small></span></label>
+        <label v-if="projectAssetsEnabled" class="ai-blocks-mode-card ai-blocks-scope-card" :class="{'is-active': scope === 'project'}"><input v-model="scope" type="radio" value="project" /><span><Blocks :size="20" aria-hidden="true" /><strong>整个项目</strong><small>同时处理资源和多个目标</small></span></label>
+        <label v-if="scope === 'project'" class="ai-blocks-policy"><span>素材策略</span><select v-model="assetPolicy" aria-label="素材策略"><option value="builtin_first">内置素材优先</option><option value="existing_only">仅已有素材</option><option value="allow_generation">允许生图</option></select></label>
+        <label class="ai-blocks-mode-card" :class="{'is-active': mode === 'modify'}"><input v-model="mode" type="radio" value="modify" /><span><Pencil :size="20" aria-hidden="true" /><strong>修改当前代码</strong><small>继续编辑原有积木</small></span></label>
+        <label class="ai-blocks-mode-card" :class="{'is-active': mode === 'append'}"><input v-model="mode" type="radio" value="append" /><span><LayoutGrid :size="20" aria-hidden="true" /><strong>旁路新增</strong><small>保留原代码并添加功能</small></span></label>
+        <label class="ai-blocks-mode-card" :class="{'is-active': mode === 'rewrite'}"><input v-model="mode" type="radio" value="rewrite" /><span><RefreshCw :size="20" aria-hidden="true" /><strong>清空重写</strong><small>重新生成全部积木</small></span></label>
+      </div>
     </fieldset>
 
-    <div v-if="isBusy" class="ai-blocks-panel-lock" role="status">{{ lockMessage }}</div>
     <div v-if="errorMessage" class="ai-blocks-alert ai-blocks-alert--error" role="alert">{{ errorMessage }}</div>
     <div v-if="noticeMessage" class="ai-blocks-alert" role="status">{{ noticeMessage }}</div>
     <div v-if="preparedPlan" class="ai-blocks-prepared-actions" role="group" aria-label="项目资源操作">
       <template v-for="op in preparedPlan.resource_ops" :key="op.op_id">
-        <button v-if="'source' in op && op.source.kind === 'image_generation'" class="button button--quiet" type="button" @click="openPreparedCanvas(op.op_id)">转到画布：{{ op.name }}</button>
+        <button v-if="'source' in op && op.source?.kind === 'image_generation'" class="button button--quiet" type="button" @click="openPreparedCanvas(op.op_id)">转到画布：{{ op.name }}</button>
       </template>
       <button class="button button--primary" type="button" @click="commitPreparedPlan">提交项目</button>
     </div>
@@ -675,12 +831,15 @@ onBeforeUnmount(() => {
                   <option value="low">低</option>
                   <option value="medium">中</option>
                   <option value="high">高</option>
+                  <option value="xhigh">超高</option>
+                  <option value="max">最大</option>
                 </select>
               </label>
               <label class="ai-blocks-model-select">
                 <select v-model="modelTier" aria-label="模型" title="模型" :disabled="isBusy">
                   <option value="normal">普通</option>
                   <option value="advanced">高级</option>
+                  <option value="super">超级</option>
                 </select>
               </label>
             </div>
@@ -713,12 +872,15 @@ onBeforeUnmount(() => {
               <option value="low">低</option>
               <option value="medium">中</option>
               <option value="high">高</option>
+              <option value="xhigh">超高</option>
+              <option value="max">最大</option>
             </select>
           </label>
           <label class="ai-blocks-model-select">
             <select v-model="modelTier" aria-label="模型" title="模型">
               <option value="normal">普通</option>
               <option value="advanced">高级</option>
+              <option value="super">超级</option>
             </select>
           </label>
         </div>

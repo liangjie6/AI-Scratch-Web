@@ -127,8 +127,8 @@ describe('compileProgramIR', () => {
       broadcast: name => ({name, id: 'broadcast-id'})
     }});
     const byOpcode = (opcode: string) => Object.values(output.blocks).find(block => block.opcode === opcode)!;
-    expect(byOpcode('event_whenbroadcastreceived').fields.BROADCAST_OPTION).toEqual({name: 'BROADCAST_OPTION', value: 'go', id: 'broadcast-id'});
-    expect(byOpcode('data_setvariableto').fields.VARIABLE).toEqual({name: 'VARIABLE', value: 'SCORE', id: 'var-id'});
+     expect(byOpcode('event_whenbroadcastreceived').fields.BROADCAST_OPTION).toEqual({name: 'BROADCAST_OPTION', value: 'go', id: 'broadcast-id', variableType: 'broadcast_msg'});
+    expect(byOpcode('data_setvariableto').fields.VARIABLE).toEqual({name: 'VARIABLE', value: 'SCORE', id: 'var-id', variableType: ''});
     expect(byOpcode('data_addtolist').fields.LIST.id).toBe('list-id');
   });
 

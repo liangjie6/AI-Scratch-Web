@@ -237,7 +237,8 @@ async function injectProgressively(
   target: ScratchTargetLike,
   compiled: CompiledProgram,
   signal: AbortSignal | undefined,
-  onProgress: ApplyOptions['onProgress']
+  onProgress: ApplyOptions['onProgress'],
+  beforeRefresh?: () => void
 ) {
   const blocks = target.blocks!;
   const created = new Set<string>();
@@ -264,6 +265,7 @@ async function injectProgressively(
         ...(connection.input ? {newInput: connection.input} : {})
       });
     }
+    beforeRefresh?.();
     bridge.refreshWorkspace();
     const opcode = compiled.blocks[visibleId].opcode;
     onProgress?.({
@@ -351,14 +353,21 @@ export async function applyAiProgram(options: ApplyOptions): Promise<AiGeneratio
   try {
     throwIfAborted(signal);
     mutated = pending.length > 0;
-    installVariables(pending);
+    installVariables(pending.filter(variable => variable.type !== 'broadcast_msg'));
+    const installedBroadcasts = new Set<string>();
+    const installReferencedBroadcasts = () => {
+      const referenced = new Set(Object.values(blocks._blocks).map(block => block.fields.BROADCAST_OPTION?.id).filter((id): id is string => Boolean(id)));
+      const ready = pending.filter(variable => variable.type === 'broadcast_msg' && referenced.has(variable.id) && !installedBroadcasts.has(variable.id));
+      installVariables(ready);
+      ready.forEach(variable => installedBroadcasts.add(variable.id));
+    };
     if (removeTopIds.length) {
       removeScripts(target, removeTopIds, removed);
       bridge.refreshWorkspace();
       mutated = true;
     }
     mutated = true;
-    await injectProgressively(bridge, target, compiled, signal, onProgress);
+    await injectProgressively(bridge, target, compiled, signal, onProgress, installReferencedBroadcasts);
 
     if (mode === 'append') {
       for (const script of compiled.scripts) {
@@ -392,7 +401,7 @@ export async function applyAiProgram(options: ApplyOptions): Promise<AiGeneratio
         await localRollback(bridge, target, compiled, removed, pending);
       } catch {
         await bridge.loadProject(backup);
-        bridge.currentVm?.setEditingTarget(snapshot.targetId);
+        bridge.currentVm?.setEditingTarget?.(snapshot.targetId);
       }
     }
     throw error;
@@ -409,7 +418,7 @@ export async function undoAiGeneration(bridge: ScratchGuiBridge, result: AiGener
   try {
     bridge.stop();
     await bridge.loadProject(result.backup);
-    bridge.currentVm?.setEditingTarget(result.targetId);
+    bridge.currentVm?.setEditingTarget?.(result.targetId);
     bridge.activateCodeTab();
   } finally {
     release();

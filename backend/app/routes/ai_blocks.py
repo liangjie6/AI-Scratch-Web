@@ -1,10 +1,11 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from functools import lru_cache
 import asyncio
 import json
 import logging
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
@@ -15,24 +16,27 @@ from ..prompts_ai_blocks import (
     build_plan_repair_messages,
     build_program_messages,
     build_program_repair_messages,
-    build_project_plan_messages,
-    build_project_plan_repair_messages,
+    build_project_manifest_messages,
+    build_project_manifest_repair_messages,
+    build_project_program_messages,
+    build_project_program_repair_messages,
     build_requirements_messages,
     build_requirements_repair_messages,
 )
-from ..providers.agnes_text_provider import AgnesTextProvider, AgnesTextProviderError
+from ..providers.agnes_text_provider import AgnesTextProvider, AgnesTextProviderError, AgnesStreamDelta
 from ..schemas.ai_blocks import (
     ChatRequest,
     GenerateRequest,
     Plan,
     ProgramIR,
-    ProjectPlan,
+    ProjectManifest,
     RequirementsRequest,
     RequirementsResponse,
     ThinkingSettings,
     extract_single_json,
     validate_program_contracts,
     validate_program_for_mode,
+    normalize_project_manifest_input,
 )
 
 router = APIRouter(prefix='/api/ai-blocks', tags=['ai-blocks'])
@@ -49,80 +53,40 @@ def get_ai_blocks_semaphore() -> asyncio.Semaphore:
     return asyncio.Semaphore(get_settings().ai_blocks_max_concurrency)
 
 
-def _sse(event: str, data: dict) -> str:
-    body = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
-    newline = chr(10)
-    return f'event: {event}{newline}data: {body}{newline}{newline}'
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f'event: {event}\ndata: {json.dumps(data, ensure_ascii=False, separators=(",", ":"))}\n\n'
 
 
-def _error_summary(error: Exception, limit: int = 2_000) -> str:
+def _error_summary(error: Exception) -> str:
     if isinstance(error, ValidationError):
-        return json.dumps(
-            error.errors(include_url=False, include_input=False),
-            ensure_ascii=False, default=str,
-        )[:limit]
-    return str(error)[:limit]
+        return '; '.join('.'.join(map(str, item['loc'])) + ': ' + item['msg'] for item in error.errors())[:2000]
+    detail = str(error).strip()
+    return detail[:2000] if detail else type(error).__name__
 
 
 def _provider_for_tier(provider: AgnesTextProvider, tier: str) -> AgnesTextProvider:
     return provider.for_tier(tier) if hasattr(provider, 'for_tier') else provider
 
 
-def _ensure_provider(provider: AgnesTextProvider) -> None:
+def _require_provider(provider: AgnesTextProvider, tier: str) -> AgnesTextProvider:
+    selected = _provider_for_tier(provider, tier)
     try:
-        provider.ensure_configured()
-    except (AgnesTextProviderError, RuntimeError) as exc:
+        selected.ensure_configured()
+    except Exception as exc:
+        logger.warning('ai_provider_not_configured provider=%s error_type=%s', getattr(selected, 'provider', 'unknown'), type(exc).__name__)
         raise HTTPException(
             status_code=503,
-            detail={'code': 'AGNES_NOT_CONFIGURED', 'message': '未配置 Agnes 对话服务'},
+            detail={'code': 'AGNES_NOT_CONFIGURED', 'message': 'AI 服务尚未配置，请联系管理员'},
         ) from exc
+    return selected
 
 
-_PROCEED_PHRASES = (
-    '开始编写', '开始生成', '开始写', '直接生成', '直接做', '按默认即可',
-    '使用默认值', '按默认', '不用再问', '不要再问', '无需再问', '别再问',
-    '开始吧', '开始', '继续', '确认', '可以', '就这样',
-)
+def _configured_retries() -> int:
+    return max(0, get_settings().ai_blocks_retry_attempts - 1)
 
 
-def _has_functional_content(value: str) -> bool:
-    normalized = ''.join(
-        character for character in value.strip().lower()
-        if not character.isspace() and character not in '，,。.!！？?'
-    )
-    for phrase in _PROCEED_PHRASES:
-        normalized = normalized.replace(phrase, '')
-    return len(normalized) >= 2
-
-
-def _apply_proceed_defaults(
-    body: RequirementsRequest,
-    result: RequirementsResponse,
-) -> RequirementsResponse:
-    if result.ready or not body.proceed_with_defaults:
-        return result
-
-    functional_request = ''
-    for message in reversed(body.messages):
-        if message.role != 'user':
-            continue
-        if _has_functional_content(message.content):
-            functional_request = message.content.strip()
-            break
-    if not functional_request:
-        return result
-
-    short_goal = functional_request[:120]
-    return RequirementsResponse.model_validate({
-        **result.model_dump(mode='json'),
-        'ready': True,
-        'title': result.title.strip() or '按描述实现功能',
-        'goal': result.goal.strip() or functional_request,
-        'behavior_steps': result.behavior_steps or [short_goal],
-        'triggers': result.triggers or ['点击绿旗'],
-        'success_criteria': result.success_criteria or [short_goal],
-        'missing_questions': [],
-    })
+def _phase(request_id: str, name: str, message: str) -> str:
+    return _sse('phase', {'request_id': request_id, 'phase': name, 'message': message})
 
 
 async def _timed_events(
@@ -130,368 +94,332 @@ async def _timed_events(
     messages: list[dict[str, str]],
     thinking: ThinkingSettings,
     json_output: bool = False,
-):
-    started_at = asyncio.get_running_loop().time()
-    logger.info(
-        'ai_stream_started provider=%s message_count=%s thinking_enabled=%s thinking_strength=%s json_output=%s messages=%s',
-        getattr(provider, 'provider', 'unknown'), len(messages), thinking.enabled,
-        thinking.strength, json_output, json.dumps(messages, ensure_ascii=False, default=str),
-    )
-    delta_count = 0
+) -> AsyncIterator[AgnesStreamDelta]:
+    timeout = get_settings().ai_blocks_provider_timeout_seconds
     try:
-        async with asyncio.timeout(get_settings().ai_blocks_provider_timeout_seconds):
-            stream_kwargs = {
-                'thinking_enabled': thinking.enabled,
-                'thinking_strength': thinking.strength,
-            }
-            if hasattr(provider, 'provider'):
-                stream_kwargs['json_output'] = json_output
-            async for delta in provider.stream_with_reasoning(messages, **stream_kwargs):
-                delta_count += 1
-                logger.info('ai_stream_delta provider=%s index=%s kind=%s text=%s', getattr(provider, 'provider', 'unknown'), delta_count, delta.kind, delta.text)
+        async with asyncio.timeout(timeout):
+            try:
+                stream = provider.stream_with_reasoning(
+                    messages,
+                    thinking_enabled=thinking.enabled,
+                    thinking_strength=thinking.strength,
+                    json_output=json_output,
+                )
+            except TypeError as exc:
+                if 'json_output' not in str(exc):
+                    raise
+                stream = provider.stream_with_reasoning(
+                    messages,
+                    thinking_enabled=thinking.enabled,
+                    thinking_strength=thinking.strength,
+                )
+            async for delta in stream:
+                if delta.kind == 'content':
+                    print(delta.text, end='', flush=True)
                 yield delta
-        logger.info(
-            'ai_stream_finished provider=%s delta_count=%s duration_ms=%s',
-            getattr(provider, 'provider', 'unknown'), delta_count,
-            round((asyncio.get_running_loop().time() - started_at) * 1000),
-        )
     except TimeoutError as exc:
-        logger.error(
-            'ai_stream_timeout provider=%s delta_count=%s duration_ms=%s',
-            getattr(provider, 'provider', 'unknown'), delta_count,
-            round((asyncio.get_running_loop().time() - started_at) * 1000), exc_info=True,
+        raise AgnesTextProviderError('AI provider timed out') from exc
+    except AgnesTextProviderError:
+        raise
+    except Exception as exc:
+        logger.warning(
+            'ai_stream_failed provider=%s error_type=%s',
+            getattr(provider, 'provider', 'unknown'), type(exc).__name__,
         )
-        raise AgnesTextProviderError('Agnes response timed out') from exc
-
-
-async def _collect(
-    provider: AgnesTextProvider,
-    messages: list[dict[str, str]],
-    thinking: ThinkingSettings,
-    limit: int = 200_000,
-    json_output: bool = False,
-) -> tuple[str, str]:
-    content_chunks: list[str] = []
-    reasoning_chunks: list[str] = []
-    size = 0
-    async for delta in _timed_events(provider, messages, thinking, json_output):
-        size += len(delta.text)
-        if size > limit:
-            raise AgnesTextProviderError('Agnes response is too large')
-        if delta.kind == 'reasoning':
-            reasoning_chunks.append(delta.text)
-        else:
-            content_chunks.append(delta.text)
-    if not content_chunks:
-        raise AgnesTextProviderError('Agnes returned no content')
-    return ''.join(content_chunks), ''.join(reasoning_chunks)
+        raise AgnesTextProviderError('AI provider stream failed') from exc
 
 
 async def _collect_resilient(
     provider: AgnesTextProvider,
     messages: list[dict[str, str]],
     thinking: ThinkingSettings,
-    *,
-    retries: int = 1,
+    retries: int = 2,
+    retry_delay_seconds: float | None = None,
     json_output: bool = False,
-) -> tuple[str, str]:
-    """Retry transient provider failures without repeating expensive reasoning."""
-    current_thinking = thinking
+) -> tuple[str, dict[str, int] | None, list[tuple[str, str]]]:
+    failures: list[tuple[str, str]] = []
+    current = thinking
+    delay_base = get_settings().ai_blocks_retry_delay_seconds if retry_delay_seconds is None else retry_delay_seconds
     for attempt in range(retries + 1):
+        chunks: list[str] = []
+        usage: dict[str, int] | None = None
         try:
-            return await _collect(provider, messages, current_thinking, json_output=json_output)
-        except AgnesTextProviderError:
+            async for delta in _timed_events(provider, messages, current, json_output):
+                if delta.kind == 'content':
+                    chunks.append(delta.text)
+                elif delta.kind == 'usage':
+                    usage = delta.usage
+            return ''.join(chunks), usage, failures
+        except AgnesTextProviderError as exc:
+            failures.append((''.join(chunks), _error_summary(exc)))
             if attempt >= retries:
                 raise
-            current_thinking = ThinkingSettings(enabled=False, strength='low')
-    raise RuntimeError('AI provider collection produced no result')
+            delay = delay_base * (2 ** attempt)
+            logger.warning(
+                'ai_provider_retry provider=%s attempt=%s max_attempts=%s delay_seconds=%s error_type=%s',
+                getattr(provider, 'provider', 'unknown'), attempt + 2, retries + 1, delay, type(exc).__name__,
+            )
+            if delay:
+                await asyncio.sleep(delay)
+            current = ThinkingSettings(enabled=False, strength='low')
+    raise AgnesTextProviderError('AI provider failed')
+
+
+async def _generate_json(
+    provider: AgnesTextProvider,
+    messages: list[dict[str, str]],
+    model: Any,
+    thinking: ThinkingSettings,
+    repair_builder: Callable[[list[tuple[str, str]]], list[dict[str, str]]],
+    retries: int = 2,
+    validator: Callable[[Any], None] | None = None,
+    on_repair: Callable[[int], None] | None = None,
+) -> Any:
+    failures: list[tuple[str, str]] = []
+    current_messages = messages
+    for attempt in range(retries + 1):
+        raw, _usage, stream_failures = await _collect_resilient(
+            provider, current_messages, thinking, retries=_configured_retries(), json_output=True,
+        )
+        if stream_failures:
+            failures.extend(stream_failures)
+        try:
+            value = model.model_validate(extract_single_json(raw))
+            if validator is not None:
+                validator(value)
+            return value
+        except (ValidationError, ValueError, TypeError) as exc:
+            failures.append((raw, _error_summary(exc)))
+            if attempt >= retries:
+                raise
+            if on_repair is not None:
+                on_repair(attempt + 1)
+            current_messages = repair_builder(failures)
+    raise AgnesTextProviderError('AI JSON generation failed')
+
+
+async def _generate_json_events(
+    provider: AgnesTextProvider,
+    messages: list[dict[str, str]],
+    model: Any,
+    thinking: ThinkingSettings,
+    repair_builder: Callable[[list[tuple[str, str]]], list[dict[str, str]]],
+    retries: int = 2,
+    validator: Callable[[Any], None] | None = None,
+    normalizer: Callable[[Any], Any] | None = None,
+) -> AsyncIterator[tuple[str, Any]]:
+    failures: list[tuple[str, str]] = []
+    current_messages = messages
+    for attempt in range(retries + 1):
+        raw, _usage, stream_failures = await _collect_resilient(
+            provider, current_messages, thinking, retries=_configured_retries(), json_output=True,
+        )
+        if stream_failures:
+            failures.extend(stream_failures)
+        try:
+            raw_value = extract_single_json(raw)
+            value = model.model_validate(normalizer(raw_value) if normalizer else raw_value)
+            if validator is not None:
+                validator(value)
+            yield 'result', value
+            return
+        except (ValidationError, ValueError, TypeError) as exc:
+            failures.append((raw, _error_summary(exc)))
+            if attempt >= retries:
+                raise
+            yield 'repair', attempt + 1
+            current_messages = repair_builder(failures)
+    raise AgnesTextProviderError('AI JSON generation failed')
 
 
 @router.post('/chat')
 async def chat(
     body: ChatRequest,
-    request: Request,
     provider: AgnesTextProvider = Depends(get_ai_blocks_provider),
-) -> StreamingResponse:
-    provider = _provider_for_tier(provider, body.model_tier)
-    logger.info(
-        'ai_chat_started request_id=%s session_id=%s model_tier=%s message_count=%s thinking=%s body=%s',
-        body.request_id, body.session_id, body.model_tier, len(body.messages),
-        body.thinking.model_dump(), body.model_dump(mode='json'),
-    )
-    _ensure_provider(provider)
-    messages = build_chat_messages(body)
+    semaphore: asyncio.Semaphore = Depends(get_ai_blocks_semaphore),
+):
+    selected = _require_provider(provider, body.model_tier)
 
-    async def generate() -> AsyncIterator[str]:
-        try:
-            async with get_ai_blocks_semaphore():
-                received_content = False
-                async for delta in _timed_events(provider, messages, body.thinking):
-                    if await request.is_disconnected():
-                        logger.info('ai_chat_disconnected request_id=%s', body.request_id)
-                        return
-                    event = 'reasoning_delta' if delta.kind == 'reasoning' else 'assistant_delta'
-                    if delta.kind == 'content':
-                        received_content = True
-                    yield _sse(event, {'request_id': body.request_id, 'text': delta.text})
-                if not received_content:
-                    raise AgnesTextProviderError('Agnes returned no content')
-                if await request.is_disconnected():
-                    return
-                logger.info('ai_chat_finished request_id=%s received_content=%s', body.request_id, received_content)
+    async def generate():
+        async with semaphore:
+            try:
+                async for delta in _timed_events(selected, build_chat_messages(body), body.thinking):
+                    if delta.kind == 'reasoning':
+                        yield _sse('reasoning_delta', {'request_id': body.request_id, 'text': delta.text})
+                    elif delta.kind == 'content':
+                        yield _sse('assistant_delta', {'request_id': body.request_id, 'text': delta.text})
                 yield _sse('message_complete', {'request_id': body.request_id})
-        except (AgnesTextProviderError, RuntimeError) as exc:
-            logger.error(
-                'ai_chat_failed request_id=%s error_type=%s error=%s',
-                body.request_id, type(exc).__name__, str(exc), exc_info=True,
-            )
-            yield _sse('message_error', {
-                'request_id': body.request_id,
-                'code': 'AI_BLOCKS_STREAM_ERROR',
-                'message': 'AI 对话暂时不可用，请稍后重试',
-            })
+            except Exception as exc:
+                logger.error(
+                    'ai_chat_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__,
+                )
+                yield _sse('message_error', {
+                    'request_id': body.request_id,
+                    'code': 'AI_CHAT_ERROR',
+                    'message': 'AI 对话暂时不可用，请稍后重试',
+                })
 
-    return StreamingResponse(generate(), media_type='text/event-stream', headers={
-        'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
-    })
+    return StreamingResponse(generate(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache'})
 
 
 @router.post('/requirements', response_model=RequirementsResponse)
 async def requirements(
     body: RequirementsRequest,
     provider: AgnesTextProvider = Depends(get_ai_blocks_provider),
-) -> RequirementsResponse:
-    provider = _provider_for_tier(provider, body.model_tier)
-    _ensure_provider(provider)
-    try:
-        async with get_ai_blocks_semaphore():
-            failed_attempts: list[tuple[str, str]] = []
-            messages = build_requirements_messages(body)
-            for attempt in range(3):
-                raw, _ = await _collect_resilient(provider, messages, body.thinking, json_output=body.model_tier == 'advanced')
-                try:
-                    result = RequirementsResponse.model_validate(extract_single_json(raw))
-                    return _apply_proceed_defaults(body, result)
-                except (ValidationError, ValueError) as validation_error:
-                    logger.warning(
-                        'AI requirements validation failed request_id=%s attempt=%s error=%s',
-                        body.request_id, attempt + 1, _error_summary(validation_error),
-                    )
-                    if attempt == 2:
-                        raise
-                    failed_attempts.append((
-                        raw, _error_summary(validation_error, 12_000),
-                    ))
-                    messages = build_requirements_repair_messages(body, failed_attempts)
-        raise RuntimeError('AI requirements generation produced no result')
-    except (AgnesTextProviderError, ValidationError, ValueError, RuntimeError) as exc:
-        raise HTTPException(
-            status_code=502,
-            detail={'code': 'INVALID_REQUIREMENTS_RESPONSE', 'message': 'AI 返回的需求格式无效，请重试'},
-        ) from exc
+    semaphore: asyncio.Semaphore = Depends(get_ai_blocks_semaphore),
+):
+    selected = _require_provider(provider, body.model_tier)
+    async with semaphore:
+        failures: list[tuple[str, str]] = []
+        messages = build_requirements_messages(body)
+        for attempt in range(3):
+            try:
+                raw, _usage, stream_failures = await _collect_resilient(selected, messages, body.thinking, json_output=True)
+                if stream_failures:
+                    failures.extend(stream_failures)
+                result = RequirementsResponse.model_validate(extract_single_json(raw))
+                if body.proceed_with_defaults and not result.ready:
+                    user_text = next((message.content.strip() for message in reversed(body.messages) if message.role == 'user' and message.content.strip()), body.target.name)
+                    goal = next((message.content.strip() for message in body.messages if message.role == 'user' and message.content.strip()), body.target.name)
+                    result = result.model_copy(update={
+                        'ready': True,
+                        'title': result.title or body.target.name,
+                        'goal': result.goal or goal,
+                        'behavior_steps': result.behavior_steps or [goal],
+                        'triggers': result.triggers or ['点击绿旗'],
+                        'success_criteria': result.success_criteria or [goal],
+                        'missing_questions': [],
+                    })
+                return result
+            except (ValidationError, ValueError, TypeError) as exc:
+                failures.append((raw if 'raw' in locals() else '', _error_summary(exc)))
+                if attempt == 2:
+                    raise HTTPException(
+                        status_code=502,
+                        detail={'code': 'INVALID_REQUIREMENTS_RESPONSE', 'message': 'AI 返回的需求结构无法校验'},
+                    ) from exc
+                messages = build_requirements_repair_messages(body, failures)
+        raise HTTPException(status_code=502, detail={'code': 'INVALID_REQUIREMENTS_RESPONSE', 'message': 'AI 返回的需求结构无法校验'})
 
 
 @router.post('/generate')
-async def generate_program(
+async def generate_endpoint(
     body: GenerateRequest,
-    request: Request,
     provider: AgnesTextProvider = Depends(get_ai_blocks_provider),
-) -> StreamingResponse:
-    provider = _provider_for_tier(provider, body.model_tier)
-    _ensure_provider(provider)
+    semaphore: asyncio.Semaphore = Depends(get_ai_blocks_semaphore),
+):
+    selected = _require_provider(provider, body.model_tier)
 
-    async def generate() -> AsyncIterator[str]:
-        try:
-            async with get_ai_blocks_semaphore():
-                if await request.is_disconnected():
-                    return
-                yield _sse('phase', {
-                    'request_id': body.request_id,
-                    'phase': 'planning',
-                    'message': '正在规划积木步骤',
-                })
-                plan: Plan | None = None
-                plan_failed_attempts: list[tuple[str, str]] = []
-                plan_messages = build_plan_messages(body)
-                for attempt in range(3):
-                    plan_raw, plan_reasoning = await _collect_resilient(
-                        provider, plan_messages, body.thinking, json_output=body.model_tier == 'advanced',
-                    )
-                    if plan_reasoning:
-                        yield _sse('reasoning_delta', {
-                            'request_id': body.request_id,
-                            'phase': 'planning' if attempt == 0 else 'repairing',
-                            'text': plan_reasoning,
-                        })
-                    try:
-                        plan = Plan.model_validate(extract_single_json(plan_raw))
-                        break
-                    except (ValidationError, ValueError) as validation_error:
-                        logger.warning(
-                            'AI plan validation failed request_id=%s attempt=%s error=%s',
-                            body.request_id, attempt + 1, _error_summary(validation_error),
-                        )
-                        if attempt == 2:
-                            raise
-                        yield _sse('phase', {
-                            'request_id': body.request_id,
-                            'phase': 'repairing',
-                            'message': '正在校正规划结构',
-                        })
-                        plan_failed_attempts.append((
-                            plan_raw, _error_summary(validation_error, 12_000),
-                        ))
-                        plan_messages = build_plan_repair_messages(
-                            body, plan_failed_attempts,
-                        )
+    async def generate():
+        async with semaphore:
+            ready_sent = False
+            try:
+                plan = body.plan
                 if plan is None:
-                    raise RuntimeError('AI plan generation produced no result')
-                yield _sse('plan_ready', {'request_id': body.request_id, 'steps': plan.steps})
-                if await request.is_disconnected():
-                    return
-                if body.output_contract == 'project_plan':
-                    yield _sse('phase', {
-                        'request_id': body.request_id,
-                        'phase': 'generating',
-                        'message': '正在生成项目资源计划',
-                    })
-                    project_raw, project_reasoning = await _collect_resilient(
-                        provider,
-                        build_project_plan_messages(body, plan.steps),
+                    yield _phase(body.request_id, 'planning', '正在规划积木步骤')
+                    async for event, value in _generate_json_events(
+                        selected,
+                        build_plan_messages(body),
+                        Plan,
                         body.thinking,
-                        json_output=body.model_tier == 'advanced',
-                    )
-                    if project_reasoning:
-                        yield _sse('reasoning_delta', {
-                            'request_id': body.request_id,
-                            'phase': 'generating',
-                            'text': project_reasoning,
-                        })
-                    project: ProjectPlan | None = None
-                    project_failed_attempts: list[tuple[str, str]] = []
-                    for attempt in range(3):
-                        try:
-                            project = ProjectPlan.model_validate(extract_single_json(project_raw))
-                            if project.scope != body.scope:
-                                raise ValueError('project scope does not match request scope')
-                            if body.asset_policy == 'existing_only' and any(
-                                operation.source is not None and operation.source.kind == 'image_generation'
-                                for operation in project.resource_ops
-                            ):
-                                raise ValueError('existing_only cannot use image_generation')
-                            break
-                        except (ValidationError, ValueError) as validation_error:
-                            if attempt == 2:
-                                raise
-                            error_detail = _error_summary(validation_error, 12_000)
-                            project_failed_attempts.append((project_raw, error_detail))
-                            yield _sse('phase', {
-                                'request_id': body.request_id,
-                                'phase': 'repairing',
-                                'message': '正在校正项目计划',
-                            })
-                            project_raw, repair_reasoning = await _collect_resilient(
-                                provider,
-                                build_project_plan_repair_messages(body, plan.steps, project_failed_attempts),
-                                body.thinking,
-                                json_output=body.model_tier == 'advanced',
-                            )
-                            if repair_reasoning:
-                                yield _sse('reasoning_delta', {
-                                    'request_id': body.request_id,
-                                    'phase': 'repairing',
-                                    'text': repair_reasoning,
-                                })
-                    if project is None:
-                        raise RuntimeError('AI ProjectPlan generation produced no result')
-                    if await request.is_disconnected():
-                        return
-                    yield _sse('project_ready', {
-                        'request_id': body.request_id,
-                        'project': project.model_dump(mode='json', exclude_none=True),
-                    })
-                    yield _sse('message_complete', {'request_id': body.request_id})
-                    return
-                yield _sse('phase', {
-                    'request_id': body.request_id,
-                    'phase': 'generating',
-                    'message': '正在生成积木程序',
-                })
-                program_raw, program_reasoning = await _collect_resilient(
-                    provider, build_program_messages(body, plan.steps), body.thinking, json_output=body.model_tier == 'advanced',
-                )
-                if program_reasoning:
-                    yield _sse('reasoning_delta', {
-                        'request_id': body.request_id,
-                        'phase': 'generating',
-                        'text': program_reasoning,
-                    })
-                program: ProgramIR | None = None
-                failed_attempts: list[tuple[str, str]] = []
-                for attempt in range(5):
-                    try:
-                        program = ProgramIR.model_validate(extract_single_json(program_raw))
-                        validate_program_for_mode(
-                            program, body.target.mode, body.target.current_program,
-                        )
-                        validate_program_contracts(
-                            program, 'stage' if body.target.is_stage else 'sprite',
-                        )
-                        break
-                    except (ValidationError, ValueError) as validation_error:
-                        logger.warning(
-                            'AI ProgramIR validation failed request_id=%s attempt=%s error=%s',
-                            body.request_id, attempt + 1, _error_summary(validation_error),
-                        )
-                        if attempt == 4:
-                            raise
-                        yield _sse('phase', {
-                            'request_id': body.request_id,
-                            'phase': 'repairing',
-                            'message': '正在校正积木结构',
-                        })
-                        error_detail = _error_summary(validation_error, 12_000)
-                        failed_attempts.append((program_raw, error_detail))
-                        program_raw, repair_reasoning = await _collect_resilient(
-                            provider,
-                            build_program_repair_messages(body, plan.steps, failed_attempts),
-                            body.thinking, json_output=body.model_tier == 'advanced',
-                        )
-                        if repair_reasoning:
-                            yield _sse('reasoning_delta', {
-                                'request_id': body.request_id,
-                                'phase': 'repairing',
-                                'text': repair_reasoning,
-                            })
-                if program is None:
-                    raise RuntimeError('AI ProgramIR generation produced no result')
-                if await request.is_disconnected():
-                    return
-                yield _sse('program_ready', {
-                    'request_id': body.request_id,
-                    'program': program.model_dump(mode='json', exclude_none=True),
-                })
-                yield _sse('message_complete', {'request_id': body.request_id})
-        except (AgnesTextProviderError, ValidationError, ValueError, RuntimeError) as error:
-            logger.warning(
-                'AI block generation failed request_id=%s error_type=%s error=%s',
-                body.request_id, type(error).__name__, _error_summary(error),
-            )
-            if isinstance(error, AgnesTextProviderError):
-                code = 'AI_BLOCKS_PROVIDER_ERROR'
-                message = 'AI 服务暂时不可用，请稍后重试'
-            elif isinstance(error, (ValidationError, ValueError)):
-                code = 'INVALID_PROGRAM_RESPONSE'
-                message = 'AI 返回的积木结构无效，自动校正未成功，请重试'
-            else:
-                code = 'AI_BLOCKS_GENERATION_ERROR'
-                message = 'AI 积木生成未完成，请重试'
-            yield _sse('message_error', {
-                'request_id': body.request_id,
-                'code': code,
-                'message': message,
-            })
+                        lambda failures: build_plan_repair_messages(body, failures),
+                        retries=2,
+                    ):
+                        if event == 'repair':
+                            yield _phase(body.request_id, 'repairing', '正在校正规划结构')
+                        else:
+                            plan = value
+                if plan is None:
+                    raise AgnesTextProviderError('AI plan is missing')
+                yield _sse('plan_ready', {'request_id': body.request_id, 'plan': plan.model_dump(mode='json')})
 
-    return StreamingResponse(generate(), media_type='text/event-stream', headers={
-        'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no',
-    })
+                if body.output_contract == 'program_ir':
+                    yield _phase(body.request_id, 'generating', '正在生成积木程序')
+                    program = None
+                    async for event, value in _generate_json_events(
+                        selected,
+                        build_program_messages(body, plan.steps),
+                        ProgramIR,
+                        body.thinking,
+                        lambda failures: build_program_repair_messages(body, plan.steps, failures),
+                        retries=4,
+                        validator=lambda item: (
+                            validate_program_contracts(item),
+                            validate_program_for_mode(item, body.target.mode, body.target.current_program),
+                        ),
+                    ):
+                        if event == 'repair':
+                            yield _phase(body.request_id, 'repairing', '正在校正积木程序')
+                        else:
+                            program = value
+                    if program is None:
+                        raise AgnesTextProviderError('AI program is missing')
+                    yield _sse('program_ready', {'request_id': body.request_id, 'program': program.model_dump(mode='json')})
+                    ready_sent = True
+                elif body.output_contract == 'project_manifest':
+                    yield _phase(body.request_id, 'generating', '正在生成项目清单')
+                    manifest = None
+                    async for event, value in _generate_json_events(
+                        selected,
+                        build_project_manifest_messages(body, plan.steps),
+                        ProjectManifest,
+                        body.thinking,
+                        lambda failures: build_project_manifest_repair_messages(body, plan.steps, failures),
+                        normalizer=normalize_project_manifest_input,
+                        retries=2,
+                    ):
+                        if event == 'repair':
+                            yield _phase(body.request_id, 'repairing', '正在校正项目清单')
+                        else:
+                            manifest = value
+                    if manifest is None:
+                        raise AgnesTextProviderError('AI manifest is missing')
+                    yield _sse('manifest_ready', {'request_id': body.request_id, 'manifest': manifest.model_dump(mode='json', exclude_none=True)})
+                    ready_sent = True
+                elif body.output_contract == 'project_program':
+                    if body.project_manifest is None or body.program_target is None:
+                        raise ValueError('project_program requires project_manifest and program_target')
+                    yield _phase(body.request_id, 'generating', '正在生成目标积木')
+                    program = None
+                    async for event, value in _generate_json_events(
+                        selected,
+                        build_project_program_messages(body, plan.steps),
+                        ProgramIR,
+                        body.thinking,
+                        lambda failures: build_project_program_repair_messages(body, plan.steps, failures),
+                        retries=4,
+                        validator=lambda item: (
+                            validate_program_contracts(item),
+                            validate_program_for_mode(item, body.program_target.mode, body.target.current_program),
+                        ),
+                    ):
+                        if event == 'repair':
+                            yield _phase(body.request_id, 'repairing', '正在校正目标积木')
+                        else:
+                            program = value
+                    if program is None:
+                        raise AgnesTextProviderError('AI program is missing')
+                    yield _sse('project_program_ready', {
+                        'request_id': body.request_id,
+                        'target': body.program_target.model_dump(mode='json', exclude_none=True),
+                        'program': program.model_dump(mode='json'),
+                    })
+                    ready_sent = True
+                yield _sse('message_complete', {'request_id': body.request_id})
+            except Exception as exc:
+                logger.error(
+                    'ai_generate_failed request_id=%s contract=%s error_type=%s summary=%s',
+                    body.request_id, body.output_contract, type(exc).__name__, _error_summary(exc),
+                )
+                if not ready_sent:
+                    yield _sse('message_error', {
+                        'request_id': body.request_id,
+                        'code': 'AI_BLOCKS_GENERATION_ERROR',
+                        'message': 'AI 积木生成未完成，请重试',
+                    })
+
+    return StreamingResponse(
+        generate(),
+        media_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )

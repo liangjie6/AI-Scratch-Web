@@ -279,7 +279,7 @@ export interface CompileOptions {
   resolver?: Partial<ProgramResolver>;
   idGenerator?: IdGenerator;
 }
-export interface VMField {name: string; value: string | number | boolean; id?: string}
+export interface VMField {name: string; value: string | number | boolean; id?: string; variableType?: '' | 'list' | 'broadcast_msg'}
 export interface VMInput {name: string; block: string; shadow: string | null}
 export interface VMBlock {
   id: string;
@@ -319,6 +319,7 @@ const primitive = {
 } as const;
 
 const defaultResolve = (name: string): ResolvedField => ({name, id: name});
+const resolverVariableType: Record<FieldResolverKind, VMField['variableType']> = {variable: '', list: 'list', broadcast: 'broadcast_msg'};
 
 export const validateCompiledGraph = (graph: Pick<CompiledProgram, 'blocks' | 'blockOrder' | 'topLevelIds'>): void => {
   const errors: string[] = [];
@@ -391,6 +392,20 @@ export const compileProgramIR = (program: ProgramIR, options: CompileOptions = {
     if (!result || typeof result.name !== 'string' || typeof result.id !== 'string' || !result.id) throw new Error(`Unable to resolve ${kind}: ${sourceName}`);
     return result;
   };
+  const resolvedVmField = (name: string, kind: FieldResolverKind, sourceName: string): VMField => {
+    const resolved = resolveField(kind, sourceName);
+    return {name, value: resolved.name, id: resolved.id, variableType: resolverVariableType[kind]};
+  };
+  const compileMenuShadow = (spec: import('./block-catalog').InputSpec | undefined, value: string | number, parent: string): VMBlock | null => {
+    if (!spec?.shadowOpcode || !spec.shadowField) return null;
+    const shadow = create(spec.shadowOpcode, parent, true);
+    if (spec.shadowResolver && typeof value === 'string' && value) {
+      shadow.fields[spec.shadowField] = resolvedVmField(spec.shadowField, spec.shadowResolver, value);
+    } else {
+      shadow.fields[spec.shadowField] = {name: spec.shadowField, value, ...(spec.shadowResolver ? {variableType: resolverVariableType[spec.shadowResolver]} : {})};
+    }
+    return shadow;
+  };
   const compileReporter = (ir: BlockIR, parent: string): VMBlock => compileBlock(ir, parent);
   const compileScalar = (input: Exclude<InputIR, {kind: 'block'}>, parent: string): VMBlock => {
     const [opcode, field] = primitive[input.kind];
@@ -416,27 +431,18 @@ export const compileProgramIR = (program: ProgramIR, options: CompileOptions = {
       const fieldSpec = spec.fields?.[name];
       if (fieldSpec?.resolver) {
         const resolved = resolveField(fieldSpec.resolver, String(value));
-        block.fields[name] = {name, value: resolved.name, id: resolved.id};
+        block.fields[name] = resolvedVmField(name, fieldSpec.resolver, String(value));
       } else block.fields[name] = {name, value: value as FieldValue};
     }
     for (const [name, input] of Object.entries(ir.inputs ?? {})) {
+      const inputSpec = spec.inputs?.[name];
       if (input.kind === 'block') {
         const reporter = compileReporter(input.block, block.id);
-        const shadowKind = spec.inputs?.[name]?.shadow;
-        let shadow: VMBlock | null = null;
-        if (shadowKind) {
-          shadow = compileScalar({kind: shadowKind, value: shadowKind === 'color' ? '#000000' : shadowKind === 'text' ? '' : 0}, block.id);
-        }
+        const shadowKind = inputSpec?.shadow;
+        const shadow = compileMenuShadow(inputSpec, '', block.id) ?? (shadowKind ? compileScalar({kind: shadowKind, value: shadowKind === 'color' ? '#000000' : shadowKind === 'text' ? '' : 0}, block.id) : null);
         block.inputs[name] = {name, block: reporter.id, shadow: shadow?.id ?? null};
       } else {
-        const inputSpec = spec.inputs?.[name];
-        let scalar: VMBlock;
-        if (inputSpec?.shadowOpcode && inputSpec.shadowField) {
-          scalar = create(inputSpec.shadowOpcode, block.id, true);
-          scalar.fields[inputSpec.shadowField] = {name: inputSpec.shadowField, value: input.value};
-        } else {
-          scalar = compileScalar(input, block.id);
-        }
+        const scalar = compileMenuShadow(inputSpec, input.value, block.id) ?? compileScalar(input, block.id);
         block.inputs[name] = {name, block: scalar.id, shadow: scalar.id};
       }
     }

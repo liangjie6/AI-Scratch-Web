@@ -38,7 +38,7 @@ declare global {
     id: string;
     opcode: string;
     inputs: Record<string, {name?: string; block: string | null; shadow: string | null}>;
-    fields: Record<string, {name?: string; value: string | number | boolean; id?: string | null}>;
+    fields: Record<string, {name?: string; value: string | number | boolean; id?: string | null; variableType?: '' | 'list' | 'broadcast_msg'}>;
     next: string | null;
     parent: string | null;
     shadow: boolean;
@@ -152,7 +152,7 @@ declare global {
     addSprite(input: string | Record<string, unknown>): Promise<void>;
     deleteSprite(targetId: string): unknown;
     setEditingTarget(targetId: string): void;
-    saveProjectSb3(): Promise<Uint8Array>;
+    saveProjectSb3(): Promise<Uint8Array | Blob>;
     loadProject(input: ArrayBuffer | Uint8Array | string): Promise<void>;
     emitWorkspaceUpdate?(): void;
     refreshWorkspace?(): void;

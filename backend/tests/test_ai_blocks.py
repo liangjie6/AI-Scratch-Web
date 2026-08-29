@@ -8,9 +8,11 @@ from app.main import app
 from app.prompts_ai_blocks import (
     SCRATCH_CODE_GENERATION_PROMPT,
     build_program_messages,
+    build_plan_messages,
+    build_project_manifest_messages,
 )
 from app.providers.agnes_text_provider import AgnesStreamDelta, AgnesTextProviderError
-from app.routes.ai_blocks import _collect_resilient, get_ai_blocks_provider
+from app.routes.ai_blocks import _collect_resilient, _timed_events, get_ai_blocks_provider
 from app.schemas.ai_blocks import (
     GenerateRequest, MAX_BLOCKS, NATIVE_OPCODES, ProgramIR, ThinkingSettings, extract_single_json,
     validate_program_contracts, validate_program_for_mode,
@@ -44,6 +46,35 @@ class MockProvider:
         async for delta in self.stream_with_reasoning(messages):
             if delta.kind == 'content':
                 yield delta.text
+
+
+def test_project_manifest_prompt_defines_only_valid_target_refs():
+    request = GenerateRequest.model_validate({
+        **payload(),
+        'requirements': requirements(),
+        'output_contract': 'project_manifest',
+        'scope': 'project',
+        'asset_policy': 'existing_only',
+    })
+    prompt = '\n'.join(item['content'] for item in build_project_manifest_messages(request, ['添加角色']))
+    assert 'TargetRef.kind 只能是 current_target、stage、existing_sprite、created_sprite' in prompt
+    assert '绝对不能写 sprite、ref_type 或其他值' in prompt
+    assert 'target={\"kind\":\"created_sprite\",\"op_id\":\"该角色的op_id\"}' in prompt
+    assert 'program_targets 的每项且只能有 target、mode、intent，绝对不能有 programs' in prompt
+    assert 'variables 每项且只能有 name、value、scope，scope 必须为 global' in prompt
+    assert '禁止 type、variable、list、id 等字段' in prompt
+    assert 'width 和 height 只能是 512、768 或 1024' in prompt
+    assert 'sheet_layout 必须是字符串 "1x1"' in prompt
+    assert 'add_backdrop 只能有 op、op_id、name、tags、source、select_after' in prompt
+    assert '所有 stage、existing_sprite、created_sprite 的 mode 都必须为 append' in prompt
+    assert 'add_builtin_sprite 只能有 op、op_id、name、x、y、size、tags、source，禁止 target' in prompt
+    assert 'stage 只能是 {\"kind\":\"stage\"}' in prompt
+    assert 'delete_sprite 只能有 op、op_id、name、target' in prompt
+    assert 'add_costume 的 source.asset_type 必须是 costume，绝对不能是 sprite' in prompt
+    assert 'add_backdrop 的 source.asset_type 必须是 backdrop' in prompt
+    assert '本次素材策略是 existing_only（仅已有素材）' in prompt
+    assert 'resource_ops 的所有 source.kind 必须是 scratch_library，严禁 image_generation' in prompt
+    assert '素材策略：existing_only' in prompt
 
 
 def payload(mode='modify', is_stage=False):
@@ -134,6 +165,23 @@ def test_program_prompt_includes_canonical_edge_bounce_contract():
 
 
 @pytest.mark.asyncio
+async def test_timed_events_prints_only_content(capsys):
+    provider = MockProvider([[
+        AgnesStreamDelta(kind='reasoning', text='内部推理'),
+        AgnesStreamDelta(kind='content', text='第一段'),
+        AgnesStreamDelta(kind='usage', usage={'total_tokens': 3}),
+        AgnesStreamDelta(kind='content', text='第二段'),
+    ]])
+
+    events = [event async for event in _timed_events(
+        provider, [{'role': 'user', 'content': 'test'}], ThinkingSettings(enabled=False, strength='low')
+    )]
+
+    assert [event.kind for event in events] == ['reasoning', 'content', 'usage', 'content']
+    assert capsys.readouterr().out == '第一段第二段'
+
+
+@pytest.mark.asyncio
 async def test_provider_timeout_retries_without_thinking():
     class RetryProvider(MockProvider):
         async def stream_with_reasoning(self, messages, *, thinking_enabled=True, thinking_strength='medium'):
@@ -159,7 +207,7 @@ async def post(path, data):
 
 
 @pytest.mark.asyncio
-async def test_chat_streams_events_and_prompt_uses_defaults_before_clarifying():
+async def test_chat_streams_events_and_prompt_uses_defaults_without_questions():
     provider = MockProvider([['请问希望用方向键，', '还是自动移动？']])
     app.dependency_overrides[get_ai_blocks_provider] = lambda: provider
     try:
@@ -171,13 +219,20 @@ async def test_chat_streams_events_and_prompt_uses_defaults_before_clarifying():
     assert response.text.count('event: assistant_delta') == 2
     assert 'event: message_complete' in response.text
     system = provider.calls[0][0]['content']
-    assert '不要把简单需求复杂化' in system
-    assert '最多只问一个关键问题' in system
-    assert '未说明细节使用最简单且符合 Scratch 习惯的默认值' in system
+    assert '根据用户输入直接确定可实现的角色或舞台行为' in system
+    assert '绝不提问、绝不请求确认' in system
+    assert '未说明细节一律使用最简单且符合 Scratch 习惯的默认值' in system
     assert '禁止输出代码' in system
     prompt = provider.calls[0][-1]['content']
     assert '"is_stage":true' in prompt
     assert 'script_1' in prompt
+
+
+def test_plan_prompt_requires_steps_only():
+    request = GenerateRequest.model_validate({**payload(), 'requirements': requirements()})
+    prompt = '\n'.join(item['content'] for item in build_plan_messages(request))
+    assert '且只能包含唯一字段 steps' in prompt
+    assert '禁止输出 success_criteria、summary、triggers、controls、plan' in prompt
 
 
 def test_program_prompt_includes_general_behavior_contract():
@@ -213,7 +268,7 @@ async def test_requirements_accumulates_chunks_and_accepts_one_code_fence():
     assert response.json() == result
     system = provider.calls[0][0]['content']
     assert '未说明的触发方式默认点击绿旗' in system
-    assert 'missing_questions 最多包含一个关键问题' in system
+    assert '必须 ready=true，missing_questions 必须始终为空数组' in system
 
 
 @pytest.mark.asyncio
@@ -700,20 +755,21 @@ async def test_ai_blocks_request_size_limit():
     assert response.json()['detail']['code'] == 'REQUEST_TOO_LARGE'
 
 @pytest.mark.asyncio
-async def test_generate_project_plan_streams_project_ready():
+async def test_generate_project_manifest_streams_manifest_ready():
     plan = json.dumps({'steps': ['选择已有背景']}, ensure_ascii=False)
-    project = json.dumps({
+    manifest = json.dumps({
         'schema_version': 1,
         'scope': 'project',
         'summary': '选择已有背景',
         'resource_ops': [{'op': 'select_backdrop', 'op_id': 'select_1', 'name': '舞台'}],
-        'block_programs': [],
+        'program_targets': [],
+        'shared_state': {'variables': [], 'lists': [], 'broadcasts': []},
     }, ensure_ascii=False)
-    provider = MockProvider([[plan], [project]])
+    provider = MockProvider([[plan], [manifest]])
     app.dependency_overrides[get_ai_blocks_provider] = lambda: provider
     request = payload()
     request['requirements'] = requirements()
-    request['output_contract'] = 'project_plan'
+    request['output_contract'] = 'project_manifest'
     request['scope'] = 'project'
     try:
         response = await post('/api/ai-blocks/generate', request)
@@ -721,7 +777,10 @@ async def test_generate_project_plan_streams_project_ready():
         app.dependency_overrides.clear()
     assert response.status_code == 200
     events = [line for line in response.text.splitlines() if line.startswith('event:')]
-    assert events == ['event: phase', 'event: plan_ready', 'event: phase', 'event: project_ready', 'event: message_complete']
+    assert events == ['event: phase', 'event: plan_ready', 'event: phase', 'event: manifest_ready', 'event: message_complete']
     assert '"scope":"project"' in response.text
-    assert 'project_ready' in response.text
+    assert 'manifest_ready' in response.text
+    assert '"target":null' not in response.text
+    assert '"name":null' not in response.text
+    assert '"op_id":null' not in response.text
 
