@@ -15,11 +15,14 @@ from ..prompt_builder import PromptBuilder
 from ..providers.agnes_text_provider import AgnesTextProvider, AgnesTextProviderError
 from ..schemas.ai_blocks import (
     ChatRequest,
-    ProgramIR,
-    UnifiedGenerationRequest,
     ProgramContractError,
+    ProgramIR,
     ProjectManifest,
+    ResourceContractError,
+    UnifiedGenerationRequest,
     ValidationRequest,
+    normalize_project_manifest_payload,
+    to_json_pointer,
     validate_program_contracts,
     validate_program_for_mode,
 )
@@ -150,17 +153,56 @@ async def generate_unified(
     )
 
 
-def _validation_issues(error: Exception) -> list[dict[str, str]]:
+def _validation_issues(error: Exception) -> list[dict[str, Any]]:
+    if isinstance(error, ResourceContractError):
+        return [error.issue.as_dict()]
     if isinstance(error, ProgramContractError):
-        return [{'path': path, 'message': message} for path, message in error.issues]
+        return [{
+            'code': 'PROGRAM_CONTRACT_INVALID',
+            'path': to_json_pointer(path),
+            'operation': 'program',
+            'actual': None,
+            'expected': message,
+            'repair_scope': 'program',
+            'repair_id': None,
+            'message': message,
+        } for path, message in error.issues]
     if isinstance(error, ValidationError):
         issues = []
         for item in error.errors():
-            location = '.'.join(str(part) for part in item.get('loc', ())) or '$'
             message = item.get('msg')
-            issues.append({'path': location, 'message': message if isinstance(message, str) else '结构化输出无效'})
-        return issues or [{'path': '$', 'message': '结构化输出无效'}]
-    return [{'path': 'output', 'message': str(error)}]
+            expected = message if isinstance(message, str) else '结构化输出无效'
+            issues.append({
+                'code': 'SCHEMA_VALIDATION_ERROR',
+                'path': to_json_pointer(tuple(item.get('loc', ()))) or '/output',
+                'operation': 'validation',
+                'actual': None,
+                'expected': expected,
+                'repair_scope': 'validation',
+                'repair_id': None,
+                'message': expected,
+            })
+        return issues or [{
+            'code': 'SCHEMA_VALIDATION_ERROR',
+            'path': '/output',
+            'operation': 'validation',
+            'actual': None,
+            'expected': '结构化输出无效',
+            'repair_scope': 'validation',
+            'repair_id': None,
+            'message': '结构化输出无效',
+        }]
+    message = str(error)
+    return [{
+        'code': 'OUTPUT_VALIDATION_ERROR',
+        'path': '/output',
+        'operation': 'validation',
+        'actual': None,
+        'expected': message,
+        'repair_scope': 'validation',
+        'repair_id': None,
+        'message': message,
+    }]
 
 
 @router.post('/validate')
@@ -171,7 +213,8 @@ async def validate_output(body: ValidationRequest) -> dict[str, Any]:
             validate_program_contracts(program, body.target_kind)
             validate_program_for_mode(program, body.mode, body.current_program)
         else:
-            ProjectManifest.model_validate(body.payload)
+            normalized_payload, normalizations = normalize_project_manifest_payload(body.payload)
+            ProjectManifest.model_validate(normalized_payload)
     except (ValidationError, ValueError) as exc:
         return {'valid': False, 'issues': _validation_issues(exc)}
-    return {'valid': True, 'issues': []}
+    return {'valid': True, 'issues': [], 'normalizations': [item.as_dict() for item in normalizations] if body.kind == 'manifest' else []}

@@ -15,10 +15,14 @@ from ..schemas.ai_blocks import (
     ProgramIR,
     ProgramMetadata,
     ProgramState,
+    ProgramContractError,
     ProjectManifest,
     RequirementsResponse,
+    ResourceContractError,
     Script,
     UnifiedGenerationRequest,
+    normalize_project_manifest_payload,
+    to_json_pointer,
     validate_program_contracts,
     validate_program_for_mode,
 )
@@ -276,7 +280,9 @@ class GenerationOrchestrator:
                     raise StreamProtocolError('manifest must precede program frames')
                 if state.manifest is not None:
                     raise StreamProtocolError('duplicate project manifest')
-                state.manifest = ProjectManifest.model_validate(parse_json(frame.content))
+                raw_manifest = parse_json(frame.content)
+                normalized_manifest, normalizations = normalize_project_manifest_payload(raw_manifest)
+                state.manifest = ProjectManifest.model_validate(normalized_manifest)
                 self._complete_phase(state, 'plan')
                 logger.info(
                     '统一生成 计划完成: 步骤=%d 清单程序目标=%d 资源操作=%d',
@@ -285,6 +291,7 @@ class GenerationOrchestrator:
                 return [GenerationEvent('phase_complete', request.request_id, phase='plan', data={
                     'steps': state.plan.steps,
                     'manifest': state.manifest.model_dump(mode='json'),
+                    'normalizations': [item.as_dict() for item in normalizations],
                 })], None
             if frame.kind == 'program_start':
                 return self._program_start(request, state, frame), None
@@ -294,16 +301,16 @@ class GenerationOrchestrator:
                 return self._program_end(request, state), None
             raise StreamProtocolError('unknown generation frame')
         except (ValidationError, ValueError, StreamProtocolError) as exc:
-            path = self._error_path(exc)
             phase = self._phase_for(frame)
+            issue = self._structured_issue(exc, frame)
             detail = self._error_detail(exc)
             logger.warning(
-                '统一生成 校验失败: phase=%s path=%s message=%s detail=%s',
-                phase, path, self._safe_message(exc), detail,
+                '统一生成 校验失败: phase=%s path=%s code=%s detail=%s',
+                phase, issue['path'], issue['code'], detail,
             )
             return [], GenerationEvent('validation_error', request.request_id, phase=phase, data={
-                'path': path,
-                'message': self._safe_message(exc),
+                **issue,
+                'message': issue['expected'],
                 'detail': detail,
                 'recoverable': False,
             })
@@ -512,15 +519,70 @@ class GenerationOrchestrator:
         return 'program' if frame.kind in {'program_start', 'program_end', 'metadata', 'shared_state', 'script'} else frame.kind
 
     @staticmethod
-    def _error_path(error: Exception) -> str:
+    def _structured_issue(error: Exception, frame: StreamFrame) -> dict[str, Any]:
+        if isinstance(error, ResourceContractError):
+            return error.issue.as_dict()
+        scope = 'manifest' if frame.kind == 'manifest' else 'program' if frame.kind in {'program_start', 'program_end', 'metadata', 'shared_state', 'script'} else 'stream'
+        if isinstance(error, ProgramContractError) and error.issues:
+            path, message = error.issues[0]
+            return {
+                'code': 'PROGRAM_CONTRACT_INVALID',
+                'path': to_json_pointer(path),
+                'operation': 'program',
+                'actual': None,
+                'expected': message,
+                'repair_scope': 'program',
+                'repair_id': None,
+            }
         if isinstance(error, ValidationError):
             errors = error.errors()
             if errors:
-                return '.'.join(str(part) for part in errors[0].get('loc', ())) or '$'
-        return 'output'
+                item = errors[0]
+                return {
+                    'code': 'SCHEMA_VALIDATION_ERROR',
+                    'path': to_json_pointer(tuple(item.get('loc', ()))),
+                    'operation': frame.kind,
+                    'actual': None,
+                    'expected': str(item.get('msg') or 'structured output is invalid'),
+                    'repair_scope': scope,
+                    'repair_id': None,
+                }
+        if isinstance(error, StreamProtocolError):
+            return {
+                'code': 'STREAM_PROTOCOL_ERROR',
+                'path': '/output',
+                'operation': frame.kind,
+                'actual': None,
+                'expected': str(error),
+                'repair_scope': 'stream',
+                'repair_id': None,
+            }
+        return {
+            'code': 'OUTPUT_VALIDATION_ERROR',
+            'path': '/output',
+            'operation': frame.kind,
+            'actual': None,
+            'expected': 'structured output validation failed',
+            'repair_scope': scope,
+            'repair_id': None,
+        }
+
+    @staticmethod
+    def _error_path(error: Exception) -> str:
+        if isinstance(error, ResourceContractError):
+            return error.issue.path
+        if isinstance(error, ProgramContractError) and error.issues:
+            return to_json_pointer(error.issues[0][0])
+        if isinstance(error, ValidationError):
+            errors = error.errors()
+            if errors:
+                return to_json_pointer(tuple(errors[0].get('loc', ()))) or '/output'
+        return '/output'
 
     @staticmethod
     def _safe_message(error: Exception) -> str:
+        if isinstance(error, ResourceContractError):
+            return error.issue.expected
         if isinstance(error, StreamProtocolError):
             return str(error)
         if isinstance(error, ValidationError):
@@ -529,10 +591,14 @@ class GenerationOrchestrator:
 
     @staticmethod
     def _error_detail(error: Exception) -> str:
+        if isinstance(error, ResourceContractError):
+            return json.dumps(error.issue.as_dict(), ensure_ascii=False, separators=(',', ':'))
+        if isinstance(error, ProgramContractError):
+            return '; '.join(f'{to_json_pointer(path)}: {message}' for path, message in error.issues[:5])
         if isinstance(error, ValidationError):
             parts = []
             for item in error.errors()[:5]:
-                loc = '.'.join(str(part) for part in item.get('loc', ())) or '$'
+                loc = to_json_pointer(tuple(item.get('loc', ()))) or '/output'
                 parts.append(f'{loc}: {item.get("type", "")}: {item.get("msg", "")}')
             return '; '.join(parts)
         return str(error)

@@ -12,7 +12,14 @@ from app.orchestration.streaming_parser import StreamProtocolError, UnifiedFrame
 from app.prompt_builder import PromptBuilder
 from app.providers.agnes_text_provider import AgnesStreamDelta
 from app.routes.ai_blocks import get_ai_blocks_orchestrator, get_ai_blocks_provider
-from app.schemas.ai_blocks import RequirementsResponse, UnifiedGenerationRequest, ValidationRequest
+from app.schemas.ai_blocks import (
+    RequirementsResponse,
+    ResourceContractError,
+    ResourceOp,
+    UnifiedGenerationRequest,
+    ValidationRequest,
+    normalize_resource_op,
+)
 
 
 class MockProvider:
@@ -359,6 +366,14 @@ def test_unified_prompt_describes_resource_operation_contract():
     assert 'stage, existing_sprite and created_sprite entries MUST use exactly "append"' in contract
 
 
+def test_knowledge_base_has_one_transport_and_input_protocol():
+    knowledge = PromptBuilder()._build_knowledge_base()
+    assert 'UNSUPPORTED_SCRATCH_REQUEST' not in knowledge
+    assert 'kind":"reporter"' not in knowledge
+    assert '不存在独立的 boolean 或 reporter wire kind' in knowledge
+    assert '统一生成传输使用标签流' in knowledge
+
+
 @pytest.mark.asyncio
 async def test_manifest_resource_op_validation_reports_rule_detail(caplog):
     caplog.set_level(logging.WARNING, logger='app.orchestration.orchestrator')
@@ -372,11 +387,83 @@ async def test_manifest_resource_op_validation_reports_rule_detail(caplog):
 
     validation = [event for event in events if event.type == 'validation_error']
     assert validation and validation[0].phase == 'plan'
-    assert validation[0].data['path'] == 'resource_ops.0'
+    assert validation[0].data['path'] == '/resource_ops/0'
+    assert validation[0].data['code'] == 'SCHEMA_VALIDATION_ERROR'
+    assert validation[0].data['operation'] == 'manifest'
     assert 'costume source cannot be a sprite' in validation[0].data['detail']
     assert events[-1].type == 'error'
     assert events[-1].data['code'] == 'OUTPUT_VALIDATION_ERROR'
     assert any('costume source cannot be a sprite' in record.getMessage() for record in caplog.records)
+
+
+def backdrop_resource(select_after_marker=True):
+    value = {
+        'op': 'add_backdrop',
+        'op_id': 'backdrop_1',
+        'name': '森林',
+        'source': {'kind': 'scratch_library', 'asset_type': 'backdrop', 'search_terms': ['森林']},
+    }
+    if select_after_marker:
+        value['select_after'] = False
+    return value
+
+
+def test_add_backdrop_normalizes_compatibility_fields_and_defaults():
+    raw = backdrop_resource(select_after_marker=False)
+    raw.update({'target': {'kind': 'stage'}, 'x': None, 'y': None, 'size': None})
+    normalized, diagnostics = normalize_resource_op(raw, path='/resource_ops/0')
+    assert normalized['select_after'] is False
+    assert 'target' not in normalized
+    assert all(field not in normalized for field in ('x', 'y', 'size'))
+    assert [item.code for item in diagnostics] == [
+        'DEFAULT_APPLIED', 'REDUNDANT_STAGE_TARGET_REMOVED', 'NULL_FIELD_REMOVED',
+        'NULL_FIELD_REMOVED', 'NULL_FIELD_REMOVED',
+    ]
+    operation = ResourceOp.model_validate(raw)
+    assert operation.select_after is False
+    assert operation.target is None
+
+
+def test_add_costume_defaults_select_after_to_false():
+    operation = ResourceOp.model_validate({
+        'op': 'add_costume',
+        'op_id': 'costume_1',
+        'target': {'kind': 'current_target'},
+        'name': '走路',
+        'source': {'kind': 'scratch_library', 'asset_type': 'costume', 'search_terms': ['走路']},
+    })
+    assert operation.select_after is False
+
+
+@pytest.mark.parametrize(('field', 'value', 'code'), [
+    ('target', {'kind': 'existing_sprite', 'name': '猫'}, 'INVALID_BACKDROP_TARGET'),
+    ('x', 10, 'INVALID_BACKDROP_PLACEMENT'),
+    ('source', {'kind': 'scratch_library', 'asset_type': 'costume', 'search_terms': ['森林']}, 'INVALID_BACKDROP_SOURCE'),
+])
+def test_add_backdrop_reports_independent_normalization_errors(field, value, code):
+    raw = backdrop_resource()
+    raw[field] = value
+    with pytest.raises(ResourceContractError) as caught:
+        normalize_resource_op(raw, path='/resource_ops/0')
+    issue = caught.value.issue.as_dict()
+    assert issue['code'] == code
+    assert issue['path'].startswith('/resource_ops/0/')
+    assert issue['operation'] == 'add_backdrop'
+    assert issue['repair_scope'] == 'resource_op'
+    assert issue['repair_id'] == 'backdrop_1'
+
+
+@pytest.mark.asyncio
+async def test_manifest_phase_reports_backdrop_normalizations():
+    raw = project_stream_output().replace(
+        '"resource_ops": []',
+        '"resource_ops": [{"op":"add_backdrop","op_id":"backdrop_1","name":"森林","target":{"kind":"stage"},"source":{"kind":"scratch_library","asset_type":"backdrop","search_terms":["森林"]}}]',
+    )
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, MockProvider(raw))]
+    plan = next(event for event in events if event.type == 'phase_complete' and event.phase == 'plan')
+    assert [item['code'] for item in plan.data['normalizations']] == ['DEFAULT_APPLIED', 'REDUNDANT_STAGE_TARGET_REMOVED']
+    assert plan.data['manifest']['resource_ops'][0]['select_after'] is False
 
 
 @pytest.mark.asyncio
@@ -422,7 +509,8 @@ async def test_validate_route_returns_structured_contract_paths():
         })
     assert response.status_code == 200
     assert response.json()['valid'] is False
-    assert response.json()['issues'][0]['path'] == '$.scripts[0].blocks[0]'
+    assert response.json()['issues'][0]['path'] == '/scripts/0/blocks/0'
+    assert response.json()['issues'][0]['code'] == 'PROGRAM_CONTRACT_INVALID'
 
 
 @pytest.mark.asyncio

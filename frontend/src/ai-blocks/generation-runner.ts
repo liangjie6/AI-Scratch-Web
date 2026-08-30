@@ -526,12 +526,17 @@ export class UnifiedGenerationRunner {
       };
       return result;
     } catch (error) {
+      let transactionInvalidated = false;
+      try {
+        transactionLock?.assertActive();
+      } catch {
+        transactionInvalidated = true;
+      }
       let restoreError: unknown;
       if (backup) {
         try {
-          transactionLock?.assertActive();
+          // A stale lock must not prevent restoring the durable backup.
           await this.bridge.loadProject(backup);
-          transactionLock?.assertActive();
           this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId);
           this.bridge.refreshWorkspace();
         } catch (caught) {
@@ -548,10 +553,14 @@ export class UnifiedGenerationRunner {
       }
       if (restoreError || assetCleanupError) {
         const details = [
+          transactionInvalidated ? 'AI 项目事务已失效' : '',
           restoreError ? '无法恢复项目备份：' + (restoreError instanceof Error ? restoreError.message : '未知错误') : '',
           assetCleanupError ? '无法清理已生成素材：' + (assetCleanupError instanceof Error ? assetCleanupError.message : '未知错误') : ''
         ].filter(Boolean).join('；');
         throw new Error('AI 项目提交失败，' + details);
+      }
+      if (transactionInvalidated) {
+        throw new Error('AI 项目提交失败，项目事务已失效但备份已恢复：' + (error instanceof Error ? error.message : '未知错误'));
       }
       throw error;
     } finally {

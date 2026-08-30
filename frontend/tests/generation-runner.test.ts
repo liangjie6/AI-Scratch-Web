@@ -43,10 +43,12 @@ function program(remove_script_ids: string[] = []): ProgramIR {
 function request(): UnifiedGenerationRequest {
   return {session_id: 'session-1', request_id: 'request-1', messages: [{role: 'user', content: '移动'}], target: {name: '角色1', is_stage: false, has_scripts: true, mode: 'append', costumes: [], sounds: [], sprite_names: ['角色1'], current_program: '{}'}, thinking: {enabled: false, strength: 'low'}, scope: 'single_sprite', asset_policy: 'builtin_first', proceed_with_defaults: true};
 }
-function fixture(failAfter = Number.POSITIVE_INFINITY) {
+function fixture(failAfter = Number.POSITIVE_INFINITY, onChange?: () => void) {
   let revision = 1;
-  const blocks = new MockBlocks(() => { revision += 1; }, failAfter);
+  let armed = false;
+  const blocks = new MockBlocks(() => { revision += 1; if (armed) onChange?.(); }, failAfter);
   blocks.createBlock(oldScript());
+  armed = true;
   const target: ScratchTargetLike = {id: 'sprite', isStage: false, isOriginal: true, getName: () => '角色1', blocks, comments: {}, variables: {}, getCostumes: () => [], getSounds: () => [], createVariable(id, name, type) { this.variables![id] = {id, name, type, value: type === 'list' ? [] : 0}; }, deleteVariable(id) { delete this.variables![id]; }, createComment(id, blockId, text, x, y, width, height, minimized) { this.comments![id] = {id, blockId, text, x, y, width, height, minimized}; }};
   const stage: ScratchTargetLike = {id: 'stage', isStage: true, isOriginal: true, getName: () => '舞台', blocks: new MockBlocks(() => { revision += 1; }), comments: {}, variables: {}, createVariable(id, name, type) { this.variables![id] = {id, name, type, value: type === 'list' ? [] : 0}; }, deleteVariable(id) { delete this.variables![id]; }};
   const vm = {editingTarget: target, runtime: {targets: [stage, target], getTargetById: (id: string) => [stage, target].find(item => item.id === id) ?? null, getTargetForStage: () => stage}, setEditingTarget: vi.fn((id: string) => { vm.editingTarget = [stage, target].find(item => item.id === id)!; }), stopAll: vi.fn()} as unknown as ScratchVmLike;
@@ -54,7 +56,8 @@ function fixture(failAfter = Number.POSITIVE_INFINITY) {
   const bridge = {currentVm: vm, get projectRevision() {return revision;}, saveProject: vi.fn(async () => new Uint8Array([1, 2, 3])), loadProject: vi.fn(async () => undefined), refreshWorkspace: vi.fn(), beginBlockGeneration: vi.fn(() => {if (active) throw new Error('busy'); active = true; return () => {active = false;};}), beginProjectTransaction: vi.fn(() => {if (active) throw new Error('busy'); active = true; let released = false; const assertActive = () => {if (released || !active) throw new Error('transaction inactive');}; return {assertActive, release: () => {if (!released) {released = true; active = false;}}};}), stop: vi.fn(), activateCodeTab: vi.fn()} as unknown as ScratchGuiBridge;
   const snapshot: AiTargetSnapshot = {targetId: 'sprite', targetName: '角色1', isStage: false, revision, blockCount: 1, hasScripts: true, scriptRefs: {}, context: request().target};
   const draft = {request: request(), snapshot, requirements: {ready: true, title: '移动', goal: '移动', behavior_steps: ['移动'], triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []}, plan: {steps: ['添加移动']}, programs: [{targetIndex: 0, metadata: {schema_version: 1, summary: '移动', remove_script_ids: []}, state: {variables: [], lists: [], broadcasts: []}, scripts: program().scripts, program: program()}]} as unknown as UnifiedGenerationDraft & {request: UnifiedGenerationRequest; snapshot: AiTargetSnapshot};
-  return {bridge, blocks, target, snapshot, draft};
+  const invalidateTransaction = () => { active = false; };
+  return {bridge, blocks, target, snapshot, draft, invalidateTransaction};
 }
 
 describe('unified generation transaction', () => {
@@ -73,6 +76,38 @@ describe('unified generation transaction', () => {
     expect(f.bridge.saveProject).toHaveBeenCalledOnce();
     expect(f.bridge.loadProject).toHaveBeenCalledOnce();
     expect(f.bridge.loadProject).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+  });
+
+  it('still restores the durable backup when the transaction lock is invalidated', async () => {
+    const f = fixture(2, () => f.invalidateTransaction());
+    await expect(new UnifiedGenerationRunner(f.bridge).commit(f.draft)).rejects.toThrow('模拟积木写入失败');
+    expect(f.bridge.loadProject).toHaveBeenCalledOnce();
+    expect(f.bridge.loadProject).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
+  });
+
+  it('reports a lost transaction lock separately from backup restore failure', async () => {
+    const f = fixture(2, () => f.invalidateTransaction());
+    const error = await new UnifiedGenerationRunner(f.bridge).commit(f.draft).catch(caught => caught as Error);
+    expect(f.bridge.loadProject).toHaveBeenCalledOnce();
+    expect(error.message).not.toContain('无法恢复项目备份');
+    expect(error.message).toContain('项目事务已失效');
+    expect(error.message).toContain('模拟积木写入失败');
+  });
+
+  it('reports both a lost transaction lock and a failed backup restore', async () => {
+    const f = fixture(2, () => f.invalidateTransaction());
+    vi.mocked(f.bridge.loadProject).mockRejectedValue(new Error('load failed'));
+    const error = await new UnifiedGenerationRunner(f.bridge).commit(f.draft).catch(caught => caught as Error);
+    expect(error.message).toContain('项目事务已失效');
+    expect(error.message).toContain('无法恢复项目备份');
+  });
+
+  it('attributes a genuine backup restore failure to restore', async () => {
+    const f = fixture(2);
+    vi.mocked(f.bridge.loadProject).mockRejectedValue(new Error('load failed'));
+    const error = await new UnifiedGenerationRunner(f.bridge).commit(f.draft).catch(caught => caught as Error);
+    expect(error.message).toContain('无法恢复项目备份');
+    expect(error.message).not.toContain('项目事务已失效');
   });
 
   it('cleans generated assets when the outer commit rolls back', async () => {

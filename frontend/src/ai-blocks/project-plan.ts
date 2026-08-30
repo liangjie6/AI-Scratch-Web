@@ -125,7 +125,12 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
     issues.push(issue(path + '.op', 'is not supported'));
     return;
   }
-  if (op === 'select_backdrop') return;
+  if (op === 'select_backdrop') {
+    for (const field of ['target', 'source', 'tags', 'x', 'y', 'size', 'select_after', 'costumes']) {
+      if (field in value) issues.push(issue(path + '.' + field, 'is not allowed for select_backdrop'));
+    }
+    return;
+  }
   if (op === 'delete_sprite') {
     validateTarget(value.target, path + '.target', issues, existingSpriteNames, created);
     if (isRecord(value.target) && value.target.kind !== 'existing_sprite') issues.push(issue(path + '.target.kind', 'delete_sprite requires an existing sprite'));
@@ -135,10 +140,10 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
   if (op === 'add_builtin_sprite' || op === 'add_sprite') {
     for (const field of ['x', 'y', 'size']) if (!isFiniteNumber(value[field])) issues.push(issue(path + '.' + field, 'must be a finite number'));
     if (isFiniteNumber(value.size) && (value.size as number) < 1) issues.push(issue(path + '.size', 'must be positive'));
-    validateTags(value.tags, path + '.tags', issues);
+    if (value.tags !== undefined) validateTags(value.tags, path + '.tags', issues);
   } else {
-    validateTags(value.tags, path + '.tags', issues);
-    if (value.select_after !== true && value.select_after !== false) issues.push(issue(path + '.select_after', 'must be boolean'));
+    if (value.tags !== undefined) validateTags(value.tags, path + '.tags', issues);
+    if (value.select_after !== undefined && value.select_after !== true && value.select_after !== false) issues.push(issue(path + '.select_after', 'must be boolean'));
   }
   if (op === 'add_builtin_sprite') {
     validateSource(value.source, path + '.source', issues, 'sprite');
@@ -147,7 +152,7 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
     return;
   }
   if (op === 'add_sprite') {
-    validateSource(value.source, path + '.source', issues);
+    validateSource(value.source, path + '.source', issues, 'costume');
     const costumes = value.costumes;
     if (!Array.isArray(costumes) || costumes.length > PROJECT_PLAN_LIMITS.costumes) {
       issues.push(issue(path + '.costumes', 'must be an array of at most 12 costumes'));
@@ -160,11 +165,11 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
         }
         if (!isString(costume.name, 120)) issues.push(issue(costumePath + '.name', 'must be a non-empty name'));
         validateSource(costume.source, costumePath + '.source', issues);
-        validateTags(costume.tags, costumePath + '.tags', issues);
+        if (costume.tags !== undefined) validateTags(costume.tags, costumePath + '.tags', issues);
         if (isRecord(costume.source) && costume.source.kind === 'scratch_library' && costume.source.asset_type === 'sprite') issues.push(issue(costumePath + '.source.asset_type', 'must not be sprite for a costume'));
       });
     }
-    if (value.source === undefined && (!Array.isArray(costumes) || costumes.length === 0)) issues.push(issue(path + '.source', 'is required when costumes is empty'));
+    if (value.source === undefined) issues.push(issue(path + '.source', 'is required for add_sprite'));
     created.add(String(value.op_id));
     return;
   }
@@ -172,10 +177,18 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
     validateTarget(value.target, path + '.target', issues, existingSpriteNames, created);
     if (isRecord(value.target) && value.target.kind === 'stage') issues.push(issue(path + '.target.kind', 'add_costume cannot target the stage'));
     if (isRecord(value.source) && value.source.kind === 'scratch_library' && value.source.asset_type === 'sprite') issues.push(issue(path + '.source.asset_type', 'must not be sprite for a costume'));
+  } else if (op === 'add_backdrop') {
+    if (value.target !== undefined && !(isRecord(value.target) && value.target.kind === 'stage' && Object.keys(value.target).length === 1)) {
+      issues.push(issue(path + '.target', 'must be omitted or exactly a stage target'));
+    }
+    for (const field of ['x', 'y', 'size']) {
+      if (field in value && value[field] !== undefined && value[field] !== null) issues.push(issue(path + '.' + field, 'is not allowed for add_backdrop'));
+    }
+    if ('costumes' in value) issues.push(issue(path + '.costumes', 'is not allowed for add_backdrop'));
   } else if (value.target !== undefined) {
     issues.push(issue(path + '.target', 'is not allowed'));
   }
-  validateSource(value.source, path + '.source', issues, op === 'add_backdrop' ? 'backdrop' : undefined);
+  validateSource(value.source, path + '.source', issues, op === 'add_backdrop' ? 'backdrop' : op === 'add_costume' ? 'costume' : undefined);
 }
 
 export function validateProjectManifest(value: unknown, existingSpriteNames: string[] = []): ValidationResult {

@@ -10,25 +10,13 @@
 - 不跨舞台或角色写入局部变量、列表、积木或资源。
 - 不使用扩展、过程、自定义积木或未知 opcode，除非 BLOCK_CATALOG/ALLOWED_EXTENSIONS 明确允许且契约支持；若 catalog 允许过程，重复绘图或算法逻辑可用过程复用，但过程定义、调用、参数和作用域必须完整且可验证。
 
-## 输出协议
+## 语义结构
 
-统一生成传输使用标签流；每个标签内部是一个严格 JSON 对象。不要在标签外输出 Markdown、代码围栏、解释、注释、前后缀或第二个对象。ProgramIR 字段会分布在 program 的 metadata、shared_state 和 script 标签中。
+统一生成传输使用标签流；每个标签内部是一个严格 JSON 对象。传输标签、顺序和标签外禁令由 system prompt 的 FINAL OUTPUT CONTRACT 定义，本知识库不定义第二套输出协议。
 
-顶层对象只能包含以下属性：
+ProgramIR 是宿主内部的语义程序，不是模型需要单独输出的顶层 JSON。它的字段会分布在 program 的 metadata、shared_state 和 script 标签中；不要输出裸 ProgramIR、错误 JSON、project.json 或其他标签外对象。禁止 NaN、Infinity、undefined、null 作为非法结构替代值、循环对象、重复引用对象和未声明属性。
 
-- schema_version：必须为数字 1。
-- summary：1..1000 个字符。
-- remove_script_ids：数组，默认 []；每项必须匹配 ^script_[A-Za-z0-9_-]+$。
-- variables：变量定义数组，默认 []，最多 100 项。
-- lists：列表定义数组，默认 []，最多 50 项。
-- broadcasts：广播名称数组，默认 []，最多 100 项。
-- scripts：脚本数组，通常至少 1 项，最多 12 项；modify 模式纯删除时允许为空数组。
-
-禁止 NaN、Infinity、undefined、null 作为非法结构替代值、循环对象、重复引用对象和未声明属性。
-
-无法安全完成时，仍只输出以下错误 JSON，不要添加解释：
-
-{"error":{"code":"UNSUPPORTED_SCRATCH_REQUEST","message":"无法满足请求"}}
+如果需求超出当前原生积木能力，在 requirements 中将 ready 设为 false 并填写 missing_questions；不要输出未声明的错误对象。后端会负责稳定的错误事件。
 
 ## ProgramIR 结构
 
@@ -80,14 +68,12 @@
 - {"kind":"text","value":"hello"}
 - {"kind":"color","value":"#4C97FF"}
 - {"kind":"block","block":{...}}
-- {"kind":"reporter","shape":"number|text|boolean|any","block":{...}}
 
 规则：
 
-- number 和 angle 的字面量 value 必须是有限 JSON 数字；若输入契约允许 reporter，可用 kind=reporter 提供动态数值。
+- number 和 angle 的字面量 value 必须是有限 JSON 数字。
 - text 和 color 的 value 必须是字符串；颜色使用 #RRGGBB。
-- boolean 输入必须是 kind=boolean 或契约允许的 kind=block，嵌套 block 必须是 boolean shape。
-- reporter 输入必须是 kind=reporter，shape 必须与 BLOCK_CATALOG 的输入契约兼容；number/text/angle 输入可以嵌入兼容 reporter。
+- 布尔值和 reporter 都使用 kind=block 表达，嵌套 block 的 opcode、shape 和输入必须与 BLOCK_CATALOG 契约兼容；不存在独立的 boolean 或 reporter wire kind。
 - 禁止用 null、空字符串或自造布尔字面量替代必填输入；可选输入和空分支只能按 BLOCK_CATALOG 声明的 omitted/empty 规则表达，由宿主生成合法 shadow。
 - 字段值只能是字符串、有限数字或布尔值。
 - 变量、列表和广播字段只写名称，不写 ID；宿主会解析真实 ID。
@@ -129,7 +115,7 @@ protected=true 的旧脚本只能保留，不得删除或重写。
 - 每个核心断言都必须在规划步骤和 ProgramIR 中有对应实现；不能只复述关键词，也不能遗漏条件、时序或恢复关系。
 - 循环表达持续关系，条件积木表达前置条件和分支关系；受条件控制的动作必须放在对应的 SUBSTACK 中，不能放在条件外。
 - 暂停、恢复、停止和状态转换必须用当前 BLOCK_CATALOG 能表达的原生积木明确表示；禁止用相近但语义不同的行为替代。
-- 生成前检查需求覆盖、执行顺序、循环/条件作用域、终止块位置和目标类型。当前原生积木无法准确表达时，只输出 UNSUPPORTED_SCRATCH_REQUEST。
+- 生成前检查需求覆盖、执行顺序、循环/条件作用域、终止块位置和目标类型。当前原生积木无法准确表达时，将 requirements.ready 设为 false 并填写 missing_questions，不要输出未声明的错误对象。
 
 ## 前端编译结果要求
 
@@ -299,7 +285,7 @@ protected=true 的旧脚本只能保留，不得删除或重写。
 1. 将需求改写为触发条件、状态、动作、循环/分支作用域、终止条件、恢复路径和成功标准；每一项都能定位到具体积木或脚本。
 2. 检查初始化是否覆盖所有状态，主循环是否真的持续，条件是否包住了受控动作，事件/广播是否与用户操作一致。
 3. 对游戏检查重启、结束、碰撞、边界、克隆和计分；对绘图检查清屏、画笔参数、几何循环和完成展示；对算法检查初始化、遍历、边界、临时变量、结果和异常输入。
-4. 检查是否引入了超出课程层级、目标类型或现有资源的机制；若用户要求无法用当前原生积木精确表达，返回 UNSUPPORTED_SCRATCH_REQUEST。
+4. 检查是否引入了超出课程层级、目标类型或现有资源的机制；若用户要求无法用当前原生积木精确表达，将 requirements.ready 设为 false 并说明缺少的能力。
 5. 检查每个脚本的布局坐标是否适度分散且稳定，避免所有脚本重叠；但布局不得影响执行语义，也不得为了排版增加无意义积木。
 6. 检查 reporter 的返回 shape、菜单 shadow、可选输入、C-block/terminal 分类、广播并发、列表 1-based 边界和 wait_until 的可达性。
 7. 检查 LEVEL_CONTEXT 的 allowed/forbidden/required 约束；模板、完整程序和版本副本不得混淆处理。

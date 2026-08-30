@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import re
 from typing import Annotated, Any, Literal
@@ -556,6 +557,168 @@ class CostumeResource(StrictModel):
     tags: list[ShortString] = Field(default_factory=list, max_length=20)
 
 
+RESOURCE_DIAGNOSTIC_CODES = (
+    'DEFAULT_APPLIED',
+    'REDUNDANT_STAGE_TARGET_REMOVED',
+    'NULL_FIELD_REMOVED',
+)
+
+
+def to_json_pointer(path: str | tuple[Any, ...]) -> str:
+    if isinstance(path, tuple):
+        parts = [str(item) for item in path]
+    else:
+        value = path.strip()
+        if value in {'', '$'}:
+            return ''
+        if value.startswith('/'):
+            return value
+        if value.startswith('$'):
+            value = value[1:]
+        parts = re.findall(r'[^.\[\]/]+', value)
+    escaped = [part.replace('~', '~0').replace('/', '~1') for part in parts if part]
+    return '/' + '/'.join(escaped) if escaped else ''
+
+
+@dataclass(frozen=True)
+class ResourceContractIssue:
+    code: str
+    path: str
+    operation: str
+    actual: Any
+    expected: str
+    repair_scope: str = 'resource_op'
+    repair_id: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            'code': self.code,
+            'path': self.path,
+            'operation': self.operation,
+            'actual': self.actual,
+            'expected': self.expected,
+            'repair_scope': self.repair_scope,
+            'repair_id': self.repair_id,
+        }
+
+
+class ResourceContractError(ValueError):
+    def __init__(self, issue: ResourceContractIssue) -> None:
+        self.issue = issue
+        super().__init__(f'{issue.code} at {issue.path}: {issue.expected}')
+
+
+def _resource_issue(
+    raw: dict[str, Any],
+    code: str,
+    path: str,
+    actual: Any,
+    expected: str,
+) -> ResourceContractError:
+    operation = str(raw.get('op', 'unknown'))
+    repair_id = raw.get('op_id') if isinstance(raw.get('op_id'), str) else None
+    return ResourceContractError(ResourceContractIssue(code, path, operation, actual, expected, repair_id=repair_id))
+
+
+def normalize_resource_op(
+    raw: Any,
+    *,
+    path: str = '/resource_ops/0',
+) -> tuple[Any, list[ResourceContractIssue]]:
+    """Apply only lossless compatibility fixes before strict resource validation."""
+    if not isinstance(raw, dict) or raw.get('op') not in {'add_backdrop', 'add_costume'}:
+        return raw, []
+
+    normalized = dict(raw)
+    diagnostics: list[ResourceContractIssue] = []
+    operation = str(normalized.get('op'))
+    repair_id = normalized.get('op_id') if isinstance(normalized.get('op_id'), str) else None
+
+    if 'select_after' not in normalized:
+        normalized['select_after'] = False
+        diagnostics.append(ResourceContractIssue(
+            'DEFAULT_APPLIED',
+            f'{path}/select_after',
+            operation,
+            None,
+            'missing select_after is equivalent to false',
+            repair_id=repair_id,
+        ))
+
+    if operation != 'add_backdrop':
+        return normalized, diagnostics
+
+    if 'target' in normalized:
+        target = normalized['target']
+        if target == {'kind': 'stage'}:
+            del normalized['target']
+            diagnostics.append(ResourceContractIssue(
+                'REDUNDANT_STAGE_TARGET_REMOVED',
+                f'{path}/target',
+                operation,
+                target,
+                'backdrop always targets the stage; omit target',
+                repair_id=repair_id,
+            ))
+        else:
+            raise _resource_issue(
+                normalized,
+                'INVALID_BACKDROP_TARGET',
+                f'{path}/target',
+                target,
+                'target must be omitted or exactly {"kind":"stage"} as a redundant compatibility field',
+            )
+
+    for field in ('x', 'y', 'size'):
+        if field not in normalized:
+            continue
+        actual = normalized[field]
+        if actual is None:
+            del normalized[field]
+            diagnostics.append(ResourceContractIssue(
+                'NULL_FIELD_REMOVED',
+                f'{path}/{field}',
+                operation,
+                None,
+                f'{field} must be omitted for a backdrop',
+                repair_id=repair_id,
+            ))
+        else:
+            raise _resource_issue(
+                normalized,
+                'INVALID_BACKDROP_PLACEMENT',
+                f'{path}/{field}',
+                actual,
+                'backdrop operations do not accept x, y, or size',
+            )
+
+    source = normalized.get('source')
+    if isinstance(source, dict) and source.get('kind') == 'scratch_library' and source.get('asset_type') != 'backdrop':
+        raise _resource_issue(
+            normalized,
+            'INVALID_BACKDROP_SOURCE',
+            f'{path}/source/asset_type',
+            source.get('asset_type'),
+            'scratch_library backdrop source must use asset_type=backdrop',
+        )
+
+    return normalized, diagnostics
+
+
+def normalize_project_manifest_payload(raw: Any) -> tuple[Any, list[ResourceContractIssue]]:
+    if not isinstance(raw, dict) or not isinstance(raw.get('resource_ops'), list):
+        return raw, []
+    normalized = dict(raw)
+    operations: list[Any] = []
+    diagnostics: list[ResourceContractIssue] = []
+    for index, operation in enumerate(raw['resource_ops']):
+        value, operation_diagnostics = normalize_resource_op(operation, path=f'/resource_ops/{index}')
+        operations.append(value)
+        diagnostics.extend(operation_diagnostics)
+    normalized['resource_ops'] = operations
+    return normalized, diagnostics
+
+
 class ResourceOp(StrictModel):
     op: Literal['add_builtin_sprite', 'add_sprite', 'delete_sprite', 'add_costume', 'add_backdrop', 'select_backdrop']
     op_id: ShortString
@@ -568,6 +731,12 @@ class ResourceOp(StrictModel):
     size: int | None = Field(default=None, ge=1, le=1000)
     select_after: bool | None = None
     costumes: list[CostumeResource] = Field(default_factory=list, max_length=12)
+
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_input(cls, value: Any) -> Any:
+        normalized, _ = normalize_resource_op(value)
+        return normalized
 
     @model_validator(mode='after')
     def validate_operation(self) -> ResourceOp:
