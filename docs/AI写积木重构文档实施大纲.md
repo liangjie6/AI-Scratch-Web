@@ -253,16 +253,18 @@ ResourceOp = Annotated[
 - `actual` 长度上限 2 KB，避免回灌大型 prompt。
 - 使用同一份契约定义生成错误代码清单和用户可读中文文案。
 
-### 5.5 迁移与兼容
+### 5.5 版本切换（无兼容层）
 
-| 阶段 | 服务端行为 | 前端行为 | 指标 |
-| --- | --- | --- | --- |
-| M1 双读 | 接受 v1/v2；v1 经归一层转内部 v2 | 继续发 v1 | v1 命中率、归一化事件 |
-| M2 双写观察 | 输出 v2；服务端影子转换回 v1 做对比 | 支持消费 v1/v2 | 差异率为 0 |
-| M3 切换 | 默认只接受 v2，v1 显式 feature flag | 默认 v2 | 7 天无 v1 生产请求 |
-| M4 删除 | 删除 v1、feature flag、兼容测试 | 删除 v1 类型 | 文档/代码无 v1 引用 |
+本次重构直接切换到新流程，不实现 v1 双读、双写、影子转换、迁移器或 feature flag。项目清单明确要求 `schema_version=2`；显式提供其他版本时，服务端和前端都返回稳定的 `UNSUPPORTED_SCHEMA_VERSION` 诊断。ProgramIR 的内部 metadata 继续使用 `schema_version=1`，它与项目 manifest 版本不是同一层协议。
 
-`schema_version` 从 1 升至 2。不要用「字段存在与否」隐式推断版本；请求与响应都显式带版本，解析器按版本选取契约。
+| 项 | 当前行为 | 验收标准 |
+| --- | --- | --- |
+| 项目 manifest | 只接受 v2 严格字段和资源操作联合 | v1 或未知版本不进入资源/程序应用 |
+| 前端校验 | 使用生成的 v2 resource contract | 后端与前端拒绝/允许结果一致 |
+| 旧接口 | 不保留旧生成入口或 v1 兼容类型 | 旧接口返回 404，代码不包含双读逻辑 |
+| 文档与 prompt | 统一描述新分段流程和 v2 字段 | 不把 v1 manifest 示例注入模型 |
+
+版本必须显式存在，不能用「字段存在与否」隐式推断；解析器只按当前 v2 契约校验项目 manifest。
 
 ## 6. 生成编排重构：分段生成与精准修复
 
@@ -302,14 +304,17 @@ S4 各目标之间**没有生成期依赖**（依赖已在 manifest 固化为 `p
 
 ### 6.4 结构化输出与模型配置
 
-**建议：S3（清单）和 S4（程序）改用结构化输出约束，而非纯文本标签流。**
+**实现决策：S1～S4 的结构化 provider 使用 JSON object 分段传输；不具备该能力的 provider 保留 tagged stream + 归一层 + 精准修复。**
 
-当前 `json_output=False`，完全依赖 prompt 文字约束 JSON 形状。项目已有多 provider 分流（[agnes_text_provider.py:59-90](backend/app/providers/agnes_text_provider.py#L59-L90)），需按 provider 能力分别处理：
+当前 provider 能力矩阵：
 
-- 支持结构化输出/JSON schema 的 provider：直接下发由 SSOT 生成的 schema，让**解码阶段**保证形状，把「字段该不该出现」从概率问题变成约束问题。这是稳定性收益最大的一项。
-- 不支持的 provider：保留标签流 + 归一层 + 精准修复。
+| provider | S1/S2/S3/S4 传输 | schema 参数 |
+| --- | --- | --- |
+| GPT | JSON object | 传递由 Pydantic/TypeAdapter 生成的严格 JSON Schema |
+| DeepSeek | JSON object | 不传 JSON Schema，仅使用 JSON object response format |
+| 其他 provider | tagged stream | 不传 JSON Schema |
 
-由于各 provider 对 schema 的支持程度不同（尤其判别式联合与 `additionalProperties:false`），**实施前必须先做能力探测**：对每个 provider 用真实 schema 跑通一次最小样例，记录支持矩阵，再决定分流策略。不要假设某个 provider 一定支持。
+能力由 provider 明确声明并按 segment 路由；JSON object 的最终 prompt 不包含 tagged-stream 输出指令。provider wire payload 与编排层 schema 转发均有测试覆盖，新增 provider 必须先补能力和 payload 测试。
 
 ## 7. Scratch VM 应用层事务
 
@@ -579,12 +584,12 @@ P1～P6 与第 9 节。**验收：** 典型项目（3 目标 + 5 资源）端到
 
 | 风险/决策 | 建议 |
 | --- | --- |
-| 多 provider 不支持完整 JSON Schema | 先能力探测；保留标签流兼容路径，不以假设推进 |
+| 多 provider 不支持完整 JSON Schema | 按 provider 能力选择 JSON object 或标签流分段传输，先完成真实能力探测，不以假设推进 |
 | 判别式联合会使 schema 大 | 将每段 schema 分开下发，S3 只给 manifest schema，S4 只给 program schema |
 | `add_backdrop` 容忍 stage target 会掩盖模型质量 | 记录并设置告警阈值；它是过渡兼容，不是永久默许 |
 | 并发 VM 写入可能改变顺序 | 先只并发准备与生成，VM 写入保持串行；有实测后再逐层放开 |
 | SB3 备份很大 | 保留单份备份，不做每步快照；L1 journal 成功时无需 loadProject |
-| shared_state 两处声明 | Phase 1 前必须选定「全局只在 manifest」或「每 program 完整重复」之一；推荐前者，并由编译器合并 |
+| shared_state 两处声明 | 采用「每 program 完整重复」边界：manifest 是全局 SSOT，后端和前端均要求每个 program 完整重复并做一致性校验 |
 | 用户在事务期间编辑 | UI 禁用是第一道防线，revision 校验是第二道；两者缺一不可 |
 
 ## 13. 推荐实施顺序

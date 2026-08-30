@@ -38,7 +38,7 @@ function frame(requestId: string, event: string, data: Record<string, unknown>, 
 function unifiedStream(requestId: string, scope: string, value = program) {
   const plan = {steps: ['添加绿旗事件', '添加移动积木']};
   const manifest = {
-    schema_version: 1,
+    schema_version: 2,
     scope: 'project',
     summary: '为项目添加绿旗移动逻辑',
     resource_ops: [],
@@ -68,7 +68,7 @@ test('opens AI blocks when randomUUID is unavailable on a LAN origin', async ({p
   await waitForEditor(page);
   await page.getByRole('button', {name: '打开 AI 写积木'}).click();
   await expect(page.getByRole('heading', {name: 'AI 写积木'})).toBeVisible();
-  await expect(page.getByText(/角色 · 角色1/)).toBeVisible();
+  await expect(page.getByRole('region', {name: 'AI 写积木'}).getByText(/角色.*角色1/)).toBeVisible();
   expect(pageErrors).toEqual([]);
 });
 

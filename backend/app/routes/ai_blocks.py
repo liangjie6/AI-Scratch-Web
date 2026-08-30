@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from ..config import get_settings
 from ..orchestration.orchestrator import GenerationOrchestrator
 from ..prompt_builder import PromptBuilder
+from ..resource_contract import bounded_actual
 from ..providers.agnes_text_provider import AgnesTextProvider, AgnesTextProviderError
 from ..schemas.ai_blocks import (
     ChatRequest,
@@ -45,7 +46,11 @@ def get_ai_blocks_semaphore() -> asyncio.Semaphore:
 @lru_cache(maxsize=1)
 def get_ai_blocks_orchestrator() -> GenerationOrchestrator:
     settings = get_settings()
-    return GenerationOrchestrator(PromptBuilder(), max_repair_rounds=settings.ai_blocks_max_repair_rounds)
+    return GenerationOrchestrator(
+        PromptBuilder(),
+        max_repair_rounds=settings.ai_blocks_max_repair_rounds,
+        max_concurrency=settings.ai_blocks_max_concurrency,
+    )
 
 
 def _sse(event: str, payload: dict[str, Any]) -> str:
@@ -153,7 +158,7 @@ async def generate_unified(
     )
 
 
-def _validation_issues(error: Exception) -> list[dict[str, Any]]:
+def _validation_issues(error: Exception, scope: str = 'manifest') -> list[dict[str, Any]]:
     if isinstance(error, ResourceContractError):
         return [error.issue.as_dict()]
     if isinstance(error, ProgramContractError):
@@ -175,10 +180,10 @@ def _validation_issues(error: Exception) -> list[dict[str, Any]]:
             issues.append({
                 'code': 'SCHEMA_VALIDATION_ERROR',
                 'path': to_json_pointer(tuple(item.get('loc', ()))) or '/output',
-                'operation': 'validation',
-                'actual': None,
+                'operation': scope,
+                'actual': bounded_actual(item.get('input')),
                 'expected': expected,
-                'repair_scope': 'validation',
+                'repair_scope': scope,
                 'repair_id': None,
                 'message': expected,
             })
@@ -188,7 +193,7 @@ def _validation_issues(error: Exception) -> list[dict[str, Any]]:
             'operation': 'validation',
             'actual': None,
             'expected': '结构化输出无效',
-            'repair_scope': 'validation',
+            'repair_scope': scope,
             'repair_id': None,
             'message': '结构化输出无效',
         }]
@@ -216,5 +221,5 @@ async def validate_output(body: ValidationRequest) -> dict[str, Any]:
             normalized_payload, normalizations = normalize_project_manifest_payload(body.payload)
             ProjectManifest.model_validate(normalized_payload)
     except (ValidationError, ValueError) as exc:
-        return {'valid': False, 'issues': _validation_issues(exc)}
+        return {'valid': False, 'issues': _validation_issues(exc, 'program' if body.kind == 'program' else 'manifest')}
     return {'valid': True, 'issues': [], 'normalizations': [item.as_dict() for item in normalizations] if body.kind == 'manifest' else []}

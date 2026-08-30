@@ -5,8 +5,9 @@ import json
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import BeforeValidator, BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
+from ..resource_contract import RESOURCE_DIAGNOSTIC_CODES, bounded_actual
 from ..scratch_block_catalog import BLOCK_CONTRACTS
 
 MAX_BLOCKS = 120
@@ -107,9 +108,9 @@ class ProjectProgramTarget(StrictModel):
 
 
 class ProjectSharedState(StrictModel):
-    variables: list[VariableDefinition] = Field(default_factory=list, max_length=100)
-    lists: list[ListDefinition] = Field(default_factory=list, max_length=50)
-    broadcasts: list[ShortString] = Field(default_factory=list, max_length=100)
+    variables: list[VariableDefinition] = Field(max_length=100)
+    lists: list[ListDefinition] = Field(max_length=50)
+    broadcasts: list[ShortString] = Field(max_length=100)
 
     @model_validator(mode='after')
     def validate_shared_state(self) -> ProjectSharedState:
@@ -125,12 +126,12 @@ class ProjectSharedState(StrictModel):
 
 
 class ProjectManifest(StrictModel):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     scope: Literal['project']
     summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
-    resource_ops: list[ResourceOp] = Field(default_factory=list, max_length=24)
-    program_targets: list[ProjectProgramTarget] = Field(default_factory=list, max_length=12)
-    shared_state: ProjectSharedState = Field(default_factory=ProjectSharedState)
+    resource_ops: list[ResourceOp] = Field(max_length=24)
+    program_targets: list[ProjectProgramTarget] = Field(max_length=12)
+    shared_state: ProjectSharedState
 
     @model_validator(mode='after')
     def validate_manifest(self) -> ProjectManifest:
@@ -374,6 +375,34 @@ def validate_program_for_mode(
     return program
 
 
+def validate_project_program_shared_state(program: ProgramIR, shared_state: ProjectSharedState) -> ProgramIR:
+    """Require each project program to repeat the manifest's global declarations exactly."""
+    issues: list[tuple[str, str]] = []
+    def dump_state(item: VariableDefinition | ListDefinition, is_list: bool) -> dict[str, Any]:
+        value = item.model_dump(mode='json')
+        if is_list and value['value'] is None:
+            value['value'] = []
+        return value
+
+    expected_variables = sorted((dump_state(item, False) for item in shared_state.variables), key=lambda item: item['name'])
+    expected_lists = sorted((dump_state(item, True) for item in shared_state.lists), key=lambda item: item['name'])
+    actual_variables = sorted((dump_state(item, False) for item in program.variables if item.scope == 'global'), key=lambda item: item['name'])
+    actual_lists = sorted((dump_state(item, True) for item in program.lists if item.scope == 'global'), key=lambda item: item['name'])
+    if actual_variables != expected_variables:
+        issues.append(('$.variables', 'project program global variables must exactly repeat manifest.shared_state.variables'))
+    if actual_lists != expected_lists:
+        issues.append(('$.lists', 'project program global lists must exactly repeat manifest.shared_state.lists'))
+    if sorted(program.broadcasts) != sorted(shared_state.broadcasts):
+        issues.append(('$.broadcasts', 'project program broadcasts must exactly repeat manifest.shared_state.broadcasts'))
+    global_names = {item['name'] for item in expected_variables} | {item['name'] for item in expected_lists}
+    for path, values in (('$.variables', program.variables), ('$.lists', program.lists)):
+        if any(item.scope != 'global' and item.name in global_names for item in values):
+            issues.append((path, 'target-local state cannot reuse a manifest global name'))
+    if issues:
+        raise ProgramContractError(issues)
+    return program
+
+
 class ProgramContractError(ValueError):
     def __init__(self, issues: list[tuple[str, str]]) -> None:
         self.issues = issues
@@ -537,6 +566,18 @@ class ScratchLibrarySource(StrictModel):
     search_terms: list[ShortString] = Field(min_length=1, max_length=12)
 
 
+class ScratchSpriteLibrarySource(ScratchLibrarySource):
+    asset_type: Literal['sprite']
+
+
+class ScratchCostumeLibrarySource(ScratchLibrarySource):
+    asset_type: Literal['costume']
+
+
+class ScratchBackdropLibrarySource(ScratchLibrarySource):
+    asset_type: Literal['backdrop']
+
+
 class ImageGenerationSource(StrictModel):
     kind: Literal['image_generation']
     reason: ShortString
@@ -548,20 +589,14 @@ class ImageGenerationSource(StrictModel):
     sheet_layout: Literal['1x1']
 
 
-ProjectManifestResourceSource = Annotated[ScratchLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
+CostumeSource = Annotated[ScratchCostumeLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
+BackdropSource = Annotated[ScratchBackdropLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
 
 
 class CostumeResource(StrictModel):
     name: ShortString
-    source: ProjectManifestResourceSource
+    source: CostumeSource
     tags: list[ShortString] = Field(default_factory=list, max_length=20)
-
-
-RESOURCE_DIAGNOSTIC_CODES = (
-    'DEFAULT_APPLIED',
-    'REDUNDANT_STAGE_TARGET_REMOVED',
-    'NULL_FIELD_REMOVED',
-)
 
 
 def to_json_pointer(path: str | tuple[Any, ...]) -> str:
@@ -595,7 +630,7 @@ class ResourceContractIssue:
             'code': self.code,
             'path': self.path,
             'operation': self.operation,
-            'actual': self.actual,
+            'actual': bounded_actual(self.actual),
             'expected': self.expected,
             'repair_scope': self.repair_scope,
             'repair_id': self.repair_id,
@@ -719,56 +754,82 @@ def normalize_project_manifest_payload(raw: Any) -> tuple[Any, list[ResourceCont
     return normalized, diagnostics
 
 
-class ResourceOp(StrictModel):
-    op: Literal['add_builtin_sprite', 'add_sprite', 'delete_sprite', 'add_costume', 'add_backdrop', 'select_backdrop']
+class AddBuiltinSpriteOp(StrictModel):
+    op: Literal['add_builtin_sprite']
     op_id: ShortString
-    target: TargetRef | None = None
     name: ShortString
-    source: ProjectManifestResourceSource | None = None
+    x: int = Field(ge=-10000, le=10000)
+    y: int = Field(ge=-10000, le=10000)
+    size: int = Field(ge=1, le=1000)
     tags: list[ShortString] = Field(default_factory=list, max_length=20)
-    x: int | None = Field(default=None, ge=-10000, le=10000)
-    y: int | None = Field(default=None, ge=-10000, le=10000)
-    size: int | None = Field(default=None, ge=1, le=1000)
-    select_after: bool | None = None
-    costumes: list[CostumeResource] = Field(default_factory=list, max_length=12)
+    source: ScratchSpriteLibrarySource
 
-    @model_validator(mode='before')
-    @classmethod
-    def normalize_input(cls, value: Any) -> Any:
-        normalized, _ = normalize_resource_op(value)
-        return normalized
+
+class AddSpriteOp(StrictModel):
+    op: Literal['add_sprite']
+    op_id: ShortString
+    name: ShortString
+    x: int = Field(ge=-10000, le=10000)
+    y: int = Field(ge=-10000, le=10000)
+    size: int = Field(ge=1, le=1000)
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
+    costumes: list[CostumeResource] = Field(min_length=1, max_length=12)
+
+
+class DeleteSpriteOp(StrictModel):
+    op: Literal['delete_sprite']
+    op_id: ShortString
+    name: ShortString
+    target: TargetRef
 
     @model_validator(mode='after')
-    def validate_operation(self) -> ResourceOp:
-        positional = (self.x, self.y, self.size)
-        if self.op == 'select_backdrop':
-            if self.source is not None or self.target is not None or any(v is not None for v in positional) or self.tags or self.select_after is not None or self.costumes:
-                raise ValueError('select_backdrop only permits op, op_id and name')
-            return self
-        if self.op == 'delete_sprite':
-            if self.source is not None or self.target is None or self.target.kind != 'existing_sprite' or any(v is not None for v in positional) or self.tags or self.select_after is not None or self.costumes:
-                raise ValueError('delete_sprite requires an existing_sprite target and no resource fields')
-            return self
-        if self.source is None:
-            raise ValueError(f'{self.op} requires source')
-        if self.op in {'add_builtin_sprite', 'add_sprite'}:
-            if self.target is not None or any(v is None for v in positional) or self.select_after is not None:
-                raise ValueError(f'{self.op} requires x, y, size and no target/select_after')
-        elif self.op == 'add_costume':
-            if self.target is None or self.target.kind == 'stage' or any(v is not None for v in positional) or self.select_after is None:
-                raise ValueError('add_costume requires a non-stage target and select_after')
-        elif self.op == 'add_backdrop':
-            if self.target is not None or any(v is not None for v in positional) or self.select_after is None:
-                raise ValueError('add_backdrop requires select_after and no target/placement fields')
-        if self.op == 'add_builtin_sprite' and (self.source.kind != 'scratch_library' or self.source.asset_type != 'sprite'):
-            raise ValueError('add_builtin_sprite requires a sprite scratch_library source')
-        if self.op == 'add_backdrop' and self.source.kind == 'scratch_library' and self.source.asset_type != 'backdrop':
-            raise ValueError('add_backdrop requires a backdrop source')
-        if self.op in {'add_costume', 'add_sprite'} and self.source.kind == 'scratch_library' and self.source.asset_type == 'sprite':
-            raise ValueError('costume source cannot be a sprite')
-        if self.op == 'add_sprite' and any(item.source.kind == 'scratch_library' and item.source.asset_type == 'sprite' for item in self.costumes):
-            raise ValueError('nested costume source cannot be a sprite')
+    def validate_target(self) -> DeleteSpriteOp:
+        if self.target.kind != 'existing_sprite':
+            raise ValueError('delete_sprite requires an existing_sprite target')
         return self
+
+
+class AddCostumeOp(StrictModel):
+    op: Literal['add_costume']
+    op_id: ShortString
+    target: TargetRef
+    name: ShortString
+    source: CostumeSource
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
+    select_after: bool = False
+
+    @model_validator(mode='after')
+    def validate_target(self) -> AddCostumeOp:
+        if self.target.kind == 'stage':
+            raise ValueError('add_costume cannot target the stage')
+        return self
+
+
+class AddBackdropOp(StrictModel):
+    op: Literal['add_backdrop']
+    op_id: ShortString
+    name: ShortString
+    source: BackdropSource
+    tags: list[ShortString] = Field(default_factory=list, max_length=20)
+    select_after: bool = False
+
+
+class SelectBackdropOp(StrictModel):
+    op: Literal['select_backdrop']
+    op_id: ShortString
+    name: ShortString
+
+
+def _normalize_resource_op_for_validation(value: Any) -> Any:
+    normalized, _ = normalize_resource_op(value)
+    return normalized
+
+
+ResourceOp = Annotated[
+    AddBuiltinSpriteOp | AddSpriteOp | DeleteSpriteOp | AddCostumeOp | AddBackdropOp | SelectBackdropOp,
+    Field(discriminator='op'),
+    BeforeValidator(_normalize_resource_op_for_validation),
+]
 
 
 BlockInput.model_rebuild()

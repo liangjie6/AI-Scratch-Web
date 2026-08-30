@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
+import asyncio
 import json
 import logging
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from ..prompt_builder import PromptBuilder, ProjectContext, TargetContext
+from ..resource_contract import bounded_actual
 from ..providers.agnes_text_provider import AgnesTextProvider
 from ..schemas.ai_blocks import (
     Plan,
@@ -19,12 +21,14 @@ from ..schemas.ai_blocks import (
     ProjectManifest,
     RequirementsResponse,
     ResourceContractError,
+    ResourceOp,
     Script,
     UnifiedGenerationRequest,
     normalize_project_manifest_payload,
     to_json_pointer,
     validate_program_contracts,
     validate_program_for_mode,
+    validate_project_program_shared_state,
 )
 from .streaming_parser import StreamFrame, StreamProtocolError, UnifiedFrameParser, parse_json
 
@@ -67,16 +71,49 @@ class _GenerationState:
     active_program: _ProgramBuffer | None = None
     phase_started: set[str] = field(default_factory=set)
     phase_completed: set[str] = field(default_factory=set)
+    expected_program_indices: set[int] | None = None
+
+
+@dataclass
+class _SegmentAttempt:
+    value: Any = None
+    events: list[GenerationEvent] = field(default_factory=list)
+    failure: GenerationEvent | None = None
+    payload: Any = None
+
+
+class _SegmentValidationFailure(Exception):
+    def __init__(self, event: GenerationEvent) -> None:
+        self.event = event
+        super().__init__(event.data.get('message', 'segment validation failed'))
 
 
 class GenerationOrchestrator:
-    """Run requirements, planning, and program generation over one provider stream."""
+    """Run segmented project generation and the single-target tagged flow."""
 
-    def __init__(self, prompt_builder: PromptBuilder | None = None, max_repair_rounds: int = 1) -> None:
+    def __init__(self, prompt_builder: PromptBuilder | None = None, max_repair_rounds: int = 2, max_concurrency: int = 4) -> None:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.max_repair_rounds = max(0, max_repair_rounds)
+        self.max_concurrency = max(1, max_concurrency)
+
+    def _repair_budget(self, scope: str) -> int:
+        # Keep broad project stages cheap while allowing local repairs two attempts.
+        scope_limit = 1 if scope in {'requirements', 'plan', 'manifest'} else 2
+        return min(self.max_repair_rounds, scope_limit)
 
     async def generate_unified(
+        self,
+        request: UnifiedGenerationRequest,
+        provider: AgnesTextProvider,
+    ) -> AsyncIterator[GenerationEvent]:
+        if request.scope == 'project':
+            async for event in self._generate_segmented_project(request, provider):
+                yield event
+            return
+        async for event in self._generate_tagged(request, provider):
+            yield event
+
+    async def _generate_tagged(
         self,
         request: UnifiedGenerationRequest,
         provider: AgnesTextProvider,
@@ -199,6 +236,582 @@ class GenerationOrchestrator:
         assert repair_failure is not None
         yield repair_failure
         yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+
+    async def _generate_segmented_project(
+        self,
+        request: UnifiedGenerationRequest,
+        provider: AgnesTextProvider,
+    ) -> AsyncIterator[GenerationEvent]:
+        project = self._project_context(request)
+        target = self._target_context(request)
+        state = _GenerationState()
+
+        requirements_context = {'scope': request.scope, 'contract_version': 2}
+        yield GenerationEvent('cache_hit', request.request_id, data=self.prompt_builder.build_segment_prompt(project, target, request, 'requirements', requirements_context)[1].as_dict())
+        requirements, events, failure, _ = await self._run_segment_with_repair(
+            request,
+            provider,
+            'requirements',
+            lambda context: self.prompt_builder.build_segment_prompt(project, target, request, 'requirements', context),
+            lambda frames: RequirementsResponse.model_validate(parse_json(self._single_segment_frame(frames, 'requirements').content)),
+            requirements_context,
+            max_rounds=self._repair_budget('requirements'),
+        )
+        for event in events:
+            yield event
+        if failure is not None or not isinstance(requirements, RequirementsResponse):
+            if failure is not None:
+                yield failure
+            yield self._terminal_validation_error(request, failure)
+            return
+        state.requirements = requirements
+        yield GenerationEvent('phase_start', request.request_id, phase='requirements')
+        yield GenerationEvent('phase_complete', request.request_id, phase='requirements', data=requirements.model_dump(mode='json'))
+        if not request.proceed_with_defaults and not requirements.ready:
+            yield GenerationEvent('error', request.request_id, data={'code': 'REQUIREMENTS_INCOMPLETE', 'message': '需求信息还不完整'})
+            return
+
+        plan_context = {'requirements': requirements.model_dump(mode='json')}
+        plan, events, failure, _ = await self._run_segment_with_repair(
+            request,
+            provider,
+            'plan',
+            lambda context: self.prompt_builder.build_segment_prompt(project, target, request, 'plan', context),
+            lambda frames: Plan.model_validate(parse_json(self._single_segment_frame(frames, 'plan').content)),
+            plan_context,
+            max_rounds=self._repair_budget('plan'),
+        )
+        for event in events:
+            yield event
+        if failure is not None or not isinstance(plan, Plan):
+            if failure is not None:
+                yield failure
+            yield self._terminal_validation_error(request, failure)
+            return
+        state.plan = plan
+        yield GenerationEvent('phase_start', request.request_id, phase='plan')
+
+        manifest_context = {'requirements': requirements.model_dump(mode='json'), 'plan': plan.model_dump(mode='json')}
+        manifest_budget = self._repair_budget('manifest')
+
+        def decode_manifest(frames: list[StreamFrame]) -> tuple[ProjectManifest, list[dict[str, Any]]]:
+            raw_manifest = parse_json(self._single_segment_frame(frames, 'manifest').content)
+            normalized_manifest, normalizations = normalize_project_manifest_payload(raw_manifest)
+            manifest = ProjectManifest.model_validate(normalized_manifest)
+            return manifest, [item.as_dict() for item in normalizations]
+
+        manifest_value, events, failure, failed_manifest_payload = await self._run_segment_with_repair(
+            request,
+            provider,
+            'manifest',
+            lambda context: self.prompt_builder.build_segment_prompt(project, target, request, 'manifest', context),
+            decode_manifest,
+            manifest_context,
+            max_rounds=0,
+        )
+        for event in events:
+            yield event
+
+        if failure is not None:
+            repair_scope = failure.data.get('repair_scope')
+            operation_index = self._resource_op_index(failure.data.get('path')) if repair_scope == 'resource_op' else None
+            if operation_index is not None and isinstance(failed_manifest_payload, dict):
+                operation_failure = failure
+                repaired = False
+                resource_budget = self._repair_budget('resource_op')
+                operation_context = {
+                    'resource_op_index': operation_index,
+                    'resource_op': self._payload_at(failed_manifest_payload, operation_index),
+                    'failure': operation_failure.data,
+                }
+                for attempt in range(1, resource_budget + 1):
+                    yield self._repair_event(request, operation_failure, 'resource_op', attempt, resource_budget, resource_op_index=operation_index)
+                    repaired_op, op_events, op_failure, failed_op_payload = await self._run_segment_with_repair(
+                        request,
+                        provider,
+                        'resource_op',
+                        lambda context, index=operation_index: self.prompt_builder.build_segment_prompt(project, target, request, 'resource_op', context, resource_op_index=index),
+                        lambda frames: TypeAdapter(ResourceOp).validate_python(parse_json(self._single_segment_frame(frames, 'resource_op').content)),
+                        operation_context,
+                        max_rounds=0,
+                        resource_op_index=operation_index,
+                    )
+                    if op_failure is not None or not hasattr(repaired_op, 'model_dump'):
+                        operation_failure = op_failure or failure
+                        operation_context = {**operation_context, 'failure': operation_failure.data}
+                        if isinstance(failed_op_payload, dict):
+                            operation_context['resource_op'] = failed_op_payload
+                        continue
+                    for event in op_events:
+                        yield event
+                    try:
+                        merged_payload = dict(failed_manifest_payload)
+                        operations = list(merged_payload.get('resource_ops', []))
+                        operations[operation_index] = repaired_op.model_dump(mode='json')
+                        merged_payload['resource_ops'] = operations
+                        normalized_manifest, normalizations = normalize_project_manifest_payload(merged_payload)
+                        manifest_value = (ProjectManifest.model_validate(normalized_manifest), [item.as_dict() for item in normalizations])
+                        repaired = True
+                        break
+                    except (ValidationError, ValueError, ResourceContractError) as exc:
+                        operation_failure = self._validation_event(request, 'plan', exc, StreamFrame('manifest'))
+                        operation_context = {**operation_context, 'failure': operation_failure.data}
+                if not repaired:
+                    yield operation_failure
+                    yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+                    return
+            else:
+                if manifest_budget <= 0:
+                    yield failure
+                    yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+                    return
+                yield self._repair_event(request, failure, 'manifest', 1, manifest_budget)
+                retry_context = {**manifest_context, 'failure': failure.data, 'failed_object': failed_manifest_payload}
+                manifest_value, retry_events, failure, _ = await self._run_segment_with_repair(
+                    request,
+                    provider,
+                    'manifest',
+                    lambda context: self.prompt_builder.build_segment_prompt(project, target, request, 'manifest', context),
+                    decode_manifest,
+                    retry_context,
+                    max_rounds=0,
+                )
+                for event in retry_events:
+                    yield event
+                if failure is not None:
+                    yield failure
+                    yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+                    return
+        if not isinstance(manifest_value, tuple):
+            yield GenerationEvent('error', request.request_id, data={'code': 'MANIFEST_MISSING', 'message': 'AI 未完成项目清单输出'})
+            return
+        state.manifest, manifest_normalizations = manifest_value
+        yield GenerationEvent('phase_complete', request.request_id, phase='plan', data={
+            'steps': state.plan.steps,
+            'manifest': state.manifest.model_dump(mode='json'),
+            'normalizations': manifest_normalizations,
+        })
+
+        target_count = len(state.manifest.program_targets)
+        if target_count == 0:
+            yield GenerationEvent('complete', request.request_id, data={'scope': request.scope, 'program_count': 0})
+            return
+
+        state.phase_started.add('program')
+        yield GenerationEvent('phase_start', request.request_id, phase='program', data={'target_index': 0})
+        semaphore = asyncio.Semaphore(self.max_concurrency)
+
+        async def run_target(index: int) -> tuple[int, Any, list[GenerationEvent], GenerationEvent | None]:
+            async with semaphore:
+                target_context = self._target_context_for_manifest_target(request, state.manifest, index)
+                program_context = {
+                    'requirements': requirements.model_dump(mode='json'),
+                    'plan': plan.model_dump(mode='json'),
+                    'manifest': state.manifest.model_dump(mode='json'),
+                    'target': state.manifest.program_targets[index].model_dump(mode='json'),
+                }
+
+                def decode_program(frames: list[StreamFrame]) -> tuple[ProgramIR, list[GenerationEvent]]:
+                    if len(frames) == 1 and frames[0].kind == 'program':
+                        output = ProgramIR.model_validate(parse_json(frames[0].content))
+                        target_kind, mode, current_program = self._target_contract(request, state, index)
+                        validate_program_contracts(output, target_kind)
+                        validate_program_for_mode(output, mode, current_program)
+                        validate_project_program_shared_state(output, state.manifest.shared_state)
+                        dumped = output.model_dump(mode='json')
+                        total = len(output.scripts)
+                        child_events = [GenerationEvent('metadata', request.request_id, phase='program', data={
+                            'target_index': index,
+                            'schema_version': dumped['schema_version'],
+                            'summary': dumped['summary'],
+                            'remove_script_ids': dumped['remove_script_ids'],
+                        }), GenerationEvent('shared_state', request.request_id, phase='program', data={
+                            'target_index': index,
+                            'variables': dumped['variables'],
+                            'lists': dumped['lists'],
+                            'broadcasts': dumped['broadcasts'],
+                        })]
+                        child_events.extend(GenerationEvent('script_ready', request.request_id, phase='program', data={
+                            'target_index': index,
+                            'index': script_index,
+                            'total': total,
+                            'script': dumped['scripts'][script_index],
+                        }) for script_index, _ in enumerate(output.scripts))
+                        child_events.append(GenerationEvent('phase_complete', request.request_id, phase='program', data={
+                            'target_index': index,
+                            'script_count': total,
+                            'summary': output.summary,
+                        }))
+                        return output, child_events
+                    local = _GenerationState(
+                        requirements=requirements,
+                        plan=plan,
+                        manifest=state.manifest,
+                        phase_started={'requirements', 'plan'},
+                        phase_completed={'requirements', 'plan'},
+                        expected_program_indices={index},
+                    )
+                    child_events: list[GenerationEvent] = []
+                    for frame in self._program_segment_frames(frames, index):
+                        frame_events, frame_failure = self._consume_frame(request, local, frame)
+                        if frame_failure is not None:
+                            raise _SegmentValidationFailure(frame_failure)
+                        child_events.extend(frame_events)
+                    if index not in local.programs:
+                        raise StreamProtocolError('program segment did not produce a complete target')
+                    return local.programs[index], child_events
+
+                value, segment_events, segment_failure, _ = await self._run_segment_with_repair(
+                    request,
+                    provider,
+                    'program',
+                    lambda context: self.prompt_builder.build_segment_prompt(project, target_context, request, 'program', context, target_index=index),
+                    decode_program,
+                    program_context,
+                    max_rounds=self._repair_budget('program'),
+                    target_index=index,
+                )
+                return index, value, segment_events, segment_failure
+
+        target_results = await asyncio.gather(*(run_target(index) for index in range(target_count)))
+        target_results.sort(key=lambda item: item[0])
+        had_repair = any(event.type == 'repair' for _, _, events, _ in target_results for event in events)
+        if had_repair:
+            for index, _, events, _ in target_results:
+                for event in events:
+                    if event.type in {'validation_error', 'repair'}:
+                        yield event
+            for index, value, events, failure in target_results:
+                if failure is not None:
+                    continue
+                last_repair = max((position for position, event in enumerate(events) if event.type == 'repair'), default=-1)
+                for event in events[last_repair + 1:]:
+                    if event.type != 'phase_start':
+                        yield event
+                state.programs[index] = value
+        else:
+            for index, value, events, failure in target_results:
+                for event in events:
+                    if event.type != 'phase_start':
+                        yield event
+                if failure is None:
+                    state.programs[index] = value
+        failed_target = next((item for item in target_results if item[3] is not None), None)
+        if failed_target is not None:
+            yield failed_target[3]
+            yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+            return
+        yield GenerationEvent('complete', request.request_id, data={'scope': request.scope, 'program_count': len(state.programs)})
+
+    async def _run_segment_with_repair(
+        self,
+        request: UnifiedGenerationRequest,
+        provider: AgnesTextProvider,
+        segment: str,
+        build_messages: Callable[[dict[str, Any]], tuple[list[dict[str, str]], Any]],
+        decode: Callable[[list[StreamFrame]], Any],
+        base_context: dict[str, Any],
+        *,
+        max_rounds: int,
+        target_index: int | None = None,
+        resource_op_index: int | None = None,
+    ) -> tuple[Any, list[GenerationEvent], GenerationEvent | None, Any]:
+        events: list[GenerationEvent] = []
+        failure: GenerationEvent | None = None
+        failed_payload: Any = None
+        for attempt in range(max_rounds + 1):
+            context = dict(base_context)
+            context.setdefault('transport', 'json_object' if self._structured_output_supported(provider, segment) else 'tagged')
+            if failure is not None:
+                context['failure'] = failure.data
+                context['failed_object'] = failed_payload
+            messages, _ = build_messages(context)
+            result = await self._run_segment_once(
+                request,
+                provider,
+                segment,
+                messages,
+                decode,
+                target_index=target_index,
+                resource_op_index=resource_op_index,
+            )
+            if result.failure is None:
+                events.extend(result.events)
+                return result.value, events, None, result.payload
+            if attempt == max_rounds:
+                events.extend(result.events)
+            else:
+                events.extend(event for event in result.events if event.type not in {'validation_error', 'content_delta'})
+            failure = result.failure
+            failed_payload = result.payload
+            if attempt < max_rounds:
+                events.append(self._repair_event(request, failure, segment, attempt + 1, max_rounds, target_index=target_index, resource_op_index=resource_op_index))
+        return None, events, failure, failed_payload
+
+    async def _run_segment_once(
+        self,
+        request: UnifiedGenerationRequest,
+        provider: AgnesTextProvider,
+        segment: str,
+        messages: list[dict[str, str]],
+        decode: Callable[[list[StreamFrame]], Any],
+        *,
+        target_index: int | None = None,
+        resource_op_index: int | None = None,
+    ) -> _SegmentAttempt:
+        result = _SegmentAttempt()
+        raw_output = ''
+        parser = UnifiedFrameParser()
+        frames: list[StreamFrame] = []
+        structured_output = self._structured_output_supported(provider, segment)
+        json_schema = self._structured_output_schema(provider, segment) if structured_output else None
+        try:
+            stream_kwargs: dict[str, Any] = {
+                'thinking_enabled': request.thinking.enabled,
+                'thinking_strength': request.thinking.strength,
+                'json_output': structured_output,
+            }
+            if json_schema is not None:
+                stream_kwargs['json_schema'] = json_schema
+            stream = provider.stream_with_reasoning(messages, **stream_kwargs)
+            async for delta in stream:
+                if delta.kind == 'reasoning' and delta.text:
+                    result.events.append(GenerationEvent('reasoning_delta', request.request_id, data={'text': delta.text, **({'target_index': target_index} if target_index is not None else {})}))
+                elif delta.kind == 'content' and delta.text:
+                    raw_output += delta.text
+                    if not structured_output:
+                        frames.extend(parser.feed(delta.text))
+            if structured_output:
+                parsed = json.loads(raw_output.strip())
+                if not isinstance(parsed, dict):
+                    raise StreamProtocolError('structured segment must contain a JSON object')
+                frames = [StreamFrame(segment, raw_output)]
+            else:
+                frames.extend(parser.finish())
+        except (ValidationError, ValueError, StreamProtocolError) as exc:
+            result.failure = self._validation_event(request, self._segment_phase(segment), exc, StreamFrame(segment))
+            return result
+        if raw_output:
+            result.events.append(GenerationEvent('content_delta', request.request_id, phase=self._segment_phase(segment), data={'text': raw_output, **({'target_index': target_index} if target_index is not None else {})}))
+        try:
+            decoded = decode(frames)
+            if isinstance(decoded, tuple) and len(decoded) == 2 and isinstance(decoded[0], ProgramIR) and isinstance(decoded[1], list):
+                result.value = decoded[0]
+                result.events.extend(decoded[1])
+            else:
+                result.value = decoded
+            result.payload = self._segment_payload(frames, segment, target_index)
+        except _SegmentValidationFailure as exc:
+            result.failure = exc.event
+            result.payload = self._segment_payload(frames, segment, target_index)
+        except (ValidationError, ValueError, StreamProtocolError) as exc:
+            result.failure = self._validation_event(request, self._segment_phase(segment), exc, self._error_frame(frames, segment, target_index))
+            result.payload = self._segment_payload(frames, segment, target_index)
+        return result
+
+    @staticmethod
+    def _structured_output_supported(provider: AgnesTextProvider, segment: str) -> bool:
+        capability = getattr(provider, 'supports_structured_output', None)
+        if not callable(capability):
+            return False
+        try:
+            return bool(capability(segment))
+        except TypeError:
+            return bool(capability())
+
+    @staticmethod
+    def _structured_output_schema(provider: AgnesTextProvider, segment: str) -> dict[str, Any] | None:
+        capability = getattr(provider, 'supports_json_schema', None)
+        if not callable(capability):
+            return None
+        try:
+            if not capability(segment):
+                return None
+        except TypeError:
+            if not capability():
+                return None
+        schemas: dict[str, dict[str, Any]] = {
+            'requirements': RequirementsResponse.model_json_schema(),
+            'plan': Plan.model_json_schema(),
+            'manifest': ProjectManifest.model_json_schema(),
+            'resource_op': TypeAdapter(ResourceOp).json_schema(),
+            'program': ProgramIR.model_json_schema(),
+        }
+        return schemas.get(segment)
+
+    @staticmethod
+    def _single_segment_frame(frames: list[StreamFrame], kind: str) -> StreamFrame:
+        matches = [frame for frame in frames if frame.kind == kind]
+        if len(matches) != 1:
+            raise StreamProtocolError(f'{kind} segment must contain exactly one frame')
+        return matches[0]
+
+    @staticmethod
+    def _program_segment_frames(frames: list[StreamFrame], target_index: int) -> list[StreamFrame]:
+        selected: list[StreamFrame] = []
+        active = False
+        for frame in frames:
+            if frame.kind == 'program_start':
+                if active:
+                    raise StreamProtocolError('program segment contains nested programs')
+                active = frame.attrs.get('target_index') == str(target_index)
+                if active:
+                    selected.append(frame)
+                continue
+            if active:
+                selected.append(frame)
+                if frame.kind == 'program_end':
+                    return selected
+        raise StreamProtocolError(f'program segment for target_index={target_index} is incomplete')
+
+    @staticmethod
+    def _segment_payload(frames: list[StreamFrame], segment: str, target_index: int | None) -> Any:
+        try:
+            if segment == 'program' and len(frames) == 1 and frames[0].kind == 'program':
+                program = parse_json(frames[0].content)
+                if not isinstance(program, dict):
+                    return None
+                return {
+                    'target_index': target_index,
+                    'metadata': {
+                        'schema_version': program.get('schema_version'),
+                        'summary': program.get('summary'),
+                        'remove_script_ids': program.get('remove_script_ids', []),
+                    },
+                    'shared_state': {
+                        'variables': program.get('variables', []),
+                        'lists': program.get('lists', []),
+                        'broadcasts': program.get('broadcasts', []),
+                    },
+                    'scripts': program.get('scripts', []),
+                }
+            if segment == 'program':
+                selected = GenerationOrchestrator._program_segment_frames(frames, target_index or 0)
+                metadata = next((item for item in selected if item.kind == 'metadata'), None)
+                shared_state = next((item for item in selected if item.kind == 'shared_state'), None)
+                scripts = [item for item in selected if item.kind == 'script']
+                if metadata is None and shared_state is None and not scripts:
+                    return None
+                return {
+                    'target_index': target_index,
+                    'metadata': parse_json(metadata.content) if metadata is not None else None,
+                    'shared_state': parse_json(shared_state.content) if shared_state is not None else None,
+                    'scripts': [parse_json(item.content) for item in scripts],
+                }
+            frame = next((item for item in frames if item.kind == segment), None)
+            return parse_json(frame.content) if frame is not None else None
+        except (StreamProtocolError, ValueError):
+            return None
+
+    @staticmethod
+    def _error_frame(frames: list[StreamFrame], segment: str, target_index: int | None) -> StreamFrame:
+        if segment == 'program':
+            try:
+                return next(item for item in GenerationOrchestrator._program_segment_frames(frames, target_index or 0) if item.kind == 'script')
+            except (StopIteration, StreamProtocolError):
+                return StreamFrame('program_start', attrs={'target_index': str(target_index or 0)})
+        return next((item for item in frames if item.kind == segment), StreamFrame(segment))
+
+    @staticmethod
+    def _resource_op_index(path: Any) -> int | None:
+        if not isinstance(path, str):
+            return None
+        parts = path.strip('/').split('/')
+        if len(parts) < 2 or parts[0] != 'resource_ops' or not parts[1].isdigit():
+            return None
+        return int(parts[1])
+
+    @staticmethod
+    def _payload_at(manifest: Any, index: int) -> Any:
+        if not isinstance(manifest, dict) or not isinstance(manifest.get('resource_ops'), list):
+            return None
+        operations = manifest['resource_ops']
+        return operations[index] if index < len(operations) else None
+
+    def _target_context_for_manifest_target(self, request: UnifiedGenerationRequest, manifest: ProjectManifest, index: int) -> TargetContext:
+        target_ref = manifest.program_targets[index].target
+        if target_ref.kind == 'current_target':
+            return self._target_context(request)
+        if target_ref.kind == 'created_sprite':
+            operation = next((item for item in manifest.resource_ops if item.op_id == target_ref.op_id), None)
+            name = operation.name if operation is not None and hasattr(operation, 'name') else target_ref.op_id
+            return TargetContext(name=name, mode='append', sprite_names=tuple(item.name for item in request.project_context.targets if not item.is_stage))
+        if request.project_context is None:
+            raise StreamProtocolError('project context is required for a manifest target')
+        if target_ref.kind == 'stage':
+            matches = [item for item in request.project_context.targets if item.is_stage]
+        else:
+            matches = [item for item in request.project_context.targets if not item.is_stage and item.name.casefold() == target_ref.name.casefold()]
+        if len(matches) != 1:
+            raise StreamProtocolError('manifest target is not represented exactly once in project context')
+        item = matches[0]
+        return TargetContext(
+            target_id=item.target_id,
+            revision=item.revision,
+            name=item.name,
+            is_stage=item.is_stage,
+            has_scripts=item.has_scripts,
+            mode='append',
+            costumes=tuple(item.costumes),
+            sounds=tuple(item.sounds),
+            sprite_names=tuple(item.sprite_names),
+            current_program=item.current_program,
+        )
+
+    @staticmethod
+    def _repair_event(
+        request: UnifiedGenerationRequest,
+        failure: GenerationEvent,
+        segment: str,
+        attempt: int,
+        max_rounds: int,
+        *,
+        target_index: int | None = None,
+        resource_op_index: int | None = None,
+    ) -> GenerationEvent:
+        data = {
+            'attempt': attempt,
+            'max_rounds': max_rounds,
+            'phase': failure.phase,
+            'path': failure.data.get('path'),
+            'code': failure.data.get('code'),
+            'operation': failure.data.get('operation'),
+            'actual': failure.data.get('actual'),
+            'expected': failure.data.get('expected'),
+            'repair_scope': failure.data.get('repair_scope', segment),
+            'repair_id': failure.data.get('repair_id'),
+            'message': failure.data.get('message'),
+            'detail': failure.data.get('detail'),
+            'resume': segment,
+        }
+        if target_index is not None:
+            data['target_index'] = target_index
+        if resource_op_index is not None:
+            data['resource_op_index'] = resource_op_index
+        return GenerationEvent('repair', request.request_id, phase=failure.phase, data=data)
+
+    @staticmethod
+    def _segment_phase(segment: str) -> str:
+        return 'plan' if segment in {'manifest', 'resource_op'} else 'program' if segment == 'program' else segment
+
+    def _validation_event(self, request: UnifiedGenerationRequest, phase: str, error: Exception, frame: StreamFrame) -> GenerationEvent:
+        issue = self._structured_issue(error, frame)
+        logger.warning(
+            'ai_segment_validation request_id=%s phase=%s code=%s path=%s operation=%s',
+            request.request_id, phase, issue.get('code'), issue.get('path'), issue.get('operation'),
+        )
+        return GenerationEvent('validation_error', request.request_id, phase=phase, data={
+            **issue,
+            'message': issue['expected'],
+            'detail': self._error_detail(error),
+            'recoverable': False,
+        })
+
+    @staticmethod
+    def _terminal_validation_error(request: UnifiedGenerationRequest, failure: GenerationEvent | None) -> GenerationEvent:
+        if failure is not None:
+            return GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+        return GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_INCOMPLETE', 'message': 'AI 未完成分段输出'})
 
     @staticmethod
     def _project_context(request: UnifiedGenerationRequest) -> ProjectContext | None:
@@ -335,7 +948,10 @@ class GenerationOrchestrator:
             raise StreamProtocolError('single target program must use target_index 0')
         if request.scope == 'project' and state.manifest is not None and target_index >= len(state.manifest.program_targets):
             raise StreamProtocolError('program target_index is outside the manifest')
-        if target_index in state.programs or target_index != len(state.programs):
+        if state.expected_program_indices is not None:
+            if target_index not in state.expected_program_indices or target_index in state.programs:
+                raise StreamProtocolError('program target_index is not assigned to this segment')
+        elif target_index in state.programs or target_index != len(state.programs):
             raise StreamProtocolError('program target_index must be unique and ordered')
         if 'program' not in state.phase_started:
             self._start_phase(state, 'program')
@@ -420,6 +1036,8 @@ class GenerationOrchestrator:
         target_kind, mode, current_program = self._target_contract(request, state, program.target_index)
         validate_program_contracts(output, target_kind)
         validate_program_for_mode(output, mode, current_program)
+        if request.scope == 'project' and state.manifest is not None:
+            validate_project_program_shared_state(output, state.manifest.shared_state)
         state.programs[program.target_index] = output
         state.active_program = None
         state.phase_completed.add('program')
@@ -522,7 +1140,7 @@ class GenerationOrchestrator:
     def _structured_issue(error: Exception, frame: StreamFrame) -> dict[str, Any]:
         if isinstance(error, ResourceContractError):
             return error.issue.as_dict()
-        scope = 'manifest' if frame.kind == 'manifest' else 'program' if frame.kind in {'program_start', 'program_end', 'metadata', 'shared_state', 'script'} else 'stream'
+        scope = 'manifest' if frame.kind == 'manifest' else 'resource_op' if frame.kind == 'resource_op' else 'program' if frame.kind in {'program_start', 'program_end', 'metadata', 'shared_state', 'script'} else frame.kind if frame.kind in {'requirements', 'plan'} else 'program'
         if isinstance(error, ProgramContractError) and error.issues:
             path, message = error.issues[0]
             return {
@@ -538,12 +1156,14 @@ class GenerationOrchestrator:
             errors = error.errors()
             if errors:
                 item = errors[0]
+                location = tuple(item.get('loc', ()))
+                unsupported_version = location == ('schema_version',) and item.get('type') != 'missing' and item.get('input') is not None and item.get('input') != 2
                 return {
-                    'code': 'SCHEMA_VALIDATION_ERROR',
-                    'path': to_json_pointer(tuple(item.get('loc', ()))),
+                    'code': 'UNSUPPORTED_SCHEMA_VERSION' if unsupported_version else 'SCHEMA_VALIDATION_ERROR',
+                    'path': to_json_pointer(location),
                     'operation': frame.kind,
-                    'actual': None,
-                    'expected': str(item.get('msg') or 'structured output is invalid'),
+                    'actual': bounded_actual(item.get('input')),
+                    'expected': 'schema_version must equal 2' if unsupported_version else str(item.get('msg') or 'structured output is invalid'),
                     'repair_scope': scope,
                     'repair_id': None,
                 }
@@ -552,9 +1172,9 @@ class GenerationOrchestrator:
                 'code': 'STREAM_PROTOCOL_ERROR',
                 'path': '/output',
                 'operation': frame.kind,
-                'actual': None,
+                'actual': bounded_actual(frame.content),
                 'expected': str(error),
-                'repair_scope': 'stream',
+                'repair_scope': scope,
                 'repair_id': None,
             }
         return {

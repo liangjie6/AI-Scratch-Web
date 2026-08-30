@@ -153,6 +153,7 @@ declare global {
     addCostume(md5ext: string, costume: Record<string, unknown>, targetId?: string): Promise<void>;
     addBackdrop(md5ext: string, backdrop: Record<string, unknown>): Promise<void>;
     addSprite(input: string | Record<string, unknown>): Promise<void>;
+    deleteCostume?(costumeIndex: number): unknown;
     deleteSprite(targetId: string): unknown;
     setEditingTarget(targetId: string): void;
     saveProjectSb3(): Promise<Uint8Array | Blob>;

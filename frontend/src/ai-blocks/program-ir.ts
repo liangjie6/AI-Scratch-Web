@@ -65,6 +65,12 @@ export interface ProgramIR {
 export interface ValidationIssue {
   path: string;
   message: string;
+  code?: string;
+  actual?: unknown;
+  expected?: string;
+  operation?: string;
+  repair_scope?: string;
+  repair_id?: string | null;
 }
 
 export interface ValidationResult {

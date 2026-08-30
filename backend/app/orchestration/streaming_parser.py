@@ -16,7 +16,7 @@ class StreamFrame:
     attrs: dict[str, str] = field(default_factory=dict)
 
 
-_ROOT_TAGS = ('requirements', 'plan', 'manifest')
+_ROOT_TAGS = ('requirements', 'plan', 'manifest', 'resource_op')
 _PROGRAM_CHILD_TAGS = ('metadata', 'shared_state')
 
 

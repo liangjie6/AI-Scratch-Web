@@ -41,6 +41,14 @@ class AgnesTextProvider:
     def ensure_configured(self) -> None:
         self._api_key()
 
+    def supports_structured_output(self, segment: str | None = None) -> bool:
+        """Return true only for segments supported by the provider's JSON transport."""
+        return self.provider in {'deepseek', 'gpt'} and segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+
+    def supports_json_schema(self, segment: str | None = None) -> bool:
+        """Return true only where the provider accepts a strict JSON Schema payload."""
+        return self.provider == 'gpt' and segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+
     def _api_key(self) -> str:
         if self.provider == 'deepseek': return self.settings.require_deepseek_api_key()
         if self.provider == 'gpt': return self.settings.require_gpt_api_key()
@@ -56,29 +64,68 @@ class AgnesTextProvider:
         async for delta in self._stream_responses(messages, thinking_enabled=False, thinking_strength='low', json_output=False) if self.provider == 'gpt' else self._stream_openai(messages, enable_thinking=None):
             if delta.kind == 'content': yield delta.text
 
-    async def stream_with_reasoning(self, messages: list[dict[str, str]], *, thinking_enabled: bool, thinking_strength: ThinkingStrength, json_output: bool = False) -> AsyncIterator[AgnesStreamDelta]:
+    async def stream_with_reasoning(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        thinking_enabled: bool,
+        thinking_strength: ThinkingStrength,
+        json_output: bool = False,
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[AgnesStreamDelta]:
         self._log_request_content(messages)
         if thinking_enabled and self.provider == 'agnes':
             source = self._stream_anthropic(messages, thinking_strength)
         elif self.provider == 'gpt':
-            source = self._stream_responses(messages, thinking_enabled=thinking_enabled, thinking_strength=thinking_strength, json_output=json_output)
+            source = self._stream_responses(
+                messages,
+                thinking_enabled=thinking_enabled,
+                thinking_strength=thinking_strength,
+                json_output=json_output,
+                json_schema=json_schema,
+            )
         else:
-            source = self._stream_openai(messages, enable_thinking=thinking_enabled, json_output=json_output)
+            source = self._stream_openai(messages, enable_thinking=thinking_enabled, json_output=json_output, json_schema=json_schema)
         async for delta in source: yield delta
 
-    async def _stream_openai(self, messages: list[dict[str, str]], *, enable_thinking: bool | None, json_output: bool = False) -> AsyncIterator[AgnesStreamDelta]:
+    async def _stream_openai(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        enable_thinking: bool | None,
+        json_output: bool = False,
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[AgnesStreamDelta]:
         payload: dict[str, Any] = {'model': self._model(), 'messages': messages, 'stream': True, 'stop': _STOP_SEQUENCES}
         if enable_thinking is not None and self.provider == 'agnes': payload['chat_template_kwargs'] = {'enable_thinking': enable_thinking}
         if self.provider == 'deepseek':
             if enable_thinking: payload['reasoning_effort'] = 'high'
-            if json_output: payload['response_format'] = {'type': 'json_object'}
+            if json_output:
+                payload['response_format'] = (
+                    {'type': 'json_schema', 'json_schema': {'name': 'ai_blocks_segment', 'strict': True, 'schema': json_schema}}
+                    if json_schema is not None
+                    else {'type': 'json_object'}
+                )
         headers = {'Authorization': f'Bearer {self._api_key()}', 'Content-Type': 'application/json'}
         async for delta in self._request_stream('chat/completions', payload, headers, self._parse_openai_lines): yield delta
 
-    async def _stream_responses(self, messages: list[dict[str, str]], *, thinking_enabled: bool, thinking_strength: ThinkingStrength, json_output: bool) -> AsyncIterator[AgnesStreamDelta]:
+    async def _stream_responses(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        thinking_enabled: bool,
+        thinking_strength: ThinkingStrength,
+        json_output: bool,
+        json_schema: dict[str, Any] | None = None,
+    ) -> AsyncIterator[AgnesStreamDelta]:
         payload: dict[str, Any] = {'model': self._model(), 'input': messages, 'stream': True}
         if thinking_enabled: payload['reasoning'] = {'effort': thinking_strength, 'summary': 'auto'}
-        if json_output: payload['text'] = {'format': {'type': 'json_object'}}
+        if json_output:
+            payload['text'] = {'format': (
+                {'type': 'json_schema', 'name': 'ai_blocks_segment', 'strict': True, 'schema': json_schema}
+                if json_schema is not None
+                else {'type': 'json_object'}
+            )}
         headers = {'Authorization': f'Bearer {self._api_key()}', 'Content-Type': 'application/json'}
         async for delta in self._request_stream('responses', payload, headers, self._parse_responses_lines): yield delta
 

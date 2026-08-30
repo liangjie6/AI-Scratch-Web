@@ -8,7 +8,7 @@
 
 ~~~json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "scope": "project",
   "summary": "一句话说明项目",
   "resource_ops": [],
@@ -42,7 +42,7 @@
 
 ~~~json
 {"op":"add_builtin_sprite","op_id":"sprite_1","name":"红包","x":0,"y":0,"size":60,"tags":["红包"],"source":{"kind":"scratch_library","asset_type":"sprite","search_terms":["gift","红包"]}}
-{"op":"add_sprite","op_id":"sprite_2","name":"自定义角色","x":0,"y":0,"size":100,"tags":["角色"],"source":{"kind":"image_generation","reason":"内置库没有该主题","prompt":"一个清晰的 Scratch 角色","style":"cartoon","width":512,"height":512,"sheet_layout":"1x1"},"costumes":[]}
+{"op":"add_sprite","op_id":"sprite_2","name":"自定义角色","x":0,"y":0,"size":100,"tags":["角色"],"costumes":[{"name":"默认造型","source":{"kind":"image_generation","reason":"内置库没有该主题","prompt":"一个清晰的 Scratch 角色","style":"cartoon","width":512,"height":512,"sheet_layout":"1x1"},"tags":[]}]}
 {"op":"add_costume","op_id":"costume_1","target":{"kind":"current_target"},"name":"帽子","source":{"kind":"scratch_library","asset_type":"costume","search_terms":["hat","帽子"]},"tags":["帽子"],"select_after":true}
 {"op":"add_backdrop","op_id":"backdrop_1","name":"森林","source":{"kind":"scratch_library","asset_type":"backdrop","search_terms":["forest","森林"]},"tags":["森林"],"select_after":true}
 {"op":"select_backdrop","op_id":"backdrop_2","name":"已有背景"}
@@ -58,7 +58,7 @@
 
 ### 创建变量
 
-如果需求涉及分数、状态、计数、列表或广播，把稳定、可读的名称写入 shared_state 和相关 target 的 intent。跨角色共享的数据使用 global；只在一个角色使用的数据使用 local。后续目标必须复用 shared_state 和当前上下文中已经存在的名称，不要改名或为同一数据重复创建。
+如果需求涉及分数、状态、计数、列表或广播，把稳定、可读的名称写入 shared_state 和相关 target 的 intent。跨角色共享的数据使用 global；只在一个角色使用的数据使用 local。后续目标必须复用 shared_state 和当前上下文中已经存在的名称，不要改名或为同一数据重复创建。每个 program 的 shared_state 必须完整重复 manifest.shared_state 的全局声明，额外局部变量和列表必须声明 scope="local"。
 
 ### 添加造型
 
@@ -74,7 +74,7 @@
 
 ### 删除角色或不支持的资源
 
-删除已有角色当前不支持，不要输出 `remove_sprite` 或其他未列出的操作；在 summary 中说明不支持。删除造型、音效资源和其他外部资源也不支持，不要臆造操作。
+删除已有角色使用 delete_sprite，target 必须是 existing_sprite，并写出与项目上下文完全一致的 name。不要输出 `remove_sprite` 或其他未列出的操作。删除造型、音效资源和其他外部资源仍不支持，不要臆造操作。
 
 ### 舞台控制
 

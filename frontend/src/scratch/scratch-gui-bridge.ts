@@ -23,6 +23,8 @@ export class ScratchGuiBridge {
   private generationToken = 0;
   private projectTransactionActive = false;
   private projectTransactionToken = 0;
+  private projectTransactionMutationDepth = 0;
+  private projectTransactionRevision: number | null = null;
   private revision = 0;
   private targetListeners = new Set<Listener>();
   private projectListeners = new Set<Listener>();
@@ -60,6 +62,8 @@ export class ScratchGuiBridge {
     this.generationToken += 1;
     this.projectTransactionToken += 1;
     this.projectTransactionActive = false;
+    this.projectTransactionMutationDepth = 0;
+    this.projectTransactionRevision = null;
     this.vm = vm;
     this.projectLoaded = false;
     this.importing = false;
@@ -70,7 +74,7 @@ export class ScratchGuiBridge {
       if (this.vm === vm) this.markProjectLoaded();
     };
     const onProjectChanged = () => {
-      if (this.vm !== vm) return;
+      if (this.vm !== vm || this.projectTransactionMutationDepth > 0) return;
       this.revision += 1;
       this.projectListeners.forEach(listener => listener());
     };
@@ -177,20 +181,60 @@ export class ScratchGuiBridge {
     this.generatingBlocks = true;
     this.projectTransactionActive = true;
     const token = ++this.projectTransactionToken;
+    const transactionRevision = this.revision;
+    this.projectTransactionRevision = transactionRevision;
     let released = false;
     return {
       assertActive: () => {
-        if (!this.projectTransactionActive || this.projectTransactionToken !== token) throw new Error('AI 项目事务已失效');
+        if (!this.projectTransactionActive || this.projectTransactionToken !== token || this.revision !== transactionRevision) throw new Error('AI 项目事务已失效');
       },
       release: () => {
         if (released) return;
         released = true;
         if (this.projectTransactionToken === token) {
           this.projectTransactionActive = false;
+          this.projectTransactionMutationDepth = 0;
+          this.projectTransactionRevision = null;
           this.generatingBlocks = false;
         }
       }
     };
+  }
+
+  runProjectTransactionMutation<T>(operation: () => T): T {
+    return this.runProjectTransactionMutationInternal(operation, true);
+  }
+
+  runProjectTransactionCompensation<T>(operation: () => T): T {
+    return this.runProjectTransactionMutationInternal(operation, false);
+  }
+
+  private runProjectTransactionMutationInternal<T>(operation: () => T, checkRevision: boolean): T {
+    if (!this.projectTransactionActive || (checkRevision && this.projectTransactionRevision !== this.revision)) throw new Error('AI 项目事务已失效');
+    this.projectTransactionMutationDepth += 1;
+    try {
+      return operation();
+    } finally {
+      this.projectTransactionMutationDepth -= 1;
+    }
+  }
+
+  async runProjectTransactionMutationAsync<T>(operation: () => Promise<T> | T): Promise<T> {
+    return this.runProjectTransactionMutationAsyncInternal(operation, true);
+  }
+
+  async runProjectTransactionCompensationAsync<T>(operation: () => Promise<T> | T): Promise<T> {
+    return this.runProjectTransactionMutationAsyncInternal(operation, false);
+  }
+
+  private async runProjectTransactionMutationAsyncInternal<T>(operation: () => Promise<T> | T, checkRevision: boolean): Promise<T> {
+    if (!this.projectTransactionActive || (checkRevision && this.projectTransactionRevision !== this.revision)) throw new Error('AI 项目事务已失效');
+    this.projectTransactionMutationDepth += 1;
+    try {
+      return await operation();
+    } finally {
+      this.projectTransactionMutationDepth -= 1;
+    }
   }
 
   refreshWorkspace() {
@@ -211,7 +255,7 @@ export class ScratchGuiBridge {
     const before = new Set(vm.runtime.targets.map(target => target.id));
 
     try {
-      await vm.addSprite(JSON.stringify(spriteJson));
+      await this.runMaybeProjectTransactionMutationAsync(() => vm.addSprite(JSON.stringify(spriteJson)));
       this.assertVmStillBound(vm, lifecycleToken);
       const additions = vm.runtime.targets.filter(target => !before.has(target.id) && !target.isStage);
       if (additions.length !== 1) throw new Error('Scratch 未能创建唯一的新角色');
@@ -249,7 +293,7 @@ export class ScratchGuiBridge {
       let rollbackFailed = false;
       for (const target of additions) {
         try {
-          vm.deleteSprite(target.id);
+          this.runMaybeProjectTransactionMutation(() => vm.deleteSprite(target.id));
         } catch {
           rollbackFailed = true;
         }
@@ -278,19 +322,21 @@ export class ScratchGuiBridge {
     const lifecycleToken = this.lifecycleToken;
     const asset = await this.createVisualAsset(costume);
     this.assertVmStillBound(vm, lifecycleToken);
-    await vm.addCostume(asset.md5ext, asset.costume, targetId);
+    await this.runMaybeProjectTransactionMutationAsync(() => vm.addCostume(asset.md5ext, asset.costume, targetId));
     this.assertVmStillBound(vm, lifecycleToken);
     const installed = target.getCostumes?.() ?? [];
-    if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装造型');
+    const installedIndex = installed.findIndex(item => String(item.assetId ?? '') === asset.assetId);
+    if (installedIndex < 0) throw new Error('Scratch 未能安装造型');
     if (!selectAfter) {
       this.assertVmStillBound(vm, lifecycleToken);
-      target.setCostume?.(oldIndex);
-      if (target.currentCostume !== oldIndex) target.currentCostume = oldIndex;
-      this.assertVmStillBound(vm, lifecycleToken);
-      vm.runtime.emitProjectChanged?.();
+      this.runMaybeProjectTransactionMutation(() => {
+        target.setCostume?.(oldIndex);
+        if (target.currentCostume !== oldIndex) target.currentCostume = oldIndex;
+        vm.runtime.emitProjectChanged?.();
+      });
       this.assertVmStillBound(vm, lifecycleToken);
     }
-    return {assetId: asset.assetId, name: costume.name};
+    return {assetId: asset.assetId, name: costume.name, costumeIndex: installedIndex};
   }
 
   async addBackdropToStage(costume: CostumeExport, selectAfter = true) {
@@ -302,19 +348,21 @@ export class ScratchGuiBridge {
     const lifecycleToken = this.lifecycleToken;
     const asset = await this.createVisualAsset(costume);
     this.assertVmStillBound(vm, lifecycleToken);
-    await vm.addBackdrop(asset.md5ext, asset.costume);
+    await this.runMaybeProjectTransactionMutationAsync(() => vm.addBackdrop(asset.md5ext, asset.costume));
     this.assertVmStillBound(vm, lifecycleToken);
     const installed = stage.getCostumes?.() ?? [];
-    if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装背景');
+    const installedIndex = installed.findIndex(item => String(item.assetId ?? '') === asset.assetId);
+    if (installedIndex < 0) throw new Error('Scratch 未能安装背景');
     if (!selectAfter) {
       this.assertVmStillBound(vm, lifecycleToken);
-      stage.setCostume?.(oldIndex);
-      if (stage.currentCostume !== oldIndex) stage.currentCostume = oldIndex;
-      this.assertVmStillBound(vm, lifecycleToken);
-      vm.runtime.emitProjectChanged?.();
+      this.runMaybeProjectTransactionMutation(() => {
+        stage.setCostume?.(oldIndex);
+        if (stage.currentCostume !== oldIndex) stage.currentCostume = oldIndex;
+        vm.runtime.emitProjectChanged?.();
+      });
       this.assertVmStillBound(vm, lifecycleToken);
     }
-    return {assetId: asset.assetId, name: costume.name};
+    return {assetId: asset.assetId, name: costume.name, costumeIndex: installedIndex};
   }
 
   selectBackdropByName(name: string) {
@@ -326,12 +374,55 @@ export class ScratchGuiBridge {
     const index = stage?.getCostumes?.().findIndex(costume => String(costume.name ?? '').trim().toLocaleLowerCase() === wanted) ?? -1;
     if (!stage || index < 0) throw new Error('找不到已有背景：' + name);
     this.assertVmStillBound(vm, lifecycleToken);
-    stage.setCostume?.(index);
-    if (stage.currentCostume !== index) stage.currentCostume = index;
-    this.assertVmStillBound(vm, lifecycleToken);
-    vm.runtime.emitProjectChanged?.();
+    this.runMaybeProjectTransactionMutation(() => {
+      stage.setCostume?.(index);
+      if (stage.currentCostume !== index) stage.currentCostume = index;
+      vm.runtime.emitProjectChanged?.();
+    });
     this.assertVmStillBound(vm, lifecycleToken);
     return {assetId: String(stage.getCostumes?.()[index]?.assetId ?? ''), name: String(stage.getCostumes?.()[index]?.name ?? name)};
+  }
+
+  restoreCostumeSelection(targetId: string, costumeIndex: number, compensation = false): void {
+    const vm = this.requireVm();
+    const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
+    if (!target) throw new Error('找不到待恢复选择的目标');
+    const lifecycleToken = this.lifecycleToken;
+    const previousEditingTargetId = vm.editingTarget?.id;
+    const mutate = compensation
+      ? (operation: () => void) => this.projectTransactionActive ? this.runProjectTransactionCompensation(operation) : operation()
+      : (operation: () => void) => this.runMaybeProjectTransactionMutation(operation);
+    mutate(() => {
+      if (vm.editingTarget?.id !== targetId) vm.setEditingTarget(targetId);
+      target.setCostume?.(costumeIndex);
+      if (target.currentCostume !== costumeIndex) target.currentCostume = costumeIndex;
+      vm.runtime.emitProjectChanged?.();
+    });
+    this.assertVmStillBound(vm, lifecycleToken);
+    if (previousEditingTargetId && previousEditingTargetId !== targetId && this.vm === vm) vm.setEditingTarget(previousEditingTargetId);
+  }
+
+  async removeCostumeFromTarget(targetId: string, costumeIndex: number, assetId: string, compensation = false): Promise<void> {
+    const vm = this.requireVm();
+    const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
+    if (!target) throw new Error('找不到待补偿的目标');
+    const installed = target.getCostumes?.() ?? [];
+    if (String(installed[costumeIndex]?.assetId ?? '') !== assetId) throw new Error('待补偿的素材位置已经变化');
+    const previousEditingTargetId = vm.editingTarget?.id;
+    const lifecycleToken = this.lifecycleToken;
+    if (vm.editingTarget?.id !== targetId) vm.setEditingTarget(targetId);
+    try {
+      const mutate = compensation
+        ? (operation: () => Promise<unknown> | unknown) => this.projectTransactionActive ? this.runProjectTransactionCompensationAsync(operation) : operation()
+        : (operation: () => Promise<unknown> | unknown) => this.runMaybeProjectTransactionMutationAsync(operation);
+      const deleted = await mutate(() => vm.deleteCostume?.(costumeIndex));
+      this.assertVmStillBound(vm, lifecycleToken);
+      if (!deleted) throw new Error('Scratch 未能删除已安装素材');
+      const remaining = target.getCostumes?.() ?? [];
+      if (remaining.some(costume => String(costume.assetId ?? '') === assetId)) throw new Error('Scratch 补偿后素材仍然存在');
+    } finally {
+      if (previousEditingTargetId && previousEditingTargetId !== targetId && this.vm === vm) vm.setEditingTarget(previousEditingTargetId);
+    }
   }
 
   private async createVisualAsset(costume: CostumeExport) {
@@ -383,6 +474,8 @@ export class ScratchGuiBridge {
     this.generationToken += 1;
     this.projectTransactionToken += 1;
     this.projectTransactionActive = false;
+    this.projectTransactionMutationDepth = 0;
+    this.projectTransactionRevision = null;
     this.vm = null;
     this.storage = null;
     this.editorState = null;
@@ -400,6 +493,14 @@ export class ScratchGuiBridge {
     this.readyReject?.(reason);
     this.readyResolve = null;
     this.readyReject = null;
+  }
+
+  private runMaybeProjectTransactionMutation<T>(operation: () => T): T {
+    return this.projectTransactionActive ? this.runProjectTransactionMutation(operation) : operation();
+  }
+
+  private async runMaybeProjectTransactionMutationAsync<T>(operation: () => Promise<T> | T): Promise<T> {
+    return this.projectTransactionActive ? this.runProjectTransactionMutationAsync(operation) : operation();
   }
 
   private assertVmStillBound(vm: ScratchVmLike, lifecycleToken: number) {

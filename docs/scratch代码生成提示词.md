@@ -12,9 +12,9 @@
 
 ## 语义结构
 
-统一生成传输使用标签流；每个标签内部是一个严格 JSON 对象。传输标签、顺序和标签外禁令由 system prompt 的 FINAL OUTPUT CONTRACT 定义，本知识库不定义第二套输出协议。
+统一生成传输由 system prompt 的 FINAL OUTPUT CONTRACT 选择 tagged stream 或 JSON object；tagged stream 的每个标签内部是一个严格 JSON 对象。本知识库不定义第二套输出协议。
 
-ProgramIR 是宿主内部的语义程序，不是模型需要单独输出的顶层 JSON。它的字段会分布在 program 的 metadata、shared_state 和 script 标签中；不要输出裸 ProgramIR、错误 JSON、project.json 或其他标签外对象。禁止 NaN、Infinity、undefined、null 作为非法结构替代值、循环对象、重复引用对象和未声明属性。
+ProgramIR 是宿主内部的语义程序。在 tagged stream 中，它的字段会分布在 program 的 metadata、shared_state 和 script 标签中；当 FINAL OUTPUT CONTRACT 选择 JSON object 且当前 segment=program 时，完整 ProgramIR 就是该段唯一 JSON 对象。不要输出错误 JSON、project.json 或协议外对象。禁止 NaN、Infinity、undefined、null 作为非法结构替代值、循环对象、重复引用对象和未声明属性。
 
 如果需求超出当前原生积木能力，在 requirements 中将 ready 设为 false 并填写 missing_questions；不要输出未声明的错误对象。后端会负责稳定的错误事件。
 
@@ -290,5 +290,5 @@ protected=true 的旧脚本只能保留，不得删除或重写。
 6. 检查 reporter 的返回 shape、菜单 shadow、可选输入、C-block/terminal 分类、广播并发、列表 1-based 边界和 wait_until 的可达性。
 7. 检查 LEVEL_CONTEXT 的 allowed/forbidden/required 约束；模板、完整程序和版本副本不得混淆处理。
 
-统一生成请求必须遵循 system prompt 末尾的 tagged stream 输出协议；不要直接输出裸 ProgramIR JSON。
+统一生成请求必须遵循 system prompt 末尾选择的 tagged stream 或 JSON object 输出协议；仅当当前 segment=program 且协议选择 JSON object 时输出完整 ProgramIR 对象，其他情况不要输出协议之外的对象。
 

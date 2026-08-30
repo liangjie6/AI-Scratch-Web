@@ -11,7 +11,7 @@ function fixture() {
     loadProject: vi.fn(async () => {revision += 1;})
   } as any;
   const snapshot = {targetId: 'target-1', targetName: '角色', isStage: false, revision: 1, blockCount: 0, hasScripts: false, scriptRefs: {}, context: {} as any};
-  const manifest = {schema_version: 1 as const, scope: 'project' as const, summary: '添加背景', resource_ops: [{op: 'add_backdrop' as const, op_id: 'backdrop-1', name: '森林', source: {kind: 'scratch_library' as const, asset_type: 'backdrop' as const, search_terms: ['森林']}, tags: [], select_after: true}], program_targets: [], shared_state: {variables: [], lists: [], broadcasts: []}};
+  const manifest = {schema_version: 2 as const, scope: 'project' as const, summary: '添加背景', resource_ops: [{op: 'add_backdrop' as const, op_id: 'backdrop-1', name: '森林', source: {kind: 'scratch_library' as const, asset_type: 'backdrop' as const, search_terms: ['森林']}, tags: [], select_after: true}], program_targets: [], shared_state: {variables: [], lists: [], broadcasts: []}};
   const prepared = new Map<string, PreparedResource>([['backdrop-1', {op_id: 'backdrop-1', kind: 'backdrop', value: {}}]]);
   return {bridge, snapshot, manifest, prepared};
 }

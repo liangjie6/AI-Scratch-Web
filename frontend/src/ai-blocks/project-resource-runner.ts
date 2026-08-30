@@ -10,6 +10,16 @@ export interface PreparedResource {
   value: unknown;
 }
 
+export type ApplyEntry =
+  | {kind: 'sprite'; targetId: string; opId: string}
+  | {kind: 'costume'; targetId: string; costumeIndex: number; assetId: string; opId: string}
+  | {kind: 'backdrop'; targetId: string; costumeIndex: number; assetId: string; opId: string}
+  | {kind: 'backdrop_selection'; targetId: string; previousCostumeIndex: number; opId: string}
+  | {kind: 'deleted_sprite'; restore: () => Promise<void> | void; opId: string}
+  | {kind: 'program'; targetId: string; scriptIds: string[]}
+  | {kind: 'asset'; assetId: string}
+  | {kind: 'resource_batch'; opId: string};
+
 export interface ProjectApplyResult {
   addedTargets: Array<{op_id: string; target_id: string; name: string}>;
   addedCostumes: Array<{op_id: string; target_id: string; asset_id: string; name: string}>;
@@ -22,7 +32,7 @@ export interface ProjectApplyResult {
 }
 
 export interface ProjectResourceExecutor {
-  apply(op: ResourceOp, prepared: PreparedResource, context: {bridge: ScratchGuiBridge; result: ProjectApplyResult}): Promise<void>;
+  apply(op: ResourceOp, prepared: PreparedResource, context: {bridge: ScratchGuiBridge; result: ProjectApplyResult}): Promise<ApplyEntry | void>;
 }
 
 export interface ProjectResourceRunOptions {
@@ -37,6 +47,7 @@ export interface ProjectResourceRunOptions {
 
 export interface ProjectTransaction {
   result: ProjectApplyResult;
+  journal?: ApplyEntry[];
   assertActive?: () => void;
 }
 
@@ -75,7 +86,19 @@ export async function applyProjectResources(
     const prepared = options.prepared.get(operation.op_id);
     if (!prepared) throw new Error('资源尚未准备完成：' + operation.op_id);
     transaction.assertActive?.();
-    await options.executor.apply(operation, prepared, {bridge: options.bridge, result: transaction.result});
+    const boundary = {kind: 'resource_batch', opId: operation.op_id} as const;
+    transaction.journal?.push(boundary);
+    let entry: ApplyEntry | void;
+    try {
+      entry = await options.executor.apply(operation, prepared, {bridge: options.bridge, result: transaction.result});
+    } catch (error) {
+      throw error;
+    }
+    if (transaction.journal) {
+      const boundaryIndex = transaction.journal.lastIndexOf(boundary);
+      if (boundaryIndex >= 0) transaction.journal.splice(boundaryIndex, 1);
+      if (entry) transaction.journal.push(entry);
+    }
     transaction.assertActive?.();
     options.onProgress?.(index + 1, operations.length, operation.name);
   }

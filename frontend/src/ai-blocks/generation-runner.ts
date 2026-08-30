@@ -24,12 +24,13 @@ import {
   type UnifiedGenerationRequest,
   type UnifiedProgramDraft
 } from './ai-blocks-api';
-import {assertProjectManifest, type ProjectManifest, type TargetRef} from './project-plan';
+import {assertProjectManifest, validateProjectProgramSharedState, type ProjectManifest, type TargetRef} from './project-plan';
 import {assertProjectSnapshotIsCurrent, assertSnapshotIsCurrent, isAiEditableScript, readAiProjectSnapshot, readAiTargetSnapshot, type AiProjectSnapshot, type AiTargetSnapshot} from './target-context';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
   applyProjectResources,
   createProjectApplyResult,
+  type ApplyEntry,
   type PreparedResource,
   type ProjectApplyResult,
   type ProjectResourceExecutor
@@ -88,10 +89,40 @@ function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('AI block generation cancelled', 'AbortError');
 }
 
-async function discardGeneratedAssets(assets: readonly GeneratedAsset[]) {
-  const outcomes = await Promise.allSettled(assets.map(asset => deleteGeneratedAsset(asset.id)));
-  const failures = outcomes.filter(outcome => outcome.status === 'rejected');
-  if (failures.length) throw new Error(failures.length + ' 个生成素材清理失败');
+async function compensateJournal(bridge: ScratchGuiBridge, journal: readonly ApplyEntry[]): Promise<boolean> {
+  const failures: unknown[] = [];
+  let requiresBackupRestore = false;
+  for (const entry of [...journal].reverse()) {
+    try {
+      if (entry.kind === 'program' || entry.kind === 'resource_batch') {
+        requiresBackupRestore = true;
+      } else if (entry.kind === 'asset') {
+        await deleteGeneratedAsset(entry.assetId);
+      } else if (entry.kind === 'sprite') {
+        const vm = bridge.currentVm;
+        if (!vm) throw new Error('Scratch VM 尚未就绪');
+        const mutate = bridge.runProjectTransactionCompensationAsync;
+        const deleted = typeof mutate === 'function'
+          ? await mutate.call(bridge, () => vm.deleteSprite?.(entry.targetId))
+          : await Promise.resolve(vm.deleteSprite?.(entry.targetId));
+        if (deleted === false || vm.runtime.targets.some(target => target.id === entry.targetId)) throw new Error('角色补偿删除未完成：' + entry.targetId);
+      } else if (entry.kind === 'costume' || entry.kind === 'backdrop') {
+        if (typeof bridge.removeCostumeFromTarget !== 'function') throw new Error('Scratch 不支持素材补偿删除');
+        await bridge.removeCostumeFromTarget(entry.targetId, entry.costumeIndex, entry.assetId, true);
+      } else if (entry.kind === 'backdrop_selection') {
+        if (typeof bridge.restoreCostumeSelection !== 'function') throw new Error('Scratch 不支持背景选择补偿');
+        bridge.restoreCostumeSelection(entry.targetId, entry.previousCostumeIndex, true);
+      } else if (entry.kind === 'deleted_sprite') {
+        const mutate = bridge.runProjectTransactionCompensationAsync;
+        if (typeof mutate === 'function') await mutate.call(bridge, entry.restore);
+        else await entry.restore();
+      }
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length) throw new Error(failures.map(error => error instanceof Error ? error.message : '未知补偿错误').join('；'));
+  return requiresBackupRestore;
 }
 
 function randomId(prefix: string) {
@@ -457,6 +488,10 @@ export class UnifiedGenerationRunner {
       const planForTarget = targetPlan(request, manifest.value, item.targetIndex);
       const result = validateProgramIR(item.program, planForTarget.targetRef.kind === 'stage' ? 'stage' : 'sprite');
       if (!result.valid) throw new ProgramIRValidationError(result.issues);
+      if (request.scope === 'project') {
+        const sharedResult = validateProjectProgramSharedState(item.program!, manifest.value!.shared_state);
+        if (!sharedResult.valid) throw new ProgramIRValidationError(sharedResult.issues);
+      }
     }
     return {request, snapshot, projectSnapshot, requirements: requirements.value, plan: plan.value, manifest: manifest.value, programs: ordered};
   }
@@ -467,9 +502,12 @@ export class UnifiedGenerationRunner {
   ): Promise<UnifiedCommitResult> {
     let backup: Uint8Array | undefined;
     let transactionLock: {assertActive: () => void; release: () => void} | undefined;
+    let transactionVm = this.bridge.currentVm;
     const appliedPrograms: AiGenerationResult[] = [];
+    const journal: ApplyEntry[] = (options.generatedAssets ?? []).map(asset => ({kind: 'asset', assetId: asset.id}));
     try {
       transactionLock = this.bridge.beginProjectTransaction();
+      transactionVm = this.bridge.currentVm;
       throwIfAborted(options.signal);
       assertSnapshotIsCurrent(this.bridge, draft.snapshot);
       if (draft.projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, draft.projectSnapshot);
@@ -478,7 +516,7 @@ export class UnifiedGenerationRunner {
       assertSnapshotIsCurrent(this.bridge, draft.snapshot);
       if (draft.projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, draft.projectSnapshot);
       const project = draft.manifest ? createProjectApplyResult(draft.snapshot, capturedBackup) : undefined;
-      const transaction = project ? {result: project, assertActive: () => transactionLock!.assertActive()} : undefined;
+      const transaction = project ? {result: project, journal, assertActive: () => transactionLock!.assertActive()} : undefined;
       if (draft.manifest && draft.manifest.resource_ops.length) {
         if (!options.preparedResources) throw new Error('项目资源尚未准备完成');
         if (!transaction) throw new Error('项目资源事务尚未初始化');
@@ -505,7 +543,11 @@ export class UnifiedGenerationRunner {
         transactionLock!.assertActive();
         const targetSnapshot = readAiTargetSnapshot(this.bridge, targetPlanForProgram.mode, target);
         const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, item.program!);
-        const applied = applyCompiledProgram(this.bridge, target, prepared.compiled, prepared.removeTopIds, prepared.pending, options.signal, progress => options.onProgress?.({...progress, current: progress.current + index}), targetSnapshot.targetName);
+        journal.push({kind: 'program', targetId, scriptIds: item.program!.scripts.map(script => script.id)});
+        const apply = () => applyCompiledProgram(this.bridge, target, prepared.compiled, prepared.removeTopIds, prepared.pending, options.signal, progress => options.onProgress?.({...progress, current: progress.current + index}), targetSnapshot.targetName);
+        const applied = typeof this.bridge.runProjectTransactionMutation === 'function'
+          ? this.bridge.runProjectTransactionMutation(apply)
+          : apply();
         transactionLock!.assertActive();
         appliedPrograms.push(applied);
         project?.appliedPrograms.push({target_id: applied.targetId, added_blocks: applied.addedBlocks, added_scripts: applied.addedScripts, removed_scripts: applied.removedScripts});
@@ -532,8 +574,20 @@ export class UnifiedGenerationRunner {
       } catch {
         transactionInvalidated = true;
       }
+      let compensationError: unknown;
+      let requiresBackupRestore = journal.some(entry => entry.kind === 'program' || entry.kind === 'resource_batch');
+      if (journal.length) {
+        try {
+          requiresBackupRestore = (await compensateJournal(this.bridge, journal)) || requiresBackupRestore;
+        } catch (caught) {
+          compensationError = caught;
+        }
+      }
       let restoreError: unknown;
-      if (backup) {
+      const vmRebound = transactionVm !== this.bridge.currentVm;
+      const canTrackOwnMutations = typeof this.bridge.runProjectTransactionMutation === 'function';
+      const concurrentProjectChange = transactionInvalidated && canTrackOwnMutations && !vmRebound && this.bridge.projectRevision !== draft.snapshot.revision;
+      if (backup && (requiresBackupRestore || !journal.length || compensationError) && !concurrentProjectChange) {
         try {
           // A stale lock must not prevent restoring the durable backup.
           await this.bridge.loadProject(backup);
@@ -543,24 +597,17 @@ export class UnifiedGenerationRunner {
           restoreError = caught;
         }
       }
-      let assetCleanupError: unknown;
-      if (options.generatedAssets?.length && !restoreError) {
-        try {
-          await discardGeneratedAssets(options.generatedAssets);
-        } catch (caught) {
-          assetCleanupError = caught;
-        }
-      }
-      if (restoreError || assetCleanupError) {
+      if (compensationError || restoreError) {
         const details = [
           transactionInvalidated ? 'AI 项目事务已失效' : '',
+          compensationError ? '局部补偿失败：' + (compensationError instanceof Error ? compensationError.message : '未知错误') : '',
           restoreError ? '无法恢复项目备份：' + (restoreError instanceof Error ? restoreError.message : '未知错误') : '',
-          assetCleanupError ? '无法清理已生成素材：' + (assetCleanupError instanceof Error ? assetCleanupError.message : '未知错误') : ''
+          error instanceof Error ? '原始错误：' + error.message : '原始错误：未知错误'
         ].filter(Boolean).join('；');
         throw new Error('AI 项目提交失败，' + details);
       }
       if (transactionInvalidated) {
-        throw new Error('AI 项目提交失败，项目事务已失效但备份已恢复：' + (error instanceof Error ? error.message : '未知错误'));
+        throw new Error('AI 项目提交失败，项目事务已失效：' + (error instanceof Error ? error.message : '未知错误'));
       }
       throw error;
     } finally {

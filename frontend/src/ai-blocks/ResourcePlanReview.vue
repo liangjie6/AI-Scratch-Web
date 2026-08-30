@@ -24,9 +24,9 @@ const resources = computed<ResourceEntry[]>(() => {
   const result: ResourceEntry[] = [];
   for (const op of props.plan?.resource_ops ?? []) {
     if (op.op === 'add_sprite' && op.costumes.length) {
-      for (const costume of op.costumes) result.push({key: op.op_id + ':' + costume.name, op, name: op.name + ' · ' + costume.name, source: costume.source, tags: costume.tags, selectionKey: op.op_id + ':' + costume.name});
+      for (const costume of op.costumes) result.push({key: op.op_id + ':' + costume.name, op, name: op.name + ' · ' + costume.name, source: costume.source, tags: costume.tags ?? [], selectionKey: op.op_id + ':' + costume.name});
     } else {
-      result.push({key: op.op_id, op, name: op.name, source: 'source' in op ? op.source : undefined, tags: 'tags' in op ? op.tags : [], selectionKey: op.op_id});
+      result.push({key: op.op_id, op, name: op.name, source: 'source' in op ? op.source : undefined, tags: 'tags' in op ? op.tags ?? [] : [], selectionKey: op.op_id});
     }
   }
   return result;

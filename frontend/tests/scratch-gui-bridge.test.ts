@@ -62,6 +62,37 @@ describe('ScratchGuiBridge resource operations', () => {
     transaction.release();
   });
 
+  it('keeps explicit own mutations stable and rejects a revision change', () => {
+    const f = fixture();
+    const transaction = f.bridge.beginProjectTransaction();
+    expect(() => f.bridge.runProjectTransactionMutation(() => undefined)).not.toThrow();
+    expect(() => transaction.assertActive()).not.toThrow();
+    f.bridge.markProjectLoaded();
+    expect(() => transaction.assertActive()).toThrow('项目事务已失效');
+    expect(() => f.bridge.runProjectTransactionCompensation(() => undefined)).not.toThrow();
+    transaction.release();
+  });
+
+  it('removes only the recorded costume and restores selection', async () => {
+    const costumes = [{name: '默认', assetId: 'old'}, {name: '新造型', assetId: 'asset-new'}];
+    const target = {id: 'sprite', isStage: false, currentCostume: 1, getCostumes: () => costumes, setCostume(index: number) {this.currentCostume = index;}};
+    const stage = {id: 'stage', isStage: true};
+    const vm = {
+      editingTarget: target,
+      runtime: {targets: [stage, target], getTargetById: (id: string) => id === 'sprite' ? target : stage},
+      deleteCostume: vi.fn((index: number) => {const [removed] = costumes.splice(index, 1); return removed ? () => undefined : null;}),
+      setEditingTarget: vi.fn(),
+    };
+    const bridge = new ScratchGuiBridge();
+    bridge.setVm(vm as any);
+    bridge.markProjectLoaded();
+
+    await bridge.removeCostumeFromTarget('sprite', 1, 'asset-new');
+
+    expect(vm.deleteCostume).toHaveBeenCalledWith(1);
+    expect(costumes).toEqual([{name: '默认', assetId: 'old'}]);
+  });
+
   it('clears VM listeners and operation state on dispose', () => {
     const f = fixture();
     const targetListener = vi.fn();

@@ -1,7 +1,7 @@
 import {generateImage} from '../ai/image-generation-api';
 import type {ImageGenerationRequest, ImageGenerationResponse, ImageStyle} from '../ai/image-generation-types';
 import {deleteGeneratedAsset, saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
-import {preloadScratchAsset, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
+import {preloadScratchAsset, searchScratchLibrary, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
 import type {ProjectManifest, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
 import type {PreparedResource} from './project-resource-runner';
 import type {CostumeExport} from '../scratch/asset-adapter';
@@ -22,6 +22,7 @@ export interface ResourcePreparationOptions {
   selections?: Map<string, ScratchSpriteItem | ScratchLibraryItem>;
   confirmGeneration?: (request: GenerationConfirmation) => Promise<boolean> | boolean;
   signal?: AbortSignal;
+  maxConcurrency?: number;
   onProgress?: (current: number, total: number, label: string) => void;
 }
 export interface PreparedProjectResources {
@@ -66,10 +67,6 @@ function costumeFromGenerated(name: string, result: ImageGenerationResponse): Co
   };
 }
 
-function sourceForCostume(op: Extract<ResourceOp, {op: 'add_sprite'}>, costume: CostumeResource): ProjectManifestResourceSource {
-  return costume.source ?? op.source ?? (() => { throw new Error('造型资源来源未定义：' + costume.name); })();
-}
-
 async function generateCostume(
   op: ResourceOp,
   name: string,
@@ -97,8 +94,21 @@ async function generateCostume(
   return costumeFromGenerated(name, generated);
 }
 
+async function resolveLibrarySelection(
+  source: Extract<ProjectManifestResourceSource, {kind: 'scratch_library'}>,
+  options: ResourcePreparationOptions,
+  key: string,
+): Promise<ScratchSpriteItem | ScratchLibraryItem | undefined> {
+  const selected = options.selections?.get(key);
+  if (selected) return selected;
+  const matches = source.asset_type === 'sprite'
+    ? await searchScratchLibrary('sprite', source.search_terms, 1)
+    : await searchScratchLibrary(source.asset_type, source.search_terms, 1);
+  return matches[0];
+}
+
 async function prepareLibraryCostume(selection: ScratchSpriteItem | ScratchLibraryItem | undefined, label: string): Promise<CostumeExport> {
-  if (!selection) throw new Error('请先为资源选择本地素材：' + label);
+  if (!selection) throw new Error('未找到可用的 Scratch 素材：' + label);
   const item: ScratchCostumeItem | undefined = 'costumes' in selection
     ? (selection as ScratchSpriteItem).costumes[0]
     : selection as ScratchLibraryItem;
@@ -118,31 +128,52 @@ async function cleanupGeneratedAssets(assets: readonly GeneratedAsset[]) {
   if (failures.length) throw new Error(failures.length + ' 个生成素材清理失败');
 }
 
+async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const output = new Array<R>(items.length);
+  let cursor = 0;
+  let failure: unknown;
+  let failed = false;
+  const run = async () => {
+    while (!failed) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      try {
+        output[index] = await worker(items[index], index);
+      } catch (error) {
+        failure = error;
+        failed = true;
+      }
+    }
+  };
+  await Promise.all(Array.from({length: Math.min(Math.max(1, limit), Math.max(1, items.length))}, () => run()));
+  if (failed) throw failure;
+  return output;
+}
+
 async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, generatedAssets: GeneratedAsset[]): Promise<PreparedResource> {
   abortIfNeeded(options.signal);
   if (op.op === 'delete_sprite') return {op_id: op.op_id, kind: 'builtin_sprite', value: null};
   if (op.op === 'add_builtin_sprite') {
-    const selected = options.selections?.get(op.op_id);
-    if (!selected || !('costumes' in selected)) throw new Error('请先为新增角色选择本地角色素材：' + op.name);
+    const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(op.source, options, op.op_id);
+    if (!selected || !('costumes' in selected)) throw new Error('未找到可用的 Scratch 角色素材：' + op.name);
     const costumes: CostumeExport[] = [];
     for (const item of (selected as ScratchSpriteItem).costumes) costumes.push(costumeFromLibrary(item, await preloadScratchAsset(item)));
     return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes}};
   }
   if (op.op === 'add_sprite') {
-    const specs: CostumeResource[] = op.costumes.length
-      ? op.costumes
-      : op.source
-        ? [{name: op.name, source: op.source, tags: op.tags}]
-        : [];
+    const specs: CostumeResource[] = op.costumes;
     const costumes: CostumeExport[] = [];
     for (const costume of specs) {
-      const source = sourceForCostume(op, costume);
+      const source = costume.source;
       assertSourceAllowed(source, options.assetPolicy);
       if (source.kind === 'scratch_library') {
-        const selected = options.selections?.get(op.op_id + ':' + costume.name) ?? options.selections?.get(op.op_id);
+        const selectionKey = op.op_id + ':' + costume.name;
+        const selected = options.selections?.get(selectionKey)
+          ?? options.selections?.get(op.op_id)
+          ?? await resolveLibrarySelection(source, options, selectionKey);
         costumes.push(await prepareLibraryCostume(selected, costume.name));
       } else {
-        costumes.push(await generateCostume(op, costume.name, source, costume.tags, options, generatedAssets));
+        costumes.push(await generateCostume(op, costume.name, source, costume.tags ?? [], options, generatedAssets));
       }
     }
     if (!costumes.length) throw new Error('新增角色至少需要一个造型资源：' + op.name);
@@ -152,10 +183,10 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
   const source = op.source;
   assertSourceAllowed(source, options.assetPolicy);
   if (source.kind === 'scratch_library') {
-    const selected = options.selections?.get(op.op_id);
+    const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(source, options, op.op_id);
     return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value: await prepareLibraryCostume(selected, op.name)};
   }
-  const value = await generateCostume(op, op.name, source, op.tags, options, generatedAssets);
+  const value = await generateCostume(op, op.name, source, op.tags ?? [], options, generatedAssets);
   return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value};
 }
 
@@ -164,10 +195,16 @@ export async function prepareProjectResources(options: ResourcePreparationOption
   const generatedAssets: GeneratedAsset[] = [];
   const total = options.plan.resource_ops.length;
   try {
-    for (let index = 0; index < options.plan.resource_ops.length; index += 1) {
+    const operations = options.plan.resource_ops;
+    const preparedValues = await mapWithConcurrency(
+      operations,
+      options.maxConcurrency ?? 4,
+      async (op) => prepareOne(op, options, generatedAssets)
+    );
+    for (let index = 0; index < operations.length; index += 1) {
       abortIfNeeded(options.signal);
-      const op = options.plan.resource_ops[index];
-      prepared.set(op.op_id, await prepareOne(op, options, generatedAssets));
+      const op = operations[index];
+      prepared.set(op.op_id, preparedValues[index]);
       options.onProgress?.(index + 1, total, op.name);
     }
     return {prepared, generatedAssets};

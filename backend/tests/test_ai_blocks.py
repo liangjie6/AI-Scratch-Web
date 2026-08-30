@@ -1,9 +1,11 @@
+import asyncio
 import json
 import logging
+import re
 
 import httpx
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from app.main import app
 from app.orchestration.cache_manager import PromptCache
@@ -13,12 +15,15 @@ from app.prompt_builder import PromptBuilder
 from app.providers.agnes_text_provider import AgnesStreamDelta
 from app.routes.ai_blocks import get_ai_blocks_orchestrator, get_ai_blocks_provider
 from app.schemas.ai_blocks import (
+    ProgramIR,
+    ProjectSharedState,
     RequirementsResponse,
     ResourceContractError,
     ResourceOp,
     UnifiedGenerationRequest,
     ValidationRequest,
     normalize_resource_op,
+    validate_project_program_shared_state,
 )
 
 
@@ -40,6 +45,113 @@ class MockProvider:
         output = self.outputs[0] if len(self.outputs) == 1 else self.outputs.pop(0)
         for chunk in (output[index:index + 7] for index in range(0, len(output), 7)):
             yield AgnesStreamDelta(kind='content', text=chunk)
+
+
+class RoutedSegmentProvider(MockProvider):
+    def __init__(self, routes, delays=None):
+        super().__init__('')
+        self.routes = {key: list(values) for key, values in routes.items()}
+        self.delays = delays or {}
+
+    @staticmethod
+    def _key_for(text, call_count):
+        if call_count == 1:
+            return 'requirements'
+        if call_count == 2:
+            return 'plan'
+        if call_count == 3 and 'resource_op_index=' not in text:
+            return 'manifest'
+        if 'resource_op_index=' in text:
+            return 'resource_op'
+        if re.search(r'target_index=0 的完整', text):
+            return 'program:0'
+        if re.search(r'target_index=1 的完整', text):
+            return 'program:1'
+        return 'manifest'
+
+    async def stream_with_reasoning(self, messages, *, thinking_enabled, thinking_strength, json_output):
+        assert json_output is False
+        self.calls.append(messages)
+        key = self._key_for(messages[-1]['content'], len(self.calls))
+        values = self.routes[key]
+        output = values[0] if len(values) == 1 else values.pop(0)
+        await asyncio.sleep(self.delays.get(key, 0))
+        for chunk in (output[index:index + 7] for index in range(0, len(output), 7)):
+            yield AgnesStreamDelta(kind='content', text=chunk)
+
+
+class StructuredSegmentProvider(RoutedSegmentProvider):
+    def __init__(self, routes):
+        super().__init__(routes)
+        self.json_flags = []
+
+    def supports_structured_output(self, segment=None):
+        return segment in {'requirements', 'plan', 'manifest', 'resource_op'}
+
+    async def stream_with_reasoning(self, messages, *, thinking_enabled, thinking_strength, json_output):
+        self.calls.append(messages)
+        text = messages[-1]['content']
+        key = self._key_for(text, len(self.calls))
+        self.json_flags.append((key, json_output))
+        values = self.routes[key]
+        output = values[0] if len(values) == 1 else values.pop(0)
+        if json_output:
+            match = re.search(r'<[^>]+>(.*?)</[^>]+>', output, re.S)
+            assert match is not None
+            output = match.group(1)
+        for chunk in (output[index:index + 7] for index in range(0, len(output), 7)):
+            yield AgnesStreamDelta(kind='content', text=chunk)
+
+
+class StructuredProjectProvider:
+    provider = 'gpt'
+
+    def __init__(self, outputs):
+        self.outputs = outputs
+        self.calls = []
+        self.transport_calls = []
+
+    def supports_structured_output(self, segment=None):
+        return segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+
+    def supports_json_schema(self, segment=None):
+        return segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+
+    async def stream_with_reasoning(self, messages, *, thinking_enabled, thinking_strength, json_output, json_schema=None):
+        assert json_output is True
+        self.calls.append(messages)
+        text = messages[-1]['content']
+        if len(self.calls) == 1:
+            segment = 'requirements'
+        elif len(self.calls) == 2:
+            segment = 'plan'
+        elif len(self.calls) == 3:
+            segment = 'manifest'
+        else:
+            target_index = re.search(r'target_index=(\d+)', text).group(1)
+            segment = f'program:{target_index}'
+        self.transport_calls.append((segment, json_output, json_schema))
+        output = json.dumps(self.outputs[segment])
+        for chunk in (output[index:index + 7] for index in range(0, len(output), 7)):
+            yield AgnesStreamDelta(kind='content', text=chunk)
+
+
+def structured_program_payload(tagged):
+    metadata = json.loads(re.search(r'<metadata>(.*?)</metadata>', tagged, re.S).group(1))
+    state = json.loads(re.search(r'<shared_state>(.*?)</shared_state>', tagged, re.S).group(1))
+    scripts = [json.loads(match.group(1)) for match in re.finditer(r'<script index="\d+" total="\d+">(.*?)</script>', tagged, re.S)]
+    return {**metadata, **state, 'scripts': scripts}
+
+
+def routed_project_provider(segments, *, manifest=None, resource_ops=None, program0=None, program1=None, delays=None):
+    return RoutedSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': list(manifest or [segments[2]]),
+        'resource_op': list(resource_ops or []),
+        'program:0': list(program0 or [segments[3]]),
+        'program:1': list(program1 or [segments[4]]),
+    }, delays=delays)
 
 
 def target(mode='append', is_stage=False):
@@ -106,7 +218,7 @@ def project_stream_output():
     requirements = {'ready': True, 'title': 'Project', 'goal': 'Update two targets', 'behavior_steps': ['React'], 'triggers': ['Green flag'], 'controls': [], 'success_criteria': ['Both targets updated'], 'missing_questions': []}
     plan = {'steps': ['Update stage', 'Update sprite']}
     manifest = {
-        'schema_version': 1, 'scope': 'project', 'summary': 'Update project', 'resource_ops': [],
+        'schema_version': 2, 'scope': 'project', 'summary': 'Update project', 'resource_ops': [],
         'program_targets': [
             {'target': {'kind': 'stage'}, 'mode': 'append', 'intent': 'Update stage'},
             {'target': {'kind': 'existing_sprite', 'name': 'Sprite1'}, 'mode': 'append', 'intent': 'Update sprite'},
@@ -134,6 +246,16 @@ def project_stream_output():
     ])
 
 
+def project_segment_outputs(output=None):
+    value = output or project_stream_output()
+    requirements = re.search(r'<requirements>.*?</requirements>', value, re.S).group(0)
+    plan = re.search(r'<plan>.*?</plan>', value, re.S).group(0)
+    manifest = re.search(r'<manifest>.*?</manifest>', value, re.S).group(0)
+    programs = [match.group(0) for match in re.finditer(r'<program target_index="(\d+)">.*?</program>', value, re.S)]
+    programs.sort(key=lambda item: int(re.search(r'target_index="(\d+)"', item).group(1)))
+    return [requirements, plan, manifest, *programs]
+
+
 class FailingProvider(MockProvider):
     async def stream_with_reasoning(self, messages, *, thinking_enabled, thinking_strength, json_output):
         self.calls.append(messages)
@@ -144,7 +266,7 @@ class FailingProvider(MockProvider):
 
 def valid_manifest_payload():
     return {
-        'schema_version': 1,
+        'schema_version': 2,
         'scope': 'project',
         'summary': 'Create a sprite',
         'resource_ops': [],
@@ -225,6 +347,34 @@ def test_unified_prompt_places_one_transport_contract_after_context():
     assert 'Ignore any earlier sentence that says to output a single JSON object' in content
     assert 'requirements, plan, then manifest only for project scope' in content
     assert 'Never output next, parent, shadow, topLevel' in content
+
+
+def test_json_object_segment_prompt_has_no_tagged_transport_instruction():
+    builder = PromptBuilder(knowledge_base='fixed knowledge')
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    messages, _ = builder.build_unified_prompt(
+        None,
+        request.target.model_dump(),
+        request,
+        transport='json_object',
+        segment='program',
+    )
+    contract = messages[0]['content'][messages[0]['content'].rfind('FINAL OUTPUT CONTRACT'):]
+    assert 'one JSON object, not a tagged stream' in contract
+    assert 'Output tags in this order' not in contract
+    assert 'complete ProgramIR object' in contract
+
+    segment_messages, _ = builder.build_segment_prompt(
+        None,
+        request.target.model_dump(),
+        request,
+        'program',
+        {'transport': 'json_object'},
+        target_index=0,
+    )
+    assert '只输出一个 JSON object' in segment_messages[-1]['content']
+    assert 'JSON object 之外的文本' in segment_messages[-1]['content']
+    assert '<program>' not in segment_messages[-1]['content']
 
 
 def test_prompt_cache_key_changes_when_context_content_changes():
@@ -335,7 +485,8 @@ async def test_unified_route_is_only_generation_entrypoint():
 @pytest.mark.asyncio
 async def test_manifest_validation_error_uses_plan_phase():
     bad = project_stream_output().replace('{"kind": "stage"}', '"stage"')
-    provider = MockProvider(bad)
+    bad_segments = project_segment_outputs(bad)
+    provider = routed_project_provider(bad_segments, manifest=[bad_segments[2]], program0=[], program1=[])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
 
@@ -354,14 +505,15 @@ def test_unified_prompt_describes_resource_operation_contract():
     )
     content = messages[0]['content']
     contract = content[content.rfind('FINAL OUTPUT CONTRACT'):]
-    assert 'add_builtin_sprite (op, op_id, name, x' in contract
-    assert 'add_sprite (op, op_id, name, x' in contract
-    assert 'delete_sprite (only op, op_id, name, target' in contract
-    assert 'add_costume (op, op_id, target current_target/existing_sprite/created_sprite but never stage' in contract
-    assert 'add_backdrop (op, op_id, name' in contract
-    assert 'select_backdrop (only op, op_id, name)' in contract
-    assert 'sheet_layout":"1x1"' in contract
-    assert 'asset_type "costume", never "sprite"' in contract
+    assert '| add_builtin_sprite | op, op_id, name, x, y, size, source | tags | target, select_after, costumes |' in contract
+    assert '| add_sprite | op, op_id, name, x, y, size, costumes | tags | target, source, select_after |' in contract
+    assert '| delete_sprite | op, op_id, name, target | none | source, x, y, size, tags, select_after, costumes |' in contract
+    assert '| add_costume | op, op_id, target, name, source | tags, select_after (select_after=False) | x, y, size, costumes |' in contract
+    assert '| add_backdrop | op, op_id, name, source | tags, select_after (select_after=False) | target, x, y, size, costumes |' in contract
+    assert '| select_backdrop | op, op_id, name | none | none |' in contract
+    assert 'RESOURCE_SOURCE_CONTRACT_JSON=' in contract
+    assert 'sheet_layout' in contract
+    assert 'add_sprite=costume' in contract
     assert 'ONLY current_target may use modify or rewrite' in contract
     assert 'stage, existing_sprite and created_sprite entries MUST use exactly "append"' in contract
 
@@ -371,7 +523,7 @@ def test_knowledge_base_has_one_transport_and_input_protocol():
     assert 'UNSUPPORTED_SCRATCH_REQUEST' not in knowledge
     assert 'kind":"reporter"' not in knowledge
     assert '不存在独立的 boolean 或 reporter wire kind' in knowledge
-    assert '统一生成传输使用标签流' in knowledge
+    assert '统一生成传输由 system prompt 的 FINAL OUTPUT CONTRACT 选择 tagged stream 或 JSON object' in knowledge
 
 
 @pytest.mark.asyncio
@@ -379,21 +531,26 @@ async def test_manifest_resource_op_validation_reports_rule_detail(caplog):
     caplog.set_level(logging.WARNING, logger='app.orchestration.orchestrator')
     bad = project_stream_output().replace(
         '"resource_ops": []',
-        '"resource_ops": [{"op": "add_sprite", "op_id": "op_ball", "name": "ball", "x": 0, "y": 0, "size": 60, "tags": [], "source": {"kind": "scratch_library", "asset_type": "sprite", "search_terms": ["ball"]}}]',
+        '"resource_ops": [{"op":"add_backdrop","op_id":"backdrop_bad","name":"森林","source":{"kind":"scratch_library","asset_type":"costume","search_terms":["森林"]}}]',
     )
-    provider = MockProvider(bad)
+    bad_segments = project_segment_outputs(bad)
+    repaired_op = backdrop_resource()
+    repaired_op['op_id'] = 'backdrop_bad'
+    good_segments = project_segment_outputs()
+    resource_output = '<resource_op>' + json.dumps(repaired_op, ensure_ascii=False) + '</resource_op>'
+    provider = routed_project_provider(good_segments, manifest=[bad_segments[2]], resource_ops=[resource_output])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
 
-    validation = [event for event in events if event.type == 'validation_error']
-    assert validation and validation[0].phase == 'plan'
-    assert validation[0].data['path'] == '/resource_ops/0'
-    assert validation[0].data['code'] == 'SCHEMA_VALIDATION_ERROR'
-    assert validation[0].data['operation'] == 'manifest'
-    assert 'costume source cannot be a sprite' in validation[0].data['detail']
-    assert events[-1].type == 'error'
-    assert events[-1].data['code'] == 'OUTPUT_VALIDATION_ERROR'
-    assert any('costume source cannot be a sprite' in record.getMessage() for record in caplog.records)
+    repair = next(event for event in events if event.type == 'repair')
+    assert repair.phase == 'plan'
+    assert repair.data['path'] == '/resource_ops/0/source/asset_type'
+    assert repair.data['code'] == 'INVALID_BACKDROP_SOURCE'
+    assert repair.data['operation'] == 'add_backdrop'
+    assert repair.data['expected'].endswith('asset_type=backdrop')
+    assert repair.data['resume'] == 'resource_op'
+    assert events[-1].type == 'complete'
+    assert any('INVALID_BACKDROP_SOURCE' in record.getMessage() for record in caplog.records)
 
 
 def backdrop_resource(select_after_marker=True):
@@ -408,6 +565,38 @@ def backdrop_resource(select_after_marker=True):
     return value
 
 
+@pytest.mark.asyncio
+async def test_resource_op_repair_has_two_local_rounds():
+    bad = project_stream_output().replace(
+        '"resource_ops": []',
+        '"resource_ops": [{"op":"add_backdrop","op_id":"backdrop_bad","name":"森林","source":{"kind":"scratch_library","asset_type":"costume","search_terms":["森林"]}}]',
+    )
+    bad_segments = project_segment_outputs(bad)
+    good_segments = project_segment_outputs()
+    invalid_op = backdrop_resource()
+    invalid_op['op_id'] = 'backdrop_bad'
+    invalid_op['source']['asset_type'] = 'costume'
+    valid_op = backdrop_resource()
+    valid_op['op_id'] = 'backdrop_bad'
+    provider = routed_project_provider(
+        good_segments,
+        manifest=[bad_segments[2]],
+        resource_ops=[
+            '<resource_op>' + json.dumps(invalid_op) + '</resource_op>',
+            '<resource_op>' + json.dumps(valid_op) + '</resource_op>',
+        ],
+    )
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    repairs = [event for event in events if event.type == 'repair']
+    assert [event.data['attempt'] for event in repairs] == [1, 2]
+    assert all(event.data['repair_scope'] == 'resource_op' for event in repairs)
+    assert len(provider.calls) == 7
+    assert events[-1].type == 'complete'
+
+
 def test_add_backdrop_normalizes_compatibility_fields_and_defaults():
     raw = backdrop_resource(select_after_marker=False)
     raw.update({'target': {'kind': 'stage'}, 'x': None, 'y': None, 'size': None})
@@ -419,13 +608,13 @@ def test_add_backdrop_normalizes_compatibility_fields_and_defaults():
         'DEFAULT_APPLIED', 'REDUNDANT_STAGE_TARGET_REMOVED', 'NULL_FIELD_REMOVED',
         'NULL_FIELD_REMOVED', 'NULL_FIELD_REMOVED',
     ]
-    operation = ResourceOp.model_validate(raw)
+    operation = TypeAdapter(ResourceOp).validate_python(raw)
     assert operation.select_after is False
-    assert operation.target is None
+    assert 'target' not in operation.model_dump()
 
 
 def test_add_costume_defaults_select_after_to_false():
-    operation = ResourceOp.model_validate({
+    operation = TypeAdapter(ResourceOp).validate_python({
         'op': 'add_costume',
         'op_id': 'costume_1',
         'target': {'kind': 'current_target'},
@@ -479,16 +668,167 @@ async def test_protocol_failure_emits_single_error_event():
 
 @pytest.mark.asyncio
 async def test_orchestrator_resolves_each_project_program_from_project_context():
-    provider = MockProvider(project_stream_output())
+    provider = routed_project_provider(project_segment_outputs(), delays={'program:0': 0.03})
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
 
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == 5
     assert events[-1].type == 'complete', [(event.type, event.phase, event.data) for event in events]
     assert events[-1].data['program_count'] == 2
     completed = [event for event in events if event.type == 'phase_complete' and event.phase == 'program']
     assert [event.data['target_index'] for event in completed] == [0, 1]
     assert 'stage-1' in provider.calls[0][0]['content']
+    assert 'requirements' in provider.calls[1][-1]['content']
+    assert 'manifest' in provider.calls[2][-1]['content']
+
+
+@pytest.mark.asyncio
+async def test_structured_project_transport_forwards_schemas_and_decodes_programs():
+    segments = project_segment_outputs()
+    outputs = {
+        'requirements': json.loads(re.search(r'<requirements>(.*?)</requirements>', segments[0], re.S).group(1)),
+        'plan': json.loads(re.search(r'<plan>(.*?)</plan>', segments[1], re.S).group(1)),
+        'manifest': json.loads(re.search(r'<manifest>(.*?)</manifest>', segments[2], re.S).group(1)),
+        'program:0': structured_program_payload(segments[3]),
+        'program:1': structured_program_payload(segments[4]),
+    }
+    provider = StructuredProjectProvider(outputs)
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    assert len(provider.calls) == 5
+    assert events[-1].type == 'complete'
+    assert events[-1].data['program_count'] == 2
+    assert all(json_output is True and schema is not None for _, json_output, schema in provider.transport_calls)
+    schemas = {segment: schema for segment, _, schema in provider.transport_calls}
+    assert schemas['manifest']['properties']['schema_version']['const'] == 2
+    assert 'scripts' in schemas['program:0']['properties']
+    assert any(event.type == 'script_ready' and event.data['target_index'] == 1 for event in events)
+
+
+
+def one_target_project_segments():
+    segments = project_segment_outputs()
+    manifest = json.loads(re.search(r'<manifest>(.*?)</manifest>', segments[2], re.S).group(1))
+    manifest['program_targets'] = manifest['program_targets'][1:2]
+    program = segments[4].replace('target_index="1"', 'target_index="0"')
+    return [segments[0], segments[1], '<manifest>' + json.dumps(manifest) + '</manifest>', program]
+
+
+@pytest.mark.asyncio
+async def test_project_flow_runs_four_segments_for_one_target():
+    segments = one_target_project_segments()
+    provider = RoutedSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': [segments[2]],
+        'resource_op': [],
+        'program:0': [segments[3]],
+        'program:1': [],
+    })
+    payload = project_request_payload()
+    payload['project_context']['targets'] = payload['project_context']['targets'][1:2]
+    request = UnifiedGenerationRequest.model_validate(payload)
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    assert len(provider.calls) == 4
+    assert events[-1].type == 'complete'
+    assert events[-1].data['program_count'] == 1
+
+
+@pytest.mark.asyncio
+async def test_capable_provider_uses_json_objects_for_root_segments():
+    segments = project_segment_outputs()
+    provider = StructuredSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': [segments[2]],
+        'resource_op': [],
+        'program:0': [segments[3]],
+        'program:1': [segments[4]],
+    })
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    assert provider.json_flags[:3] == [('requirements', True), ('plan', True), ('manifest', True)]
+    assert provider.json_flags[3:] == [('program:0', False), ('program:1', False)]
+    assert events[-1].type == 'complete'
+    assert not any(event.type == 'validation_error' for event in events)
+
+
+@pytest.mark.asyncio
+async def test_manifest_v1_reports_unsupported_schema_version():
+    segments = project_segment_outputs()
+    segments[2] = segments[2].replace('"schema_version": 2', '"schema_version": 1', 1)
+    provider = RoutedSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': [segments[2]],
+        'resource_op': [],
+        'program:0': [segments[3]],
+        'program:1': [segments[4]],
+    })
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    failure = next(event for event in events if event.type == 'validation_error')
+    assert failure.data['code'] == 'UNSUPPORTED_SCHEMA_VERSION'
+    assert failure.data['path'] == '/schema_version'
+
+
+def test_project_program_shared_state_normalizes_omitted_list_values():
+    shared_state = ProjectSharedState.model_validate({'variables': [], 'lists': [{'name': 'items', 'value': [], 'scope': 'global'}], 'broadcasts': []})
+    program = ProgramIR.model_validate({'schema_version': 1, 'summary': 'list parity', 'remove_script_ids': [], 'variables': [], 'lists': [{'name': 'items', 'scope': 'global'}], 'broadcasts': [], 'scripts': [script()]})
+
+    assert validate_project_program_shared_state(program, shared_state) is program
+
+
+@pytest.mark.asyncio
+async def test_manifest_missing_schema_version_reports_schema_error():
+    segments = project_segment_outputs()
+    segments[2] = segments[2].replace('"schema_version": 2,', '', 1)
+    provider = RoutedSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': [segments[2]],
+        'resource_op': [],
+        'program:0': [segments[3]],
+        'program:1': [segments[4]],
+    })
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    failure = next(event for event in events if event.type == 'validation_error')
+    assert failure.data['code'] == 'SCHEMA_VALIDATION_ERROR'
+    assert failure.data['path'] == '/schema_version'
+
+
+@pytest.mark.asyncio
+async def test_project_program_global_state_must_match_manifest():
+    segments = project_segment_outputs()
+    manifest = json.loads(segments[2].split('<manifest>', 1)[1].split('</manifest>', 1)[0])
+    manifest['shared_state']['variables'] = [{'name': 'score', 'value': 0, 'scope': 'global'}]
+    segments[2] = segments[2].split('<manifest>', 1)[0] + '<manifest>' + json.dumps(manifest) + '</manifest>' + segments[2].split('</manifest>', 1)[1]
+    provider = RoutedSegmentProvider({
+        'requirements': [segments[0]],
+        'plan': [segments[1]],
+        'manifest': [segments[2]],
+        'resource_op': [],
+        'program:0': [segments[3]],
+        'program:1': [segments[4]],
+    })
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    failure = next(event for event in events if event.type == 'validation_error')
+    assert failure.data['code'] == 'PROGRAM_CONTRACT_INVALID'
+    assert failure.data['path'] == '/variables'
 
 
 def test_tagged_parser_rejects_malformed_program_name():
@@ -540,13 +880,15 @@ def bad_mode_manifest_output():
 
 @pytest.mark.asyncio
 async def test_orchestrator_repairs_manifest_mode_violation():
-    provider = MockProvider([bad_mode_manifest_output(), project_stream_output()])
+    bad_segments = project_segment_outputs(bad_mode_manifest_output())
+    good_segments = project_segment_outputs()
+    provider = routed_project_provider(good_segments, manifest=[bad_segments[2], good_segments[2]])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     orchestrator = GenerationOrchestrator(PromptBuilder(knowledge_base='fixed'), max_repair_rounds=1)
 
     events = [event async for event in orchestrator.generate_unified(request, provider)]
 
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 6
     repair = [event for event in events if event.type == 'repair']
     assert repair and repair[0].data['attempt'] == 1
     assert repair[0].data['resume'] == 'manifest'
@@ -554,15 +896,18 @@ async def test_orchestrator_repairs_manifest_mode_violation():
     assert events[-1].type == 'complete'
     assert events[-1].data['program_count'] == 2
     assert not any(event.type == 'validation_error' for event in events)
-    repair_messages = provider.calls[1]
-    assert any(item['role'] == 'assistant' and '<manifest>' in item['content'] for item in repair_messages)
-    assert any(item['role'] == 'user' and 'must use append' in item['content'] and '从 <manifest> 标签开始' in item['content'] for item in repair_messages)
+    repair_messages = provider.calls[3]
+    repair_prompt = repair_messages[-1]['content']
+    assert 'must use append' in repair_prompt
+    assert 'failed_object' in repair_prompt
+    assert '"mode":"modify"' in repair_prompt
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_repairs_program_validation_error():
-    bad = project_stream_output().replace('opcode": "event_whenflagclicked"', 'opcode": "motion_movesteps"', 1)
-    provider = MockProvider([bad, project_stream_output()])
+    good_segments = project_segment_outputs()
+    bad_segments = project_segment_outputs(project_stream_output().replace('opcode": "event_whenflagclicked"', 'opcode": "motion_movesteps"', 1))
+    provider = routed_project_provider(good_segments, program0=[bad_segments[3], good_segments[3]], program1=[good_segments[4]])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     orchestrator = GenerationOrchestrator(PromptBuilder(knowledge_base='fixed'), max_repair_rounds=1)
 
@@ -572,17 +917,23 @@ async def test_orchestrator_repairs_program_validation_error():
     assert repair and repair[0].data['resume'] == 'program'
     assert events[-1].type == 'complete'
     assert events[-1].data['program_count'] == 2
+    assert [event.data['target_index'] for event in events if event.type == 'phase_complete' and event.phase == 'program'] == [0, 1]
+    repair_prompt = provider.calls[5][-1]['content']
+    assert 'failed_object' in repair_prompt
+    assert '"scripts"' in repair_prompt
+    assert bad_segments[3] not in repair_prompt
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_repair_exhaustion_yields_one_terminal_error():
-    provider = MockProvider(bad_mode_manifest_output())
+    bad_segments = project_segment_outputs(bad_mode_manifest_output())
+    provider = routed_project_provider(bad_segments, manifest=[bad_segments[2], bad_segments[2]], program0=[], program1=[])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     orchestrator = GenerationOrchestrator(PromptBuilder(knowledge_base='fixed'), max_repair_rounds=1)
 
     events = [event async for event in orchestrator.generate_unified(request, provider)]
 
-    assert len(provider.calls) == 2
+    assert len(provider.calls) == 4
     repairs = [event for event in events if event.type == 'repair']
     assert len(repairs) == 1
     validation = [event for event in events if event.type == 'validation_error']
@@ -594,13 +945,16 @@ async def test_orchestrator_repair_exhaustion_yields_one_terminal_error():
 
 @pytest.mark.asyncio
 async def test_orchestrator_repairs_second_round_when_first_repair_fails():
-    provider = MockProvider([bad_mode_manifest_output(), bad_mode_manifest_output(), project_stream_output()])
+    good_segments = project_segment_outputs()
+    bad_program = project_segment_outputs(project_stream_output().replace('opcode": "event_whenflagclicked"', 'opcode": "motion_movesteps"', 1))[3]
+    provider = routed_project_provider(good_segments, program0=[bad_program, bad_program, good_segments[3]], program1=[good_segments[4]])
     request = UnifiedGenerationRequest.model_validate(project_request_payload())
     orchestrator = GenerationOrchestrator(PromptBuilder(knowledge_base='fixed'), max_repair_rounds=2)
 
     events = [event async for event in orchestrator.generate_unified(request, provider)]
 
-    assert len(provider.calls) == 3
+    assert len(provider.calls) == 7
     repairs = [event for event in events if event.type == 'repair']
     assert [item.data['attempt'] for item in repairs] == [1, 2]
+    assert events[-1].type == 'complete'
     assert events[-1].type == 'complete'

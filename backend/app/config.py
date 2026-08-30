@@ -25,7 +25,7 @@ class Settings(BaseSettings):
         default=480, ge=10, le=720, validation_alias='AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS',
     )
     ai_blocks_max_repair_rounds: int = Field(
-        default=1, ge=0, le=3, validation_alias='AI_BLOCKS_MAX_REPAIR_ROUNDS',
+        default=2, ge=0, le=3, validation_alias='AI_BLOCKS_MAX_REPAIR_ROUNDS',
     )
     max_prompt_length: int = Field(default=800, ge=10, le=2_000)
 
