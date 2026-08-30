@@ -33,7 +33,6 @@ export type ImageGenerationSource = {
   sheet_layout: '1x1';
 };
 export type ProjectManifestResourceSource = ScratchLibrarySource | ImageGenerationSource;
-export type ProjectPlanResourceSource = ProjectManifestResourceSource;
 export interface CostumeResource {
   name: string;
   source: ProjectManifestResourceSource;
@@ -60,7 +59,6 @@ export interface ProjectManifest {
   program_targets: ProjectProgramTarget[];
   shared_state?: ProjectSharedState;
 }
-export type ProjectPlan = ProjectManifest;
 
 const issue = (path: string, message: string): ValidationIssue => ({path, message});
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -98,7 +96,12 @@ function validateTarget(value: unknown, path: string, issues: ValidationIssue[],
     if ('name' in value || 'op_id' in value) issues.push(issue(path, kind + ' cannot contain name or op_id'));
   } else if (kind === 'existing_sprite') {
     if (!isString(value.name, 120)) issues.push(issue(path + '.name', 'is required'));
-    else if (existingSpriteNames.length > 0 && !existingSpriteNames.includes(value.name)) issues.push(issue(path + '.name', 'must refer to an existing sprite'));
+    else if (existingSpriteNames.length > 0) {
+      const wanted = value.name.trim().toLocaleLowerCase();
+      const matches = existingSpriteNames.filter(item => item.trim().toLocaleLowerCase() === wanted);
+      if (matches.length === 0) issues.push(issue(path + '.name', 'must refer to an existing sprite'));
+      else if (matches.length > 1) issues.push(issue(path + '.name', 'must refer to a uniquely named sprite'));
+    }
   } else {
     if (!isString(value.op_id, 120)) issues.push(issue(path + '.op_id', 'is required'));
     else if (!created.has(value.op_id)) issues.push(issue(path + '.op_id', 'must reference a prior sprite resource operation'));
@@ -118,7 +121,7 @@ function validateOperation(value: unknown, index: number, issues: ValidationIssu
   if (!isString(value.op_id, 120)) issues.push(issue(path + '.op_id', 'must be a non-empty identifier'));
   if (!isString(value.name, 120)) issues.push(issue(path + '.name', 'must be a non-empty name'));
   const op = value.op;
-  if (!['add_builtin_sprite', 'add_sprite', 'add_costume', 'add_backdrop', 'select_backdrop'].includes(String(op))) {
+  if (!['add_builtin_sprite', 'add_sprite', 'add_costume', 'add_backdrop', 'select_backdrop', 'delete_sprite'].includes(String(op))) {
     issues.push(issue(path + '.op', 'is not supported'));
     return;
   }
@@ -243,6 +246,3 @@ export function assertProjectManifest(value: unknown, existingSpriteNames?: stri
   const result = validateProjectManifest(value, existingSpriteNames);
   if (!result.valid) throw new Error(result.issues.map(item => item.path + ': ' + item.message).join('; '));
 }
-
-export const validateProjectPlan = validateProjectManifest;
-export const assertProjectPlan = assertProjectManifest;

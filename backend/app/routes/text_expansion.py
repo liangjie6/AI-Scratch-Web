@@ -55,7 +55,7 @@ async def expand_text(
             async for text in provider.stream(messages):
                 received = True
                 chunk_count += 1
-                logger.info('text_expansion_delta request_id=%s index=%s text=%s', request_id, chunk_count, text)
+                logger.debug('text_expansion_delta: %s', text)
                 yield _sse('content_delta', {'text': text})
             if not received:
                 raise AgnesTextProviderError('Agnes returned no content')

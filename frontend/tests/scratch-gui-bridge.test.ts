@@ -26,4 +26,56 @@ describe('ScratchGuiBridge resource operations', () => {
   it('rejects stage targets for costumes', async () => {
     const f = fixture(); await expect(f.bridge.addCostumeToTarget('stage', costume('错误'))).rejects.toThrow('已有角色');
   });
+
+  it('re-arms readiness and invalidates an old generation release on VM rebind', async () => {
+    const f = fixture();
+    await expect(f.bridge.ready).resolves.toBe(f.vm);
+    const releaseOldGeneration = f.bridge.beginBlockGeneration();
+    const secondVm = {...f.vm, editingTarget: f.sprite, runtime: {...f.vm.runtime, targets: [f.stage, f.sprite]}};
+    f.bridge.setVm(secondVm as any);
+    expect(f.bridge.currentVm).toBe(secondVm);
+    await expect(f.bridge.ready).resolves.toBe(secondVm);
+    const releaseNewGeneration = f.bridge.beginBlockGeneration();
+    releaseOldGeneration();
+    expect(() => f.bridge.beginBlockGeneration()).toThrow('已有 AI 积木生成任务');
+    releaseNewGeneration();
+    expect(() => f.bridge.beginBlockGeneration()).not.toThrow();
+  });
+
+  it('re-arms readiness when a disposed bridge is reused', async () => {
+    const f = fixture();
+    const oldReady = f.bridge.ready;
+    oldReady.catch(() => undefined);
+    f.bridge.dispose();
+    const secondVm = {...f.vm, editingTarget: f.sprite, runtime: {...f.vm.runtime, targets: [f.stage, f.sprite]}};
+    f.bridge.setVm(secondVm as any);
+    f.bridge.markProjectLoaded();
+    await expect(f.bridge.ready).resolves.toBe(secondVm);
+  });
+
+  it('invalidates a project transaction when the VM is rebound', () => {
+    const f = fixture();
+    const transaction = f.bridge.beginProjectTransaction();
+    const secondVm = {...f.vm, editingTarget: f.sprite, runtime: {...f.vm.runtime, targets: [f.stage, f.sprite]}};
+    f.bridge.setVm(secondVm as any);
+    expect(() => transaction.assertActive()).toThrow('项目事务已失效');
+    transaction.release();
+  });
+
+  it('clears VM listeners and operation state on dispose', () => {
+    const f = fixture();
+    const targetListener = vi.fn();
+    const projectListener = vi.fn();
+    f.bridge.subscribeTargets(targetListener);
+    f.bridge.subscribeProject(projectListener);
+    const release = f.bridge.beginBlockGeneration();
+    f.bridge.dispose();
+    expect(f.bridge.currentVm).toBeNull();
+    expect(f.bridge.isReady).toBe(false);
+    expect(f.bridge.importIsFatal).toBe(false);
+    expect(() => f.bridge.beginBlockGeneration()).not.toThrow();
+    release();
+    expect(targetListener).not.toHaveBeenCalled();
+    expect(projectListener).not.toHaveBeenCalled();
+  });
 });

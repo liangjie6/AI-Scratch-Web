@@ -22,10 +22,11 @@ class Settings(BaseSettings):
     ai_blocks_max_request_bytes: int = Field(default=262_144, ge=16_384, le=1_048_576, validation_alias='AI_BLOCKS_MAX_REQUEST_BYTES')
     ai_blocks_max_concurrency: int = Field(default=2, ge=1, le=8, validation_alias='AI_BLOCKS_MAX_CONCURRENCY')
     ai_blocks_provider_timeout_seconds: float = Field(
-        default=360, ge=10, le=360, validation_alias='AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS',
+        default=480, ge=10, le=720, validation_alias='AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS',
     )
-    ai_blocks_retry_attempts: int = Field(default=3, ge=1, le=5, validation_alias='AI_BLOCKS_RETRY_ATTEMPTS')
-    ai_blocks_retry_delay_seconds: float = Field(default=0.5, ge=0, le=10, validation_alias='AI_BLOCKS_RETRY_DELAY_SECONDS')
+    ai_blocks_max_repair_rounds: int = Field(
+        default=1, ge=0, le=3, validation_alias='AI_BLOCKS_MAX_REPAIR_ROUNDS',
+    )
     max_prompt_length: int = Field(default=800, ge=10, le=2_000)
 
     provider_base_url: str = 'https://sui-xiang.com/v1'

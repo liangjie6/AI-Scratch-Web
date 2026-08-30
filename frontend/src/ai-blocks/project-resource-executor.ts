@@ -27,7 +27,9 @@ function targetName(target: ScratchTargetLike): string {
 
 function findSprite(bridge: ScratchGuiBridge, name: string): ScratchTargetLike | undefined {
   const wanted = name.trim().toLocaleLowerCase();
-  return bridge.currentVm?.runtime.targets.find(item => !item.isStage && targetName(item).toLocaleLowerCase() === wanted);
+  const matches = bridge.currentVm?.runtime.targets.filter(item => !item.isStage && item.isOriginal !== false && targetName(item).toLocaleLowerCase() === wanted) ?? [];
+  if (matches.length > 1) throw new Error('已有角色名称不唯一：' + name);
+  return matches[0];
 }
 
 function targetIdFor(
@@ -56,7 +58,10 @@ export function createProjectResourceExecutor(options: ResourceExecutorOptions):
       if (op.op === 'delete_sprite') {
         const targetId = targetIdFor(options.bridge, op.target, options.currentTargetId, context.result);
         if (targetId === options.currentTargetId) throw new Error('不能删除当前正在编辑的角色');
-        options.bridge.currentVm?.deleteSprite?.(targetId);
+        const vm = options.bridge.currentVm;
+        if (!vm) throw new Error('Scratch VM 尚未就绪');
+        await Promise.resolve(vm.deleteSprite?.(targetId));
+        if (vm.runtime.targets.some(target => target.id === targetId)) throw new Error('角色删除未完成：' + targetId);
         return;
       }
       if (op.op === 'add_sprite' || op.op === 'add_builtin_sprite') {

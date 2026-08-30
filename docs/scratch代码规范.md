@@ -8,19 +8,19 @@
 
 ## 1. 数据流与边界
 
-1. 前端读取当前编辑目标，生成目标快照和当前脚本上下文。
-2. 后端通过 /api/ai-blocks/requirements 归纳需求。
-3. 后端通过 SSE /api/ai-blocks/generate 返回计划和 ProgramIR。
-4. 后端使用 Pydantic 和 block contract 校验，前端再按自身编译契约校验并拒绝超出前端限制的结果。
-5. 前端将 ProgramIR 编译为 VM block graph，生成 parent、next、input、shadow 和字段 ID。
-6. 前端渐进式创建积木并刷新 Scratch 工作区；失败时回滚到生成前快照。
+1. 前端读取当前编辑目标；项目模式同时生成项目快照和全部目标上下文。
+2. 可选的自然语言对话通过 /api/ai-blocks/chat 完成，不参与生成提交。
+3. 统一生成通过一次 SSE /api/ai-blocks/generate-unified 返回 requirements、plan、manifest，以及按 target 输出的 metadata、shared_state 和 script_ready。
+4. 后端使用 Pydantic 和 block contract 校验，前端在 Prepare 阶段再次按自身编译契约校验，且此阶段不得写入 VM。
+5. 前端将每个 ProgramIR 编译为 VM block graph，生成 parent、next、input、shadow 和字段 ID。
+6. Commit 阶段只创建一个 SB3 备份，在同一个外层事务中应用资源和全部目标程序；失败时恢复备份并清理已持久化的生成素材。
 
 因此：
 
 - AI 必须输出 ProgramIR JSON，禁止直接输出 hydrated VM block、XML、SB3、Base64 或 JavaScript。
 - AI 不生成 Scratch block ID、变量 ID、列表 ID、广播 ID、assetId 或 md5ext。
 - AI 只描述业务意图、脚本结构、字段名称和输入值；ID 和 VM 连接关系由前端编译器生成。
-- 生成目标必须是当前编辑的舞台或角色，不能跨目标写入局部变量、积木或资源。
+- single_sprite 生成只允许当前编辑目标；project 生成可按受控 manifest 引用舞台、已有角色和已创建角色。
 - 目标快照发生变化后，前端会拒绝继续应用结果，必须重新生成。
 
 ## 2. ProgramIR 顶层格式
@@ -220,13 +220,19 @@ ProgramIR 校验通过不等于 SB3 已完成验收。最终导出仍应按 scra
 
 ## 8. 后端 SSE 合同
 
-### 8.1 需求接口
+### 8.1 对话接口
 
-POST /api/ai-blocks/requirements 请求包含 session_id、request_id、messages、target、thinking、proceed_with_defaults；响应包含 ready、title、goal、behavior_steps、triggers、controls、success_criteria、missing_questions。
+POST /api/ai-blocks/chat 只接收 session_id、request_id、messages、target、thinking 和可选的 model_tier，发送 assistant_delta、reasoning_delta、message_complete 或 message_error。每个事件都必须携带匹配的 request_id；完成后继续输出属于协议错误。
 
-### 8.2 生成接口
+### 8.2 统一生成接口
 
-POST /api/ai-blocks/generate 通常依次发送 phase、plan_ready、program_ready、message_complete。program_ready 的 data 必须是 {"program": ProgramIR}。message_complete 之前流结束属于失败，前端不得应用不完整结果。模型修复不能绕过 schema 和 contract 校验。
+POST /api/ai-blocks/generate-unified 只调用一次 provider 流。输出标签顺序为 requirements、plan、manifest（仅 project）、program；每个 program 依次包含 metadata、shared_state 和一个或多个 script。SSE 事件使用 cache_hit、phase_start、phase_complete、content_delta、reasoning_delta、metadata、shared_state、script_ready、validation_error、error 和 complete。
+
+program 的 phase_complete 必须带 target_index 和 script_count；script_ready 必须带 target_index、index、total。项目清单和每个 ProgramIR 都必须通过后端及前端校验。流完成前断开、request_id 不匹配、未知事件、重复属性或完成后继续输出都属于失败，前端不得应用不完整结果。
+
+### 8.3 校验接口
+
+POST /api/ai-blocks/validate 接收 kind 为 program 或 manifest 的严格请求，返回 {"valid": boolean, "issues": []}。ProgramIR 校验还必须结合 target_kind 和 mode；manifest 校验不得携带程序专用字段。
 
 ## 9. 验证清单
 
@@ -244,7 +250,7 @@ npm --prefix frontend run build
 - frontend/tests/program-compiler.test.ts：IR、shadow、父子引用、变量解析、循环和限制。
 - frontend/tests/opcode-catalog-contract.test.ts：前后端 opcode 契约同步。
 - frontend/tests/generation-runner.test.ts：注入、回滚、撤销。
-- frontend/tests/e2e/ai-blocks.spec.ts：Scratch GUI、SSE、锁定、渐进注入和撤销。
+- frontend/tests/e2e/ai-blocks.spec.ts：Scratch GUI、统一 SSE、锁定、原子提交和撤销。
 - backend/tests/test_ai_blocks.py：后端 schema、模式和 contract 校验。
 
 ### 9.2 5173 浏览器验收

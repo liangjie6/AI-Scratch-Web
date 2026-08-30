@@ -12,7 +12,7 @@
 
 ## 输出协议
 
-成功时只输出一个严格 JSON 对象，不输出 Markdown、代码围栏、解释、注释、前后缀或第二个对象。
+统一生成传输使用标签流；每个标签内部是一个严格 JSON 对象。不要在标签外输出 Markdown、代码围栏、解释、注释、前后缀或第二个对象。ProgramIR 字段会分布在 program 的 metadata、shared_state 和 script 标签中。
 
 顶层对象只能包含以下属性：
 
@@ -304,5 +304,5 @@ protected=true 的旧脚本只能保留，不得删除或重写。
 6. 检查 reporter 的返回 shape、菜单 shadow、可选输入、C-block/terminal 分类、广播并发、列表 1-based 边界和 wait_until 的可达性。
 7. 检查 LEVEL_CONTEXT 的 allowed/forbidden/required 约束；模板、完整程序和版本副本不得混淆处理。
 
-现在只输出符合上述协议的 ProgramIR JSON。
+统一生成请求必须遵循 system prompt 末尾的 tagged stream 输出协议；不要直接输出裸 ProgramIR JSON。
 

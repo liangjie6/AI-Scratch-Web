@@ -140,6 +140,9 @@ declare global {
     runtime: {
       targets: ScratchTargetLike[];
       on?: (event: string, listener: (...args: unknown[]) => void) => void;
+      addListener?: (event: string, listener: (...args: unknown[]) => void) => void;
+      off?: (event: string, listener: (...args: unknown[]) => void) => void;
+      removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
       getTargetById?: (targetId: string) => ScratchTargetLike | null;
       getTargetForStage?: () => ScratchTargetLike;
       emitProjectChanged?: () => void;

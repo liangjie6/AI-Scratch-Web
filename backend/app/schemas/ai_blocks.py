@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from copy import deepcopy
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -54,6 +53,18 @@ class TargetContext(StrictModel):
         return value
 
 
+class ProjectTargetContext(TargetContext):
+    target_id: ShortString
+    revision: int = Field(ge=0)
+
+
+class ProjectContext(StrictModel):
+    project_id: ShortString
+    version: int = Field(ge=0)
+    targets: list[ProjectTargetContext] = Field(min_length=1, max_length=12)
+    shared_state: dict[str, Any] = Field(default_factory=dict, max_length=16)
+
+
 class ThinkingSettings(StrictModel):
     enabled: bool = True
     strength: Literal['low', 'medium', 'high', 'xhigh', 'max'] = 'medium'
@@ -72,10 +83,6 @@ class ChatRequest(AIBlocksRequestBase):
     pass
 
 
-class RequirementsRequest(AIBlocksRequestBase):
-    proceed_with_defaults: bool = False
-
-
 class RequirementsResponse(StrictModel):
     ready: bool
     title: str = Field(max_length=200)
@@ -84,19 +91,8 @@ class RequirementsResponse(StrictModel):
     triggers: list[ShortString] = Field(max_length=30)
     controls: list[ShortString] = Field(max_length=30)
     success_criteria: list[ShortString] = Field(max_length=30)
-    missing_questions: list[ShortString] = Field(max_length=20)
-
-
-class GenerateRequest(AIBlocksRequestBase):
-    requirements: RequirementsResponse
-    plan: Plan | None = None
-    protocol_version: Literal[1, 2] = 1
-    output_contract: Literal['program_ir', 'project_manifest', 'project_program'] = 'program_ir'
-    scope: Literal['single_sprite', 'project'] = 'single_sprite'
-    project_manifest: ProjectManifest | None = None
-    program_target: ProjectProgramTarget | None = None
-    asset_policy: Literal['builtin_first', 'existing_only', 'allow_generation'] = 'builtin_first'
-    asset_match_evidence: list[AssetMatchEvidence] = Field(default_factory=list, max_length=40)
+    # The model sometimes omits this when there are no open questions; treat it as optional.
+    missing_questions: list[ShortString] = Field(default_factory=list, max_length=20)
 
 
 class Plan(StrictModel):
@@ -145,7 +141,7 @@ class ProjectManifest(StrictModel):
             ids.add(operation.op_id)
             if operation.op in {'add_sprite', 'add_builtin_sprite'}:
                 created.add(operation.op_id)
-            target = operation.target
+            target = getattr(operation, 'target', None)
             if target and target.kind == 'created_sprite' and target.op_id not in created:
                 raise ValueError('created_sprite must reference a prior add_sprite or add_builtin_sprite operation')
         keys = [(item.target.kind, item.target.name, item.target.op_id) for item in self.program_targets]
@@ -162,6 +158,42 @@ class ProjectManifest(StrictModel):
 class ProjectProgramResponse(StrictModel):
     target: ProjectProgramTarget
     program: ProgramIR
+
+
+class UnifiedGenerationRequest(AIBlocksRequestBase):
+    scope: Literal['single_sprite', 'project'] = 'single_sprite'
+    asset_policy: Literal['builtin_first', 'existing_only', 'allow_generation'] = 'builtin_first'
+    project_context: ProjectContext | None = None
+    proceed_with_defaults: bool = True
+
+    @model_validator(mode='after')
+    def validate_scope_context(self) -> UnifiedGenerationRequest:
+        if self.scope == 'project' and self.project_context is None:
+            raise ValueError('project_context is required for project generation')
+        if self.scope == 'single_sprite' and self.project_context is not None:
+            raise ValueError('project_context is only valid for project generation')
+        return self
+
+
+class ValidationRequest(StrictModel):
+    kind: Literal['program', 'manifest']
+    payload: dict[str, Any]
+    target_kind: Literal['stage', 'sprite'] = 'sprite'
+    mode: Literal['modify', 'append', 'rewrite'] = 'append'
+    current_program: str = Field(default='', max_length=40_000)
+
+    @model_validator(mode='after')
+    def validate_endpoint_contract(self) -> ValidationRequest:
+        if self.current_program:
+            try:
+                parsed = json.loads(self.current_program)
+            except json.JSONDecodeError as exc:
+                raise ValueError('current_program must be valid JSON') from exc
+            if not isinstance(parsed, dict):
+                raise ValueError('current_program must contain a JSON object')
+        if self.kind == 'manifest' and {'target_kind', 'mode', 'current_program'} & self.model_fields_set:
+            raise ValueError('manifest validation does not accept program-only fields')
+        return self
 
 
 class LiteralInput(StrictModel):
@@ -238,6 +270,38 @@ class Script(StrictModel):
     blocks: list[Block] = Field(min_length=1, max_length=MAX_BLOCKS)
 
 
+class ProgramMetadata(StrictModel):
+    schema_version: Literal[1] = 1
+    summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
+    remove_script_ids: list[str] = Field(default_factory=list, max_length=MAX_SCRIPTS)
+
+    @field_validator('remove_script_ids')
+    @classmethod
+    def validate_removed_ids(cls, value: list[str]) -> list[str]:
+        pattern = re.compile(r'^script_[A-Za-z0-9_-]+$')
+        if any(not pattern.fullmatch(item) for item in value):
+            raise ValueError('remove_script_ids must use script_N style ids')
+        if len(value) != len(set(value)):
+            raise ValueError('remove_script_ids must be unique')
+        return value
+
+
+class ProgramState(StrictModel):
+    variables: list[VariableDefinition] = Field(default_factory=list, max_length=100)
+    lists: list[ListDefinition] = Field(default_factory=list, max_length=50)
+    broadcasts: list[ShortString] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode='after')
+    def validate_names(self) -> ProgramState:
+        for values, label in ((self.variables, 'variables'), (self.lists, 'lists')):
+            names = [item.name for item in values]
+            if len(names) != len(set(names)):
+                raise ValueError(f'{label} names must be unique')
+        if len(self.broadcasts) != len(set(self.broadcasts)):
+            raise ValueError('broadcast names must be unique')
+        return self
+
+
 class ProgramIR(StrictModel):
     schema_version: Literal[1]
     summary: str = Field(min_length=1, max_length=MAX_SUMMARY_LENGTH)
@@ -297,8 +361,11 @@ def validate_program_for_mode(
         raise ValueError(f'{mode} mode cannot remove scripts by id')
     if mode == 'modify' and program.remove_script_ids and current_program:
         context = json.loads(current_program)
+        scripts = context.get('scripts', [])
+        if not isinstance(scripts, list):
+            raise ValueError('current_program scripts must be a list')
         protected = {
-            item.get('id') for item in context.get('scripts', [])
+            item.get('id') for item in scripts
             if isinstance(item, dict) and item.get('protected') is True
         }
         if protected.intersection(program.remove_script_ids):
@@ -325,7 +392,11 @@ def validate_program_contracts(
     def visit_sequence(blocks: list[Block], path: str, *, script: bool) -> None:
         for index, block in enumerate(blocks):
             block_path = f'{path}[{index}]'
-            shape = BLOCK_CONTRACTS[block.opcode].shape
+            contract = BLOCK_CONTRACTS.get(block.opcode)
+            if contract is None:
+                issue(f'{block_path}.opcode', 'unknown opcode')
+                continue
+            shape = contract.shape
             if script and index == 0 and shape != 'hat':
                 issue(block_path, 'script must start with an event hat block')
             if shape == 'hat' and ((script and index > 0) or not script):
@@ -341,7 +412,10 @@ def validate_program_contracts(
         nested_reporter: bool,
         expected_reporter: str | None = None,
     ) -> None:
-        contract = BLOCK_CONTRACTS[block.opcode]
+        contract = BLOCK_CONTRACTS.get(block.opcode)
+        if contract is None:
+            issue(f'{path}.opcode', 'unknown opcode')
+            return
         if target_kind not in contract.targets:
             issue(f'{path}.opcode', f'not valid for {target_kind}')
         if nested_reporter:
@@ -528,35 +602,12 @@ class ResourceOp(StrictModel):
         return self
 
 
-def normalize_project_manifest_input(value: object) -> object:
-    """Remove only harmless legacy aliases before strict manifest validation."""
-    if not isinstance(value, dict):
-        return value
-    normalized = deepcopy(value)
-    for operation in normalized.get('resource_ops', []):
-        if not isinstance(operation, dict):
-            continue
-        op = operation.get('op')
-        if op in {'add_builtin_sprite', 'add_sprite', 'add_backdrop', 'select_backdrop'}:
-            operation.pop('target', None)
-        if op in {'add_costume', 'add_backdrop'}:
-            if operation.get('select_after') == 'true': operation['select_after'] = True
-            elif operation.get('select_after') == 'false': operation['select_after'] = False
-        if op == 'add_costume':
-            source = operation.get('source')
-            if isinstance(source, dict) and source.get('kind') == 'scratch_library' and source.get('asset_type') == 'sprite':
-                source['asset_type'] = 'costume'
-        costumes = operation.get('costumes')
-        if isinstance(costumes, list):
-            for costume in costumes:
-                if isinstance(costume, dict) and isinstance(costume.get('source'), dict) and costume['source'].get('kind') == 'scratch_library' and costume['source'].get('asset_type') == 'sprite':
-                    costume['source']['asset_type'] = 'costume'
-    for target in normalized.get('program_targets', []):
-        if isinstance(target, dict) and isinstance(target.get('target'), dict) and target['target'].get('kind') in {'stage', 'current_target'}:
-            target['target'].pop('name', None)
-            target['target'].pop('op_id', None)
-    return normalized
-
-
-GenerateRequest.model_rebuild()
+BlockInput.model_rebuild()
+Block.model_rebuild()
+TargetRef.model_rebuild()
+ProjectSharedState.model_rebuild()
+ProjectProgramTarget.model_rebuild()
+ProjectManifest.model_rebuild()
+ProjectProgramResponse.model_rebuild()
+UnifiedGenerationRequest.model_rebuild()
 

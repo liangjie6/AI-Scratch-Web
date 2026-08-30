@@ -2,22 +2,45 @@ import type {CostumeExport, ImportedSpriteResult, SpriteImportExpectation} from 
 
 type Listener = () => void;
 
+export interface ProjectTransactionHandle {
+  assertActive(): void;
+  release(): void;
+}
+
 export class ScratchGuiBridge {
   private vm: ScratchVmLike | null = null;
+  private vmListenerCleanups: Array<() => void> = [];
   private storage: ScratchStorageLike | null = null;
   private editorState: ScratchEditorStateLike | null = null;
   private projectLoaded = false;
   private readyResolve: ((vm: ScratchVmLike) => void) | null = null;
+  private readyReject: ((reason?: unknown) => void) | null = null;
+  private readyPromise!: Promise<ScratchVmLike>;
   private importing = false;
   private fatalImport = false;
   private generatingBlocks = false;
+  private lifecycleToken = 0;
+  private generationToken = 0;
+  private projectTransactionActive = false;
+  private projectTransactionToken = 0;
   private revision = 0;
   private targetListeners = new Set<Listener>();
   private projectListeners = new Set<Listener>();
 
-  readonly ready = new Promise<ScratchVmLike>(resolve => {
-    this.readyResolve = resolve;
-  });
+  constructor() {
+    this.resetReadyPromise();
+  }
+
+  get ready() {
+    return this.readyPromise;
+  }
+
+  private resetReadyPromise() {
+    this.readyPromise = new Promise<ScratchVmLike>((resolve, reject) => {
+      this.readyResolve = resolve;
+      this.readyReject = reject;
+    });
+  }
 
   setStorage(storage: ScratchStorageLike) {
     this.storage = storage;
@@ -28,20 +51,37 @@ export class ScratchGuiBridge {
   }
 
   setVm(vm: ScratchVmLike) {
+    if (this.vm) {
+      this.rejectReady(new Error('Scratch VM 已重新绑定'));
+      this.resetReadyPromise();
+    }
+    this.detachVmListeners();
+    this.lifecycleToken += 1;
+    this.generationToken += 1;
+    this.projectTransactionToken += 1;
+    this.projectTransactionActive = false;
     this.vm = vm;
-    const onProjectLoaded = () => this.markProjectLoaded();
+    this.projectLoaded = false;
+    this.importing = false;
+    this.fatalImport = false;
+    this.generatingBlocks = false;
+    this.revision += 1;
+    const onProjectLoaded = () => {
+      if (this.vm === vm) this.markProjectLoaded();
+    };
     const onProjectChanged = () => {
+      if (this.vm !== vm) return;
       this.revision += 1;
       this.projectListeners.forEach(listener => listener());
     };
     const onTargetsUpdate = () => {
-      this.targetListeners.forEach(listener => listener());
+      if (this.vm === vm) this.targetListeners.forEach(listener => listener());
     };
 
-    vm.on?.('PROJECT_LOADED', onProjectLoaded);
-    vm.on?.('PROJECT_CHANGED', onProjectChanged);
-    vm.on?.('targetsUpdate', onTargetsUpdate);
-    vm.runtime.on?.('PROJECT_LOADED', onProjectLoaded);
+    this.addVmListener(vm, 'PROJECT_LOADED', onProjectLoaded);
+    this.addVmListener(vm, 'PROJECT_CHANGED', onProjectChanged);
+    this.addVmListener(vm, 'targetsUpdate', onTargetsUpdate);
+    this.addVmListener(vm.runtime, 'PROJECT_LOADED', onProjectLoaded);
 
     const waitForTargets = () => {
       if (this.projectLoaded || this.vm !== vm) return;
@@ -53,18 +93,28 @@ export class ScratchGuiBridge {
     };
     waitForTargets();
 
-    if (this.projectLoaded) {
-      this.readyResolve?.(vm);
-      this.readyResolve = null;
-    }
+  }
+
+  private addVmListener(source: {on?: (event: string, listener: (...args: unknown[]) => void) => void; addListener?: (event: string, listener: (...args: unknown[]) => void) => void; off?: (event: string, listener: (...args: unknown[]) => void) => void; removeListener?: (event: string, listener: (...args: unknown[]) => void) => void}, event: string, listener: (...args: unknown[]) => void) {
+    const add = source.on ?? source.addListener;
+    const remove = source.off ?? source.removeListener;
+    if (!add) return;
+    add.call(source, event, listener);
+    if (remove) this.vmListenerCleanups.push(() => remove.call(source, event, listener));
+  }
+
+  private detachVmListeners() {
+    for (const cleanup of this.vmListenerCleanups.splice(0)) cleanup();
   }
 
   markProjectLoaded() {
+    if (!this.vm) return;
     const firstLoad = !this.projectLoaded;
     this.projectLoaded = true;
     if (this.vm) {
       this.readyResolve?.(this.vm);
       this.readyResolve = null;
+      this.readyReject = null;
     }
     if (!firstLoad) {
       this.revision += 1;
@@ -111,13 +161,35 @@ export class ScratchGuiBridge {
   }
 
   beginBlockGeneration() {
-    if (this.generatingBlocks) throw new Error('已有 AI 积木生成任务正在运行');
+    if (this.generatingBlocks || this.importing) throw new Error('已有 AI 积木生成任务正在运行');
     this.generatingBlocks = true;
+    const generationToken = ++this.generationToken;
     let released = false;
     return () => {
       if (released) return;
       released = true;
-      this.generatingBlocks = false;
+      if (this.generationToken === generationToken) this.generatingBlocks = false;
+    };
+  }
+
+  beginProjectTransaction(): ProjectTransactionHandle {
+    if (this.generatingBlocks || this.projectTransactionActive || this.importing) throw new Error('已有 AI 项目事务正在运行');
+    this.generatingBlocks = true;
+    this.projectTransactionActive = true;
+    const token = ++this.projectTransactionToken;
+    let released = false;
+    return {
+      assertActive: () => {
+        if (!this.projectTransactionActive || this.projectTransactionToken !== token) throw new Error('AI 项目事务已失效');
+      },
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.projectTransactionToken === token) {
+          this.projectTransactionActive = false;
+          this.generatingBlocks = false;
+        }
+      }
     };
   }
 
@@ -130,15 +202,17 @@ export class ScratchGuiBridge {
     expectations: SpriteImportExpectation[]
   ): Promise<ImportedSpriteResult> {
     const vm = this.requireVm();
+    const lifecycleToken = this.lifecycleToken;
     if (!this.projectLoaded) throw new Error('Scratch 项目尚未就绪');
     if (this.fatalImport) throw new Error('上次导入补偿失败，请重新加载最近保存的项目');
     if (this.importing) throw new Error('角色正在导入，请勿重复提交');
-    if (this.generatingBlocks) throw new Error('AI 正在生成积木，请稍后再导入角色');
+    if (this.generatingBlocks && !this.projectTransactionActive) throw new Error('AI 正在生成积木，请稍后再导入角色');
     this.importing = true;
     const before = new Set(vm.runtime.targets.map(target => target.id));
 
     try {
       await vm.addSprite(JSON.stringify(spriteJson));
+      this.assertVmStillBound(vm, lifecycleToken);
       const additions = vm.runtime.targets.filter(target => !before.has(target.id) && !target.isStage);
       if (additions.length !== 1) throw new Error('Scratch 未能创建唯一的新角色');
       const target = additions[0];
@@ -172,16 +246,19 @@ export class ScratchGuiBridge {
       };
     } catch (error) {
       const additions = vm.runtime.targets.filter(target => !before.has(target.id) && !target.isStage);
+      let rollbackFailed = false;
       for (const target of additions) {
         try {
           vm.deleteSprite(target.id);
         } catch {
-          this.fatalImport = true;
+          rollbackFailed = true;
         }
       }
-      if (vm.runtime.targets.some(target => !before.has(target.id) && !target.isStage)) {
+      const stale = this.vm !== vm || this.lifecycleToken !== lifecycleToken;
+      if (!stale && (rollbackFailed || vm.runtime.targets.some(target => !before.has(target.id) && !target.isStage))) {
         this.fatalImport = true;
       }
+      if (stale) throw new Error('Scratch VM 已重新绑定，导入结果已丢弃');
       if (this.fatalImport) {
         throw new Error('导入失败且无法清除半成品角色，请重新加载最近保存的项目');
       }
@@ -194,47 +271,66 @@ export class ScratchGuiBridge {
 
   async addCostumeToTarget(targetId: string, costume: CostumeExport, selectAfter = true) {
     const vm = this.requireVm();
+    if (this.generatingBlocks && !this.projectTransactionActive) throw new Error('AI 正在生成积木，请稍后再导入造型');
     const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
     if (!target || target.isStage) throw new Error('只能向已有角色添加造型');
     const oldIndex = target.currentCostume ?? 0;
+    const lifecycleToken = this.lifecycleToken;
     const asset = await this.createVisualAsset(costume);
+    this.assertVmStillBound(vm, lifecycleToken);
     await vm.addCostume(asset.md5ext, asset.costume, targetId);
+    this.assertVmStillBound(vm, lifecycleToken);
     const installed = target.getCostumes?.() ?? [];
     if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装造型');
     if (!selectAfter) {
+      this.assertVmStillBound(vm, lifecycleToken);
       target.setCostume?.(oldIndex);
       if (target.currentCostume !== oldIndex) target.currentCostume = oldIndex;
+      this.assertVmStillBound(vm, lifecycleToken);
       vm.runtime.emitProjectChanged?.();
+      this.assertVmStillBound(vm, lifecycleToken);
     }
     return {assetId: asset.assetId, name: costume.name};
   }
 
   async addBackdropToStage(costume: CostumeExport, selectAfter = true) {
     const vm = this.requireVm();
+    if (this.generatingBlocks && !this.projectTransactionActive) throw new Error('AI 正在生成积木，请稍后再导入背景');
     const stage = vm.runtime.getTargetForStage?.() ?? vm.runtime.targets.find(item => item.isStage);
     if (!stage) throw new Error('Scratch 舞台尚未就绪');
     const oldIndex = stage.currentCostume ?? 0;
+    const lifecycleToken = this.lifecycleToken;
     const asset = await this.createVisualAsset(costume);
+    this.assertVmStillBound(vm, lifecycleToken);
     await vm.addBackdrop(asset.md5ext, asset.costume);
+    this.assertVmStillBound(vm, lifecycleToken);
     const installed = stage.getCostumes?.() ?? [];
     if (!installed.some(item => String(item.assetId ?? '') === asset.assetId)) throw new Error('Scratch 未能安装背景');
     if (!selectAfter) {
+      this.assertVmStillBound(vm, lifecycleToken);
       stage.setCostume?.(oldIndex);
       if (stage.currentCostume !== oldIndex) stage.currentCostume = oldIndex;
+      this.assertVmStillBound(vm, lifecycleToken);
       vm.runtime.emitProjectChanged?.();
+      this.assertVmStillBound(vm, lifecycleToken);
     }
     return {assetId: asset.assetId, name: costume.name};
   }
 
   selectBackdropByName(name: string) {
     const vm = this.requireVm();
+    const lifecycleToken = this.lifecycleToken;
+    if (this.generatingBlocks && !this.projectTransactionActive) throw new Error('AI 正在生成积木，请稍后再选择背景');
     const stage = vm.runtime.getTargetForStage?.() ?? vm.runtime.targets.find(item => item.isStage);
     const wanted = name.trim().toLocaleLowerCase();
     const index = stage?.getCostumes?.().findIndex(costume => String(costume.name ?? '').trim().toLocaleLowerCase() === wanted) ?? -1;
     if (!stage || index < 0) throw new Error('找不到已有背景：' + name);
+    this.assertVmStillBound(vm, lifecycleToken);
     stage.setCostume?.(index);
     if (stage.currentCostume !== index) stage.currentCostume = index;
+    this.assertVmStillBound(vm, lifecycleToken);
     vm.runtime.emitProjectChanged?.();
+    this.assertVmStillBound(vm, lifecycleToken);
     return {assetId: String(stage.getCostumes?.()[index]?.assetId ?? ''), name: String(stage.getCostumes?.()[index]?.name ?? name)};
   }
 
@@ -254,13 +350,21 @@ export class ScratchGuiBridge {
   }
 
   async saveProject(): Promise<Uint8Array> {
-    const output = await this.requireVm().saveProjectSb3();
+    const vm = this.requireVm();
+    const lifecycleToken = this.lifecycleToken;
+    const output = await vm.saveProjectSb3();
+    this.assertVmStillBound(vm, lifecycleToken);
     if (output instanceof Uint8Array) return new Uint8Array(output);
-    return new Uint8Array(await (output as Blob).arrayBuffer());
+    const bytes = new Uint8Array(await (output as Blob).arrayBuffer());
+    this.assertVmStillBound(vm, lifecycleToken);
+    return bytes;
   }
 
   async loadProject(input: ArrayBuffer | Uint8Array | string) {
-    await this.requireVm().loadProject(input);
+    const vm = this.requireVm();
+    const lifecycleToken = this.lifecycleToken;
+    await vm.loadProject(input);
+    this.assertVmStillBound(vm, lifecycleToken);
   }
 
   run() {
@@ -269,6 +373,37 @@ export class ScratchGuiBridge {
 
   stop() {
     this.requireVm().stopAll();
+  }
+
+  dispose() {
+    this.detachVmListeners();
+    this.rejectReady(new Error('Scratch GUI bridge 已释放'));
+    this.resetReadyPromise();
+    this.lifecycleToken += 1;
+    this.generationToken += 1;
+    this.projectTransactionToken += 1;
+    this.projectTransactionActive = false;
+    this.vm = null;
+    this.storage = null;
+    this.editorState = null;
+    this.projectLoaded = false;
+    this.importing = false;
+    this.fatalImport = false;
+    this.generatingBlocks = false;
+    this.targetListeners.clear();
+    this.projectListeners.clear();
+    this.revision += 1;
+  }
+
+  private rejectReady(reason: Error) {
+    this.readyPromise.catch(() => undefined);
+    this.readyReject?.(reason);
+    this.readyResolve = null;
+    this.readyReject = null;
+  }
+
+  private assertVmStillBound(vm: ScratchVmLike, lifecycleToken: number) {
+    if (this.vm !== vm || this.lifecycleToken !== lifecycleToken) throw new Error('Scratch VM 已重新绑定');
   }
 
   private requireVm() {

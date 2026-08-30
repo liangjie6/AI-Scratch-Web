@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {readAiTargetSnapshot} from '../src/ai-blocks/target-context';
+import {assertSnapshotIsCurrent, readAiTargetSnapshot} from '../src/ai-blocks/target-context';
 import type {ScratchGuiBridge} from '../src/scratch/scratch-gui-bridge';
 
 function block(id: string, opcode: string, options: Partial<ScratchBlockLike> = {}): ScratchBlockLike {
@@ -10,6 +10,22 @@ function block(id: string, opcode: string, options: Partial<ScratchBlockLike> = 
 }
 
 describe('AI target snapshot', () => {
+  it('rejects a silent block mutation even when the project revision is unchanged', () => {
+    const blockRecord = block('native', 'event_whenflagclicked', {topLevel: true});
+    const blocks = {
+      _blocks: {native: blockRecord}, _scripts: ['native'],
+      getScripts: () => ['native'],
+      getBlock: (id: string) => ({native: blockRecord}[id])
+    } as unknown as ScratchBlocksLike;
+    const target = {id: 'sprite', isStage: false, isOriginal: true, blocks, variables: {}, comments: {}, getName: () => '角色1', getCostumes: () => [], getSounds: () => []} as ScratchTargetLike;
+    const stage = {id: 'stage', isStage: true, variables: {}, getName: () => '舞台'} as ScratchTargetLike;
+    const vm = {editingTarget: target, runtime: {targets: [stage, target], getTargetForStage: () => stage}} as unknown as ScratchVmLike;
+    const bridge = {currentVm: vm, projectRevision: 7} as unknown as ScratchGuiBridge;
+    const snapshot = readAiTargetSnapshot(bridge, 'rewrite');
+    blockRecord.fields = {VALUE: {name: 'VALUE', value: 'changed'}};
+    expect(() => assertSnapshotIsCurrent(bridge, snapshot)).toThrow('当前目标内容发生了变化');
+  });
+
   it('exposes native script refs but protects custom and extension scripts', () => {
     const records: Record<string, ScratchBlockLike> = {
       native: block('native', 'event_whenflagclicked', {topLevel: true, x: 10, next: 'move'}),

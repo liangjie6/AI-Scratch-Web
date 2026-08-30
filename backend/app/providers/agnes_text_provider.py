@@ -29,6 +29,15 @@ class AgnesTextProvider:
     def for_tier(self, tier: str) -> 'AgnesTextProvider':
         return AgnesTextProvider(self.settings, self.http_client, {'normal': 'agnes', 'advanced': 'deepseek', 'super': 'gpt'}.get(tier, 'agnes'))
 
+    @staticmethod
+    def _log_request_content(messages: list[dict[str, str]]) -> None:
+        """AI 写积木：把每次模型请求里 messages 的 content 打印到后端控制台（只打印 content）。"""
+        for index, message in enumerate(messages, start=1):
+            content = message.get('content', '') if isinstance(message, dict) else ''
+            if isinstance(content, (list, dict, tuple)):
+                content = json.dumps(content, ensure_ascii=False)
+            logger.info('[AI写积木] 模型请求 content[%d]: %s', index, content)
+
     def ensure_configured(self) -> None:
         self._api_key()
 
@@ -48,6 +57,7 @@ class AgnesTextProvider:
             if delta.kind == 'content': yield delta.text
 
     async def stream_with_reasoning(self, messages: list[dict[str, str]], *, thinking_enabled: bool, thinking_strength: ThinkingStrength, json_output: bool = False) -> AsyncIterator[AgnesStreamDelta]:
+        self._log_request_content(messages)
         if thinking_enabled and self.provider == 'agnes':
             source = self._stream_anthropic(messages, thinking_strength)
         elif self.provider == 'gpt':

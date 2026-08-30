@@ -1,8 +1,8 @@
 import {generateImage} from '../ai/image-generation-api';
 import type {ImageGenerationRequest, ImageGenerationResponse, ImageStyle} from '../ai/image-generation-types';
-import {saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
+import {deleteGeneratedAsset, saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
 import {preloadScratchAsset, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
-import type {ProjectPlan, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
+import type {ProjectManifest, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
 import type {PreparedResource} from './project-resource-runner';
 import type {CostumeExport} from '../scratch/asset-adapter';
 
@@ -17,7 +17,7 @@ export interface GenerationConfirmation {
   tags: string[];
 }
 export interface ResourcePreparationOptions {
-  plan: ProjectPlan;
+  plan: ProjectManifest;
   assetPolicy?: AssetPolicy;
   selections?: Map<string, ScratchSpriteItem | ScratchLibraryItem>;
   confirmGeneration?: (request: GenerationConfirmation) => Promise<boolean> | boolean;
@@ -112,6 +112,12 @@ function assertSourceAllowed(source: ProjectManifestResourceSource, policy?: Ass
   }
 }
 
+async function cleanupGeneratedAssets(assets: readonly GeneratedAsset[]) {
+  const outcomes = await Promise.allSettled(assets.map(asset => deleteGeneratedAsset(asset.id)));
+  const failures = outcomes.filter(outcome => outcome.status === 'rejected');
+  if (failures.length) throw new Error(failures.length + ' 个生成素材清理失败');
+}
+
 async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, generatedAssets: GeneratedAsset[]): Promise<PreparedResource> {
   abortIfNeeded(options.signal);
   if (op.op === 'delete_sprite') return {op_id: op.op_id, kind: 'builtin_sprite', value: null};
@@ -157,11 +163,22 @@ export async function prepareProjectResources(options: ResourcePreparationOption
   const prepared = new Map<string, PreparedResource>();
   const generatedAssets: GeneratedAsset[] = [];
   const total = options.plan.resource_ops.length;
-  for (let index = 0; index < options.plan.resource_ops.length; index += 1) {
-    abortIfNeeded(options.signal);
-    const op = options.plan.resource_ops[index];
-    prepared.set(op.op_id, await prepareOne(op, options, generatedAssets));
-    options.onProgress?.(index + 1, total, op.name);
+  try {
+    for (let index = 0; index < options.plan.resource_ops.length; index += 1) {
+      abortIfNeeded(options.signal);
+      const op = options.plan.resource_ops[index];
+      prepared.set(op.op_id, await prepareOne(op, options, generatedAssets));
+      options.onProgress?.(index + 1, total, op.name);
+    }
+    return {prepared, generatedAssets};
+  } catch (error) {
+    let cleanupError: unknown;
+    try {
+      await cleanupGeneratedAssets(generatedAssets);
+    } catch (caught) {
+      cleanupError = caught;
+    }
+    if (cleanupError) throw new Error('资源准备失败且无法清理已生成素材：' + (cleanupError instanceof Error ? cleanupError.message : '未知错误'));
+    throw error;
   }
-  return {prepared, generatedAssets};
 }

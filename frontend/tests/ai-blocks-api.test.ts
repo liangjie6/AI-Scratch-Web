@@ -1,143 +1,99 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {
-  streamAiBlocksChat,
-  streamAiBlocksGeneration,
-  summarizeAiBlocksRequirements,
-  type AiBlocksTargetContext
-} from '../src/ai-blocks/ai-blocks-api';
+import {streamAiBlocksChat, streamUnifiedGeneration, type AiBlocksTargetContext, type UnifiedGenerationRequest} from '../src/ai-blocks/ai-blocks-api';
 
 const target: AiBlocksTargetContext = {
-  name: '角色1',
-  is_stage: false,
-  has_scripts: false,
-  mode: 'append',
-  costumes: ['造型1'],
-  sounds: [],
-  sprite_names: ['角色1'],
-  current_program: '{}'
+  name: '角色1', is_stage: false, has_scripts: false, mode: 'append', costumes: ['造型1'], sounds: [], sprite_names: ['角色1'], current_program: '{}'
 };
-const base = {
-  session_id: '11111111-1111-4111-8111-111111111111',
-  request_id: '22222222-2222-4222-8222-222222222222',
-  messages: [{role: 'user' as const, content: '点击绿旗后移动'}],
-  thinking: {enabled: true, strength: 'medium' as const},
-  target
+const base: UnifiedGenerationRequest = {
+  model_tier: 'normal', session_id: 'session-1', request_id: 'request-1', messages: [{role: 'user', content: '点击绿旗后移动'}],
+  thinking: {enabled: true, strength: 'medium'}, target, scope: 'single_sprite', asset_policy: 'builtin_first', proceed_with_defaults: true
 };
+const NL = String.fromCharCode(10);
 
-function sseResponse(frames: string[]) {
+function sseResponse(frames: string[], splitBytes = 0) {
   const encoder = new TextEncoder();
+  const bytes = encoder.encode(frames.join(''));
   return new Response(new ReadableStream({
     start(controller) {
-      frames.forEach(frame => controller.enqueue(encoder.encode(frame)));
+      if (!splitBytes) controller.enqueue(bytes);
+      else for (let index = 0; index < bytes.length; index += splitBytes) controller.enqueue(bytes.slice(index, index + splitBytes));
       controller.close();
     }
   }), {headers: {'Content-Type': 'text/event-stream; charset=utf-8'}});
 }
+function frame(event: string, data: Record<string, unknown>, phase?: string) {
+  return 'event: ' + event + NL + 'data: ' + JSON.stringify({request_id: base.request_id, ...(phase ? {phase} : {}), data}) + NL + NL;
+}
+function generatedFrames() {
+  const requirements = {ready: true, title: '移动角色', goal: '绿旗后移动', behavior_steps: ['移动 10 步'], triggers: ['绿旗'], controls: [], success_criteria: ['角色移动'], missing_questions: []};
+  const program = {id: 'script_move', purpose: '移动', x: 40, y: 40, blocks: [{opcode: 'event_whenflagclicked'}]};
+  return [
+    frame('phase_start', {message: '整理需求'}, 'requirements'),
+    frame('phase_complete', requirements, 'requirements'),
+    frame('phase_start', {message: '规划'}, 'plan'),
+    frame('phase_complete', {steps: ['添加绿旗事件']}, 'plan'),
+    frame('phase_start', {target_index: 0}, 'program'),
+    frame('metadata', {target_index: 0, schema_version: 1, summary: '移动角色', remove_script_ids: []}, 'program'),
+    frame('shared_state', {target_index: 0, variables: [], lists: [], broadcasts: []}, 'program'),
+    frame('script_ready', {target_index: 0, index: 0, total: 1, script: program}, 'program'),
+    frame('phase_complete', {target_index: 0, script_count: 1}, 'program'),
+    frame('complete', {program_count: 1})
+  ];
+}
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('AI blocks API', () => {
-  it('streams assistant deltas across split UTF-8 frames', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([
-      'event: assistant_delta\ndata: {"text":"请说明操作方式"}\n\n',
-      'event: message_complete\ndata: {}\n\n'
-    ]));
+describe('unified AI blocks API', () => {
+  it('uses one request and parses split UTF-8 unified events', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse(generatedFrames(), 2));
+    vi.stubGlobal('fetch', fetchMock);
+    const events: string[] = [];
+    await streamUnifiedGeneration(base, event => events.push(event.type));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({scope: 'single_sprite', asset_policy: 'builtin_first'});
+    expect(events).toEqual(['phase_start', 'phase_complete', 'phase_start', 'phase_complete', 'phase_start', 'metadata', 'shared_state', 'script_ready', 'phase_complete', 'complete']);
+  });
+
+  it('passes request id and data separately to event consumers', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([frame('phase_complete', {steps: ['保留原代码']}, 'plan'), frame('complete', {program_count: 0})])));
+    const received: unknown[] = [];
+    await streamUnifiedGeneration(base, event => received.push(event));
+    expect(received[0]).toMatchObject({type: 'phase_complete', requestId: base.request_id, phase: 'plan', data: {steps: ['保留原代码']}});
+  });
+
+  it('rejects legacy event names and incomplete unified streams', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse(['event: plan_ready' + NL + 'data: {}' + NL + NL])));
+    await expect(streamUnifiedGeneration(base, () => undefined)).rejects.toMatchObject({code: 'STREAM_PROTOCOL_ERROR'});
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([frame('phase_start', {}, 'requirements')])));
+    await expect(streamUnifiedGeneration(base, () => undefined)).rejects.toMatchObject({code: 'STREAM_INCOMPLETE'});
+  });
+
+  it('rejects mismatched request ids and sanitized server errors', async () => {
+    const mismatch = 'event: complete' + NL + 'data: ' + JSON.stringify({request_id: 'other', data: {}}) + NL + NL;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([mismatch])));
+    await expect(streamUnifiedGeneration(base, () => undefined)).rejects.toMatchObject({code: 'STREAM_PROTOCOL_ERROR'});
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([frame('error', {code: 'OUTPUT_PROTOCOL_ERROR', message: 'AI 输出未通过协议校验'})])));
+    await expect(streamUnifiedGeneration(base, () => undefined)).rejects.toMatchObject({code: 'OUTPUT_PROTOCOL_ERROR'});
+    const topLevel = 'event: error' + NL + 'data: ' + JSON.stringify({request_id: base.request_id, code: 'AI_PROVIDER_TIMEOUT', message: 'AI 生成超时，请稍后重试'}) + NL + NL;
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([topLevel])));
+    await expect(streamUnifiedGeneration(base, () => undefined)).rejects.toMatchObject({code: 'AI_PROVIDER_TIMEOUT', message: 'AI 生成超时，请稍后重试'});
+  });
+
+  it('keeps pure chat on its separate endpoint', async () => {
+    const response = 'event: assistant_delta' + NL + 'data: ' + JSON.stringify({request_id: base.request_id, text: '请使用绿旗事件'}) + NL + NL + 'event: message_complete' + NL + 'data: ' + JSON.stringify({request_id: base.request_id}) + NL + NL;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([response], 1));
     vi.stubGlobal('fetch', fetchMock);
     let answer = '';
-    await streamAiBlocksChat(base, delta => { answer += delta; });
-    expect(answer).toBe('请说明操作方式');
-    expect(fetchMock).toHaveBeenCalledWith('/api/ai-blocks/chat', expect.objectContaining({method: 'POST'}));
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({thinking: {enabled: true, strength: 'medium'}});
-  });
-
-  it('returns structured requirements', async () => {
-    const requirements = {
-      ready: true,
-      title: '移动角色',
-      goal: '绿旗后移动',
-      behavior_steps: ['移动 10 步'],
-      triggers: ['绿旗'],
-      controls: [],
-      success_criteria: ['角色移动'],
-      missing_questions: []
+    const chatRequest = {
+      model_tier: base.model_tier, session_id: base.session_id, request_id: base.request_id,
+      messages: base.messages, target: base.target, thinking: base.thinking
     };
-    let requestBody = '';
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requestBody = String(init?.body ?? '');
-      return new Response(JSON.stringify(requirements), {status: 200, headers: {'Content-Type': 'application/json'}});
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    await expect(summarizeAiBlocksRequirements({...base, proceed_with_defaults: true})).resolves.toEqual(requirements);
-    expect(JSON.parse(requestBody)).toMatchObject({proceed_with_defaults: true});
-  });
-
-  it('streams plan and validated program payload', async () => {
-    const program = {
-      schema_version: 1,
-      summary: '移动角色',
-      remove_script_ids: [],
-      variables: [],
-      lists: [],
-      broadcasts: [],
-      scripts: [{id: 'script_move', purpose: '移动', x: 40, y: 40, blocks: [{opcode: 'event_whenflagclicked'}]}]
-    };
-    vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
-      'event: phase\ndata: {"phase":"planning","message":"正在规划"}\n\n',
-      'event: reasoning_delta\ndata: {"text":"先选择绿旗事件","phase":"planning"}\n\n',
-      'event: plan_ready\ndata: {"steps":["添加绿旗事件"]}\n\n',
-      'event: program_ready\ndata: ' + JSON.stringify({program}) + '\n\n',
-      'event: message_complete\ndata: {}\n\n'
-    ])));
-    const phases: string[] = [];
-    const plans: string[][] = [];
-    const reasoning: string[] = [];
-    const result = await streamAiBlocksGeneration({
-      ...base,
-      requirements: {ready: true, title: '移动', goal: '移动', behavior_steps: ['移动'], triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []},
-      output_contract: 'program_ir',
-      scope: 'single_sprite',
-      asset_policy: 'builtin_first'
-    }, {
-      onPhase: phase => phases.push(phase.message),
-      onPlan: steps => plans.push(steps),
-      onReasoning: (text, phase) => reasoning.push(phase + ':' + text)
-    });
-    expect(result).toEqual({kind: 'program', program});
-    expect(phases).toEqual(['正在规划']);
-    expect(plans).toEqual([['添加绿旗事件']]);
-    expect(reasoning).toEqual(['planning:先选择绿旗事件']);
-  });
-
-  it('returns a single project program target from the new protocol', async () => {
-    const program = {
-      schema_version: 1,
-      summary: '移动新角色',
-      remove_script_ids: [],
-      variables: [],
-      lists: [],
-      broadcasts: [],
-      scripts: [{id: 'script_created', purpose: '移动', x: 0, y: 0, blocks: [{opcode: 'event_whenflagclicked'}]}]
-    };
-    const targetRef = {target: {kind: 'created_sprite' as const, op_id: 'sprite_1'}, mode: 'append' as const, intent: '移动新角色'};
-    vi.stubGlobal('fetch', vi.fn(async () => sseResponse([
-      'event: plan_ready\ndata: {"plan":{"steps":["移动"]}}\n\n',
-      'event: project_program_ready\ndata: ' + JSON.stringify({program, target: targetRef}) + '\n\n',
-      'event: message_complete\ndata: {}\n\n'
-    ])));
-    const result = await streamAiBlocksGeneration({
-      ...base,
-      requirements: {ready: true, title: '项目', goal: '项目', behavior_steps: ['移动'], triggers: ['绿旗'], controls: [], success_criteria: ['移动'], missing_questions: []},
-      output_contract: 'project_program',
-      scope: 'project',
-      asset_policy: 'builtin_first',
-      project_manifest: {schema_version: 1, scope: 'project', summary: '项目', resource_ops: [], program_targets: [targetRef], shared_state: {variables: [], lists: [], broadcasts: []}},
-      program_target: targetRef
-    }, {onPlan: steps => expect(steps).toEqual(['移动'])});
-    expect(result).toEqual({kind: 'program', program, target: targetRef});
-  });
-
-  it('rejects a stream that ends without completion', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => sseResponse(['event: assistant_delta\ndata: {"text":"未完成"}\n\n'])));
-    await expect(streamAiBlocksChat(base, () => undefined)).rejects.toMatchObject({code: 'STREAM_INCOMPLETE'});
+    await streamAiBlocksChat(chatRequest, value => { answer += value; });
+    expect(answer).toBe('请使用绿旗事件');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/ai-blocks/chat');
+    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(body).toEqual(chatRequest);
+    expect(body.scope).toBeUndefined();
+    expect(body.project_context).toBeUndefined();
   });
 });

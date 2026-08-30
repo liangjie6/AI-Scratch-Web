@@ -1,10 +1,24 @@
-import type {ProgramIR} from './program-ir';
-import type {ProjectManifest, ProjectProgramTarget, AiBlocksScope, AssetPolicy} from './project-plan';
+import type {ProgramIR, ScriptIR} from './program-ir';
+import type {ProjectManifest, AiBlocksScope, AssetPolicy} from './project-plan';
 import {createSseParser} from '../ai/text-expansion-api';
 
 export type AiBlocksMode = 'modify' | 'append' | 'rewrite';
 export type AiBlocksModelTier = 'normal' | 'advanced' | 'super';
 export type AiBlocksThinkingStrength = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type UnifiedGenerationPhase = 'requirements' | 'plan' | 'program';
+export type UnifiedGenerationEventType =
+  | 'cache_hit'
+  | 'phase_start'
+  | 'phase_complete'
+  | 'content_delta'
+  | 'reasoning_delta'
+  | 'metadata'
+  | 'shared_state'
+  | 'script_ready'
+  | 'repair'
+  | 'validation_error'
+  | 'error'
+  | 'complete';
 
 export interface AiBlocksThinkingSettings {
   enabled: boolean;
@@ -14,7 +28,14 @@ export interface AiBlocksThinkingSettings {
 export interface AiBlocksMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** 思考过程文本，随生成过程累积并在对话卡片中保留 */
   reasoning?: string;
+  /** 任务清单：该次生成的计划步骤，结束后仍保留在卡片中 */
+  plan?: string[];
+  /** 对话卡片状态：streaming 为进行中；成功/失败/取消均为终态并保留在对话里 */
+  status?: 'streaming' | 'success' | 'error' | 'cancelled';
+  /** 失败或取消的说明，同卡片内一并保留 */
+  error?: string;
 }
 
 export interface AiBlocksTargetContext {
@@ -28,6 +49,18 @@ export interface AiBlocksTargetContext {
   current_program: string;
 }
 
+export interface AiBlocksProjectTargetContext extends AiBlocksTargetContext {
+  target_id: string;
+  revision: number;
+}
+
+export interface AiBlocksProjectContext {
+  project_id: string;
+  version: number;
+  targets: AiBlocksProjectTargetContext[];
+  shared_state: Record<string, unknown>;
+}
+
 export interface AiBlocksRequirements {
   ready: boolean;
   title: string;
@@ -39,7 +72,23 @@ export interface AiBlocksRequirements {
   missing_questions: string[];
 }
 
-export interface BaseRequest {
+export interface AiBlocksPlan {
+  steps: string[];
+}
+
+export interface ProgramMetadata {
+  schema_version: 1;
+  summary: string;
+  remove_script_ids: string[];
+}
+
+export interface ProgramState {
+  variables: ProgramIR['variables'];
+  lists: ProgramIR['lists'];
+  broadcasts: string[];
+}
+
+export interface AiBlocksChatRequest {
   model_tier?: AiBlocksModelTier;
   session_id: string;
   request_id: string;
@@ -48,37 +97,40 @@ export interface BaseRequest {
   thinking: AiBlocksThinkingSettings;
 }
 
-export interface SummarizeAiBlocksRequest extends BaseRequest {
-  proceed_with_defaults?: boolean;
+export interface UnifiedGenerationRequest {
+  model_tier?: AiBlocksModelTier;
+  session_id: string;
+  request_id: string;
+  messages: AiBlocksMessage[];
+  target: AiBlocksTargetContext;
+  thinking: AiBlocksThinkingSettings;
+  scope: AiBlocksScope;
+  asset_policy: AssetPolicy;
+  project_context?: AiBlocksProjectContext;
+  proceed_with_defaults: boolean;
 }
 
-export interface AiBlocksPlan {
-  steps: string[];
+export interface UnifiedGenerationEvent {
+  type: UnifiedGenerationEventType;
+  requestId: string;
+  phase?: UnifiedGenerationPhase;
+  data: Record<string, unknown>;
 }
 
-export interface GenerateAiBlocksRequest extends BaseRequest {
+export interface UnifiedProgramDraft {
+  targetIndex: number;
+  metadata: ProgramMetadata;
+  state: ProgramState;
+  scripts: ScriptIR[];
+  program?: ProgramIR;
+}
+
+export interface UnifiedGenerationDraft {
   requirements: AiBlocksRequirements;
-  plan?: AiBlocksPlan;
-  protocol_version?: 1 | 2;
-  output_contract?: 'program_ir' | 'project_manifest' | 'project_program';
-  project_manifest?: ProjectManifest;
-  program_target?: ProjectProgramTarget;
-  scope?: AiBlocksScope;
-  asset_policy?: AssetPolicy;
-  asset_match_evidence?: Array<{
-    requirement_id: string;
-    asset_type: 'sprite' | 'costume' | 'backdrop';
-    manifest_version: 'scratch-gui-15.0.1';
-    match_count: number;
-    candidates: Array<{name: string; tags: string[]}>;
-  }>;
+  plan: AiBlocksPlan;
+  manifest?: ProjectManifest;
+  programs: UnifiedProgramDraft[];
 }
-
-export type AiGenerationOutput =
-  | {kind: 'program'; program: ProgramIR; target?: ProjectProgramTarget}
-  | {kind: 'manifest'; manifest: ProjectManifest};
-
-export interface GenerationPhase {phase: string; message: string}
 
 export class AiBlocksApiError extends Error {
   constructor(public readonly code: string, message: string) {
@@ -87,30 +139,76 @@ export class AiBlocksApiError extends Error {
   }
 }
 
-function apiError(payload: unknown, fallback: string): AiBlocksApiError {
-  const value = payload as {detail?: {code?: string; message?: string}; code?: string; message?: string} | null;
-  const detail = value?.detail ?? value;
-  return new AiBlocksApiError(detail?.code ?? 'AI_BLOCKS_FAILED', detail?.message ?? fallback);
+function errorFromPayload(payload: unknown, fallback: string): AiBlocksApiError {
+  const value = payload as {detail?: unknown; data?: unknown; code?: unknown; message?: unknown} | null;
+  const detail = (value?.detail ?? value?.data ?? value) as {code?: unknown; message?: unknown} | null;
+  const code = typeof detail?.code === 'string' && /^[A-Z0-9_]+$/.test(detail.code) ? detail.code : 'AI_BLOCKS_REQUEST_FAILED';
+  const message = typeof detail?.message === 'string' && detail.message.length <= 240 && !/[\r\n]/.test(detail.message) ? detail.message : fallback;
+  return new AiBlocksApiError(code, message);
 }
 
-async function fetchSse(path: string, body: unknown, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
-  const response = await fetch(path, {
+function asRecord(value: unknown, message: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', message);
+  return value as Record<string, unknown>;
+}
+
+function asData(payload: Record<string, unknown>): Record<string, unknown> {
+  return payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data as Record<string, unknown>
+    : {};
+}
+
+export async function streamUnifiedGeneration(
+  request: UnifiedGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch('/api/ai-blocks/generate-unified', {
     method: 'POST',
     headers: {Accept: 'text/event-stream', 'Content-Type': 'application/json'},
-    body: JSON.stringify(body),
+    body: JSON.stringify(request),
     signal
   });
-  if (!response.ok) throw apiError(await response.json().catch(() => null), 'AI 请求失败（HTTP ' + response.status + '）');
-  if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('text/event-stream')) {
-    throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '服务端未返回 AI 消息流');
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw errorFromPayload(payload, 'AI 生成请求失败（HTTP ' + response.status + '）');
   }
-  if (!response.body) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '浏览器未获得 AI 消息流');
-  return response.body;
-}
+  if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('text/event-stream')) {
+    throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '服务端未返回统一生成流');
+  }
+  if (!response.body) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '浏览器未获得响应流');
 
-async function consumeSse(body: ReadableStream<Uint8Array>, onEvent: (event: string, payload: unknown) => void) {
-  const parser = createSseParser(({event, data}) => onEvent(event, data));
-  const reader = body.getReader();
+  let completed = false;
+  const parser = createSseParser(({event, data}) => {
+    if (!['cache_hit', 'phase_start', 'phase_complete', 'content_delta', 'reasoning_delta', 'metadata', 'shared_state', 'script_ready', 'repair', 'validation_error', 'complete', 'error'].includes(event)) {
+      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '收到未知的统一生成事件：' + event);
+    }
+    const payload = asRecord(data, '统一生成事件数据无效');
+    if (payload.request_id !== request.request_id) {
+      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件 request_id 不匹配');
+    }
+    if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成流在完成后仍有输出');
+    if (payload.phase !== undefined && !['requirements', 'plan', 'program'].includes(String(payload.phase))) {
+      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件 phase 无效');
+    }
+    if (['phase_start', 'phase_complete', 'metadata', 'shared_state', 'script_ready', 'validation_error'].includes(event) && typeof payload.phase !== 'string') {
+      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件缺少 phase');
+    }
+    if (event === 'error') {
+      throw errorFromPayload(payload, 'AI 输出未完成');
+    }
+    if (event === 'complete') {
+      if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成流重复完成');
+      completed = true;
+    }
+    onEvent({
+      type: event as UnifiedGenerationEventType,
+      requestId: String(payload.request_id),
+      phase: typeof payload.phase === 'string' ? payload.phase as UnifiedGenerationPhase : undefined,
+      data: asData(payload)
+    });
+  });
+  const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
   try {
     while (true) {
@@ -123,87 +221,60 @@ async function consumeSse(body: ReadableStream<Uint8Array>, onEvent: (event: str
   } finally {
     reader.releaseLock();
   }
+  if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', '统一生成连接意外中断');
 }
 
-export async function streamAiBlocksChat(request: BaseRequest, onDelta: (text: string) => void, signal?: AbortSignal, onReasoningDelta?: (text: string) => void) {
-  const body = await fetchSse('/api/ai-blocks/chat', request, signal);
-  let completed = false;
-  await consumeSse(body, (event, data) => {
-    const payload = data as {text?: unknown; code?: string; message?: string};
-    if (event === 'assistant_delta' && typeof payload?.text === 'string') onDelta(payload.text);
-    else if (event === 'reasoning_delta' && typeof payload?.text === 'string') onReasoningDelta?.(payload.text);
-    else if (event === 'message_complete') completed = true;
-    else if (event === 'message_error') throw new AiBlocksApiError(payload?.code ?? 'AI_CHAT_ERROR', payload?.message ?? 'AI 对话暂时不可用');
-  });
-  if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', 'AI 对话连接意外中断');
-}
-
-export async function summarizeAiBlocksRequirements(request: SummarizeAiBlocksRequest, signal?: AbortSignal): Promise<AiBlocksRequirements> {
-  const response = await fetch('/api/ai-blocks/requirements', {
+export async function streamAiBlocksChat(
+  request: AiBlocksChatRequest,
+  onDelta: (text: string) => void,
+  signal?: AbortSignal,
+  onReasoning?: (text: string) => void
+): Promise<void> {
+  const response = await fetch('/api/ai-blocks/chat', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {Accept: 'text/event-stream', 'Content-Type': 'application/json'},
     body: JSON.stringify(request),
     signal
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw apiError(payload, 'AI 无法整理当前需求');
-  return payload as AiBlocksRequirements;
-}
-
-interface GenerationHandlers {
-  onPhase?: (phase: GenerationPhase) => void;
-  onPlan?: (steps: string[]) => void;
-  onProgram?: (program: ProgramIR) => void;
-  onManifest?: (manifest: ProjectManifest) => void;
-  onProjectProgram?: (program: ProgramIR, target: ProjectProgramTarget) => void;
-  onReasoning?: (text: string, phase: string) => void;
-}
-
-export async function streamAiBlocksGeneration(request: GenerateAiBlocksRequest, handlers: GenerationHandlers = {}, signal?: AbortSignal): Promise<AiGenerationOutput> {
-  const body = await fetchSse('/api/ai-blocks/generate', request, signal);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw errorFromPayload(payload, 'AI 对话请求失败（HTTP ' + response.status + '）');
+  }
+  if (!(response.headers.get('content-type') ?? '').toLowerCase().includes('text/event-stream')) {
+    throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '服务端未返回对话流');
+  }
+  if (!response.body) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '浏览器未获得响应流');
   let completed = false;
-  let readyEvent: 'program_ready' | 'manifest_ready' | 'project_program_ready' | null = null;
-  let program: ProgramIR | null = null;
-  let manifest: ProjectManifest | null = null;
-  let programTarget: ProjectProgramTarget | undefined;
-  await consumeSse(body, (event, data) => {
-    const payload = data as {phase?: unknown; message?: unknown; steps?: unknown; plan?: {steps?: unknown}; program?: unknown; manifest?: unknown; target?: unknown; text?: unknown; code?: string; error?: string};
-    if (event === 'phase' && typeof payload?.phase === 'string') {
-      handlers.onPhase?.({phase: payload.phase, message: typeof payload.message === 'string' ? payload.message : ''});
-    } else if (event === 'plan_ready') {
-      const steps = Array.isArray(payload.steps) ? payload.steps : payload.plan?.steps;
-      if (Array.isArray(steps)) handlers.onPlan?.(steps.filter((item): item is string => typeof item === 'string'));
-    } else if (event === 'reasoning_delta' && typeof payload?.text === 'string') {
-      handlers.onReasoning?.(payload.text, typeof payload.phase === 'string' ? payload.phase : '');
-    } else if (event === 'program_ready' && payload.program && typeof payload.program === 'object') {
-      if (readyEvent) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 返回了多个完成事件');
-      readyEvent = 'program_ready';
-      program = payload.program as ProgramIR;
-      handlers.onProgram?.(program);
-    } else if (event === 'manifest_ready' && payload.manifest && typeof payload.manifest === 'object') {
-      if (readyEvent) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 返回了多个完成事件');
-      readyEvent = 'manifest_ready';
-      manifest = payload.manifest as ProjectManifest;
-      handlers.onManifest?.(manifest);
-    } else if (event === 'project_program_ready' && payload.program && typeof payload.program === 'object' && payload.target && typeof payload.target === 'object') {
-      if (readyEvent) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 返回了多个完成事件');
-      readyEvent = 'project_program_ready';
-      program = payload.program as ProgramIR;
-      programTarget = payload.target as ProjectProgramTarget;
-      handlers.onProjectProgram?.(program, programTarget);
-    } else if (event === 'project_ready') {
-      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '旧 project_plan 协议已移除，请重新发起项目生成');
+  const parser = createSseParser(({event, data}) => {
+    if (!['assistant_delta', 'reasoning_delta', 'message_complete', 'message_error'].includes(event)) {
+      throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '收到未知的 AI 对话事件：' + event);
+    }
+    const payload = asRecord(data, 'AI 对话事件数据无效');
+    if (payload.request_id !== request.request_id) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 对话事件 request_id 不匹配');
+    if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 对话流在完成后仍有输出');
+    if (event === 'assistant_delta' || event === 'reasoning_delta') {
+      if (typeof payload.text !== 'string') throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 对话文本事件无效');
+      if (event === 'assistant_delta') onDelta(payload.text);
+      else onReasoning?.(payload.text);
     } else if (event === 'message_complete') {
+      if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', 'AI 对话流重复完成');
       completed = true;
     } else if (event === 'message_error') {
-      throw new AiBlocksApiError(payload?.code ?? 'AI_BLOCKS_GENERATION_ERROR', typeof payload?.message === 'string' ? payload.message : 'AI 积木生成失败');
+      throw errorFromPayload(payload, 'AI 对话暂时不可用');
     }
   });
-  if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', 'AI 积木生成连接意外中断');
-  if (request.output_contract === 'project_manifest') {
-    if (!manifest) throw new AiBlocksApiError('PROJECT_MANIFEST_MISSING', 'AI 未返回可用的项目清单');
-    return {kind: 'manifest', manifest};
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  try {
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      parser.push(decoder.decode(value, {stream: true}));
+    }
+    parser.push(decoder.decode());
+    parser.finish();
+  } finally {
+    reader.releaseLock();
   }
-  if (!program) throw new AiBlocksApiError('PROGRAM_MISSING', 'AI 未返回可用的积木程序');
-  return {kind: 'program', program, ...(programTarget ? {target: programTarget} : {})};
+  if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', 'AI 对话连接意外中断');
 }

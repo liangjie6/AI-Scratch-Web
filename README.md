@@ -253,10 +253,10 @@ data: {}
 | 方法 | 路径 | 返回 |
 | --- | --- | --- |
 | POST | /api/ai-blocks/chat | SSE 对话流 |
-| POST | /api/ai-blocks/requirements | 结构化需求 JSON |
-| POST | /api/ai-blocks/generate | SSE：阶段、计划、ProgramIR |
+| POST | /api/ai-blocks/generate-unified | SSE：需求、计划、项目清单和逐目标 ProgramIR |
+| POST | /api/ai-blocks/validate | ProgramIR 或项目清单校验结果 |
 
-生成接口会发送 phase、plan_ready、reasoning_delta、program_ready、message_complete 或 message_error 事件。请求包含 session_id、request_id、messages、target、thinking 和可选的 model_tier。
+对话接口只接收 session_id、request_id、messages、target、thinking 和可选的 model_tier。统一生成接口使用一次 provider 流，按 requirements、plan、manifest、program 标签输出；前端先完成无 VM 写入的 Prepare，再在一次外层备份下原子提交资源和全部目标程序。流事件包括 cache_hit、phase_start、phase_complete、reasoning_delta、metadata、shared_state、script_ready、validation_error、error 和 complete。
 
 ## 项目结构
 
