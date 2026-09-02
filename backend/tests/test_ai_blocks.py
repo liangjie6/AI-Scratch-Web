@@ -707,6 +707,47 @@ async def test_structured_project_transport_forwards_schemas_and_decodes_program
     assert any(event.type == 'script_ready' and event.data['target_index'] == 1 for event in events)
 
 
+def test_structured_output_schemas_include_every_property_in_required():
+    provider = StructuredProjectProvider({})
+
+    def assert_chatgpt_compatible(value):
+        if isinstance(value, dict):
+            assert 'oneOf' not in value
+            assert 'discriminator' not in value
+            for child in value.values():
+                assert_chatgpt_compatible(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_chatgpt_compatible(child)
+
+    def assert_required(value):
+        if isinstance(value, dict):
+            properties = value.get('properties')
+            if isinstance(properties, dict):
+                assert set(value.get('required', [])) == set(properties)
+            for child in value.values():
+                assert_required(child)
+        elif isinstance(value, list):
+            for child in value:
+                assert_required(child)
+
+    for segment in ('requirements', 'plan', 'manifest', 'program'):
+        schema = GenerationOrchestrator._structured_output_schema(provider, segment)
+        assert schema is not None
+        assert_chatgpt_compatible(schema)
+        assert_required(schema)
+
+    requirements = GenerationOrchestrator._structured_output_schema(provider, 'requirements')
+    assert requirements is not None
+    assert 'missing_questions' in requirements['required']
+
+    manifest = GenerationOrchestrator._structured_output_schema(provider, 'manifest')
+    assert manifest is not None
+    assert 'anyOf' in manifest['$defs']['AddBackdropOp']['properties']['source']
+
+    # ResourceOp is a root union, which Responses structured output does not accept.
+    assert GenerationOrchestrator._structured_output_schema(provider, 'resource_op') is None
+
 
 def one_target_project_segments():
     segments = project_segment_outputs()

@@ -101,3 +101,13 @@ async def test_gpt_structured_output_forwards_json_schema():
         'strict': True,
         'schema': schema,
     }
+
+
+def test_gpt_json_schema_only_uses_chatgpt_safe_segments():
+    provider = AgnesTextProvider(Settings(gpt_api_key='gpt-key'), provider='gpt')
+
+    assert provider.supports_json_schema('requirements')
+    assert provider.supports_json_schema('plan')
+    assert not provider.supports_json_schema('manifest')
+    assert not provider.supports_json_schema('resource_op')
+    assert not provider.supports_json_schema('program')

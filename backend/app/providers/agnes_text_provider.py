@@ -46,8 +46,10 @@ class AgnesTextProvider:
         return self.provider in {'deepseek', 'gpt'} and segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
 
     def supports_json_schema(self, segment: str | None = None) -> bool:
-        """Return true only where the provider accepts a strict JSON Schema payload."""
-        return self.provider == 'gpt' and segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+        """Return true only for ChatGPT 5.6-safe strict JSON Schema segments."""
+        # Manifest/resource_op use unions and program uses dynamic Scratch maps;
+        # send those as JSON objects and keep validation on the backend.
+        return self.provider == 'gpt' and segment in {'requirements', 'plan'}
 
     def _api_key(self) -> str:
         if self.provider == 'deepseek': return self.settings.require_deepseek_api_key()

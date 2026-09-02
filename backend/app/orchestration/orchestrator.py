@@ -7,6 +7,7 @@ import json
 import logging
 from typing import Any
 
+from openai.lib._pydantic import to_strict_json_schema
 from pydantic import TypeAdapter, ValidationError
 
 from ..prompt_builder import PromptBuilder, ProjectContext, TargetContext
@@ -34,6 +35,27 @@ from .streaming_parser import StreamFrame, StreamProtocolError, UnifiedFramePars
 
 
 logger = logging.getLogger(__name__)
+
+
+def _to_chatgpt_strict_json_schema(model: Any) -> dict[str, Any]:
+    """Adapt Pydantic's strict schema to the ChatGPT Responses dialect."""
+    schema = to_strict_json_schema(model)
+
+    def normalize(value: Any) -> None:
+        if isinstance(value, dict):
+            if 'oneOf' in value:
+                alternatives = value.pop('oneOf')
+                existing = value.get('anyOf')
+                value['anyOf'] = [*(existing if isinstance(existing, list) else []), *alternatives]
+            value.pop('discriminator', None)
+            for child in tuple(value.values()):
+                normalize(child)
+        elif isinstance(value, list):
+            for child in value:
+                normalize(child)
+
+    normalize(schema)
+    return schema
 
 
 @dataclass(frozen=True)
@@ -630,14 +652,17 @@ class GenerationOrchestrator:
         except TypeError:
             if not capability():
                 return None
+        # Apex validates the ChatGPT 5.6 strict Responses schema dialect.
         schemas: dict[str, dict[str, Any]] = {
-            'requirements': RequirementsResponse.model_json_schema(),
-            'plan': Plan.model_json_schema(),
-            'manifest': ProjectManifest.model_json_schema(),
-            'resource_op': TypeAdapter(ResourceOp).json_schema(),
-            'program': ProgramIR.model_json_schema(),
+            'requirements': _to_chatgpt_strict_json_schema(RequirementsResponse),
+            'plan': _to_chatgpt_strict_json_schema(Plan),
+            'manifest': _to_chatgpt_strict_json_schema(ProjectManifest),
+            'resource_op': _to_chatgpt_strict_json_schema(TypeAdapter(ResourceOp)),
+            'program': _to_chatgpt_strict_json_schema(ProgramIR),
         }
-        return schemas.get(segment)
+        schema = schemas.get(segment)
+        # A root anyOf is outside the Responses structured-output subset.
+        return schema if schema is not None and schema.get('type') == 'object' else None
 
     @staticmethod
     def _single_segment_frame(frames: list[StreamFrame], kind: str) -> StreamFrame:
