@@ -52,7 +52,8 @@ const unmatchedEntries = computed(() => libraryEntries.value.filter(entry => unm
 const unresolvedLibraryEntries = computed(() => unmatchedEntries.value.filter(entry => !selections.value.has(entry.selectionKey) && !confirmedMissingGenerationKeys.value.has(entry.key)));
 const generationAllowed = computed(() => props.assetPolicy !== 'existing_only');
 const allGeneratedSelected = computed(() => generated.value.every(entry => selectedGenerationKeys.value.has(entry.key)));
-const canConfirm = computed(() => !matching.value && !matchError.value && !unresolvedLibraryEntries.value.length && allGeneratedSelected.value);
+const generationPolicySatisfied = computed(() => generationAllowed.value || !generated.value.length);
+const canConfirm = computed(() => !matching.value && !matchError.value && !unresolvedLibraryEntries.value.length && generationPolicySatisfied.value && allGeneratedSelected.value);
 
 function sourceFor(entry: ResourceEntry) {
   return entry.source;
@@ -97,8 +98,11 @@ async function resolveLibraryMatches() {
     selections.value = nextSelections;
     automaticSelectionKeys.value = nextAutomatic;
     unmatchedKeys.value = new Set(missing.map(entry => entry.key));
-    if (missing.length && generationAllowed.value) generationEntry.value = missing[0];
-    if (!missing.length && !generated.value.length) {
+    if (missing.length && generationAllowed.value) {
+      // Missing library assets become automatic image-generation fallbacks.
+      confirmedMissingGenerationKeys.value = new Set(missing.map(entry => entry.key));
+    }
+    if (!missing.length || generationAllowed.value) {
       matching.value = false;
       maybeAutoConfirm();
     }
@@ -159,7 +163,7 @@ function generationFallback(entry: ResourceEntry): ImageGenerationSource | undef
   const target = entry.op.op === 'add_backdrop' ? '舞台背景' : '角色造型';
   return {
     kind: 'image_generation',
-    reason: 'Scratch 内置素材库没有匹配的' + target + '，等待用户确认后生成替代素材',
+    reason: 'Scratch 内置素材库没有匹配的' + target + '，自动生成替代素材',
     prompt: '请生成一个适合 Scratch 项目的' + target + '，主题为：' + subject,
     style: 'scratch',
     width: 480,
@@ -168,7 +172,7 @@ function generationFallback(entry: ResourceEntry): ImageGenerationSource | undef
   };
 }
 function maybeAutoConfirm() {
-  if (generated.value.length || unresolvedLibraryEntries.value.length || matching.value || matchError.value || autoCompleting.value) return;
+  if (unresolvedLibraryEntries.value.length || matching.value || matchError.value || autoCompleting.value || !generationPolicySatisfied.value) return;
   confirm();
 }
 function confirm() {
@@ -215,8 +219,8 @@ function pickerTerms(entry: ResourceEntry) {
         <header class="resource-review__header"><div><h2 id="resource-review-title"><Image :size="19" />项目资源</h2><p>{{ plan.summary }}</p></div><button class="icon-button" type="button" title="取消" aria-label="取消" @click="emit('cancel')"><X :size="18" /></button></header>
         <div v-if="matching" class="resource-review__notice resource-review__notice--loading"><LoaderCircle class="spin" :size="17" />正在匹配 Scratch 内置素材，匹配成功的资源会直接使用。</div>
         <div v-else-if="matchError" class="resource-review__notice resource-review__notice--error"><AlertTriangle :size="17" /><span>{{ matchError }}<button class="button button--quiet" type="button" @click="resolveLibraryMatches">重试</button></span></div>
-        <div v-else-if="unmatchedEntries.length" class="resource-review__notice"><AlertTriangle :size="17" /><span>{{ generationAllowed ? '以下资源没有匹配的 Scratch 素材，请确认生成替代素材，或手动选择其他素材。' : '以下资源没有匹配的 Scratch 素材，请手动选择其他素材。' }}</span></div>
-        <div v-else class="resource-review__notice resource-review__notice--success"><Check :size="17" /><span>Scratch 内置素材已自动匹配；只有明确的生图资源需要确认。</span></div>
+        <div v-else-if="unmatchedEntries.length" class="resource-review__notice"><AlertTriangle :size="17" /><span>{{ generationAllowed ? '以下资源没有匹配的 Scratch 素材，系统将自动生成替代素材；也可以手动选择其他素材。' : '以下资源没有匹配的 Scratch 素材，请手动选择其他素材。' }}</span></div>
+        <div v-else class="resource-review__notice resource-review__notice--success"><Check :size="17" /><span>Scratch 内置素材已自动匹配；缺失资源和生图资源会自动处理。</span></div>
         <div class="resource-review__list">
           <article v-for="entry in resources" :key="entry.key" class="resource-review__item">
             <div v-if="entry.source?.kind === 'scratch_library'" class="resource-review__resource-actions">
@@ -230,7 +234,7 @@ function pickerTerms(entry: ResourceEntry) {
           </article>
           <p v-if="!resources.length" class="resource-review__empty">此项目不需要新增资源。</p>
         </div>
-        <footer class="resource-review__footer"><span v-if="matching">正在匹配素材…</span><span v-else-if="unresolvedLibraryEntries.length">还有 {{ unresolvedLibraryEntries.length }} 项资源需要处理</span><span v-else-if="generated.length">{{ generated.length }} 项生图等待确认</span><span v-else>资源将自动使用</span><div><button class="button" type="button" @click="emit('cancel')">取消</button><button class="button button--primary" type="button" :disabled="!canConfirm" @click="confirm">确认并准备</button></div></footer>
+        <footer class="resource-review__footer"><span v-if="matching">正在匹配素材…</span><span v-else-if="unresolvedLibraryEntries.length">还有 {{ unresolvedLibraryEntries.length }} 项资源需要处理</span><span v-else-if="generated.length">{{ generated.length }} 项生图将自动处理</span><span v-else>资源将自动使用</span><div><button class="button" type="button" @click="emit('cancel')">取消</button><button class="button button--primary" type="button" :disabled="!canConfirm" @click="confirm">确认并准备</button></div></footer>
       </section>
       <section v-else class="resource-review resource-review--processing" role="status" aria-live="polite">
         <div class="resource-review__processing">

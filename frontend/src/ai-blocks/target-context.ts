@@ -227,8 +227,9 @@ export function readAiProjectSnapshot(bridge: ScratchGuiBridge): AiProjectSnapsh
 
 export function assertProjectSnapshotIsCurrent(bridge: ScratchGuiBridge, snapshot: AiProjectSnapshot) {
   const vm = bridge.currentVm;
-  if (!vm?.editingTarget || vm.editingTarget.id !== snapshot.editingTargetId) {
-    throw new Error('确认需求后当前目标已经切换，请重新生成计划');
+  // Selecting another target does not change the project; validate the saved topology instead.
+  if (!vm?.editingTarget) {
+    throw new Error('Scratch 编辑器尚未就绪，无法继续生成');
   }
   if (bridge.projectRevision !== snapshot.revision) {
     throw new Error('确认需求后项目发生了变化，请重新生成计划');
@@ -237,9 +238,6 @@ export function assertProjectSnapshotIsCurrent(bridge: ScratchGuiBridge, snapsho
   const targetIds = targets.map(target => target.id);
   if (targetIds.length !== snapshot.targetIds.length || targetIds.some((id, index) => id !== snapshot.targetIds[index])) {
     throw new Error('确认需求后项目角色发生了变化，请重新生成计划');
-  }
-  if (snapshot.targetRefs && targets.some((target, index) => target !== snapshot.targetRefs?.[index])) {
-    throw new Error('确认需求后项目角色已被替换，请重新生成计划');
   }
   if (snapshot.targetSignatures && targets.some((target, index) => targetSignature(target) !== snapshot.targetSignatures?.[index])) {
     throw new Error('确认需求后项目角色属性发生了变化，请重新生成计划');
@@ -251,13 +249,15 @@ export function assertProjectSnapshotIsCurrent(bridge: ScratchGuiBridge, snapsho
 
 export function assertSnapshotIsCurrent(bridge: ScratchGuiBridge, snapshot: AiTargetSnapshot) {
   const vm = bridge.currentVm;
-  if (!vm?.editingTarget || vm.editingTarget.id !== snapshot.targetId || (snapshot.targetRef && vm.editingTarget !== snapshot.targetRef)) {
-    throw new Error('当前目标已经切换，请重新确认后再生成');
+  const target = vm?.runtime.getTargetById?.(snapshot.targetId) ?? vm?.runtime.targets.find(item => item.id === snapshot.targetId);
+  // The original target remains authoritative even when Scratch selects another target.
+  if (!target) {
+    throw new Error('确认需求后当前目标已被移除，请重新生成计划');
   }
   if (bridge.projectRevision !== snapshot.revision) {
     throw new Error('确认需求后项目代码发生了变化，请重新生成计划');
   }
-  if (snapshot.stateSignature && targetStateSignature(vm.editingTarget) !== snapshot.stateSignature) {
+  if (snapshot.stateSignature && targetStateSignature(target) !== snapshot.stateSignature) {
     throw new Error('确认需求后当前目标内容发生了变化，请重新生成计划');
   }
 }
