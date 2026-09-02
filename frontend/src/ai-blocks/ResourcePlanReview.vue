@@ -114,6 +114,10 @@ watch(() => [props.open, props.plan] as const, ([open]) => {
   else {
     matchRun += 1;
     generationEntry.value = null;
+    pickerEntry.value = null;
+    autoCompleting.value = false;
+    matching.value = false;
+    matchError.value = '';
   }
 });
 
@@ -168,7 +172,7 @@ function maybeAutoConfirm() {
   confirm();
 }
 function confirm() {
-  if (!canConfirm.value) return;
+  if (!canConfirm.value || autoCompleting.value) return;
   autoCompleting.value = true;
   const confirmed = [...selectedGenerationKeys.value, ...confirmedMissingGenerationKeys.value];
   const fallbacks: Record<string, ImageGenerationSource> = {};
@@ -227,6 +231,14 @@ function pickerTerms(entry: ResourceEntry) {
           <p v-if="!resources.length" class="resource-review__empty">此项目不需要新增资源。</p>
         </div>
         <footer class="resource-review__footer"><span v-if="matching">正在匹配素材…</span><span v-else-if="unresolvedLibraryEntries.length">还有 {{ unresolvedLibraryEntries.length }} 项资源需要处理</span><span v-else-if="generated.length">{{ generated.length }} 项生图等待确认</span><span v-else>资源将自动使用</span><div><button class="button" type="button" @click="emit('cancel')">取消</button><button class="button button--primary" type="button" :disabled="!canConfirm" @click="confirm">确认并准备</button></div></footer>
+      </section>
+      <section v-else class="resource-review resource-review--processing" role="status" aria-live="polite">
+        <div class="resource-review__processing">
+          <LoaderCircle class="spin" :size="28" />
+          <h2>正在准备项目资源</h2>
+          <p>已确认素材，正在继续写入项目。</p>
+          <button class="button" type="button" @click="emit('cancel')">取消</button>
+        </div>
       </section>
       <ScratchLibraryPickerDialog v-if="pickerEntry" :open="Boolean(pickerEntry)" :type="pickerType(pickerEntry)" :initial-terms="pickerTerms(pickerEntry)" @close="pickerEntry = null" @select="selectAsset" />
       <div v-if="generationEntry" class="resource-generation-overlay" @click.self="cancelGenerationPrompt">

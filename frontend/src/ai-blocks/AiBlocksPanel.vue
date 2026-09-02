@@ -435,6 +435,9 @@ function openResourceReview() {
 async function confirmProjectManifest(confirmedGenerationIds: string[], selections: Record<string, ScratchSpriteItem | ScratchLibraryItem>, generationFallbacks: Record<string, ImageGenerationSource> = {}) {
   const draftValue = generationDraft.value;
   if (!draftValue?.manifest || !props.bridge || isBusy.value) return;
+  // Close the review overlay before awaiting asset preparation or program generation.
+  projectManifest.value = null;
+  noticeMessage.value = '';
   state.value = 'preparing';
   phaseName.value = 'preparing';
   progress.value = {current: 0, total: 0, label: '正在准备项目资源…'};
@@ -466,6 +469,7 @@ async function confirmProjectManifest(confirmedGenerationIds: string[], selectio
   } catch (error: unknown) {
     state.value = 'review';
     phaseName.value = 'review';
+    noticeMessage.value = '';
     progress.value = {current: progress.value.current, total: progress.value.total, label: '确认资源后才会写入项目。'};
     if (error instanceof DOMException && error.name === 'AbortError') {
       settleTurn('cancelled', '已取消资源准备，项目未被修改。');

@@ -139,6 +139,10 @@
 
 .scratch-picker-overlay, .resource-review-overlay { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; padding: 20px; background: rgba(18, 30, 27, .42); }
 .scratch-picker, .resource-review { width: min(720px, 100%); max-height: min(720px, 92vh); overflow: auto; background: #fff; border: 1px solid #d9e2df; border-radius: 8px; box-shadow: 0 20px 60px rgba(18, 30, 27, .2); }
+.resource-review--processing { display: grid; min-height: 240px; place-items: center; }
+.resource-review__processing { display: grid; justify-items: center; gap: 10px; padding: 36px 24px; color: #286552; text-align: center; }
+.resource-review__processing h2 { margin: 0; color: #17352e; font-size: 18px; }
+.resource-review__processing p { margin: 0; color: #687772; font-size: 13px; }
 .scratch-picker__header, .resource-review__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #e5ece9; }
 .scratch-picker__header h2, .resource-review__header h2 { display: flex; align-items: center; gap: 8px; margin: 0; color: #17352e; font-size: 18px; }
 .resource-review__header p { margin: 6px 0 0; color: #6a7773; font-size: 13px; }
