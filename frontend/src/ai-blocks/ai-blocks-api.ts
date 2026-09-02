@@ -5,6 +5,20 @@ import {createSseParser} from '../ai/text-expansion-api';
 export type AiBlocksMode = 'modify' | 'append' | 'rewrite';
 export type AiBlocksModelTier = 'normal' | 'advanced' | 'super';
 export type AiBlocksThinkingStrength = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const AI_BLOCKS_MODEL_OPTIONS = [
+  {value: 'normal', label: '普通', model: 'Agnes · agnes-2.5-flash'},
+  {value: 'advanced', label: '高级', model: 'DeepSeek · deepseek-v4-flash'},
+  {value: 'super', label: '超级', model: 'GPT · gpt-5.6-sol'},
+] as const satisfies ReadonlyArray<{value: AiBlocksModelTier; label: string; model: string}>;
+
+export const AI_BLOCKS_THINKING_OPTIONS = [
+  {value: 'low', label: '低'},
+  {value: 'medium', label: '中'},
+  {value: 'high', label: '高'},
+  {value: 'xhigh', label: '超高'},
+  {value: 'max', label: '最大'},
+] as const satisfies ReadonlyArray<{value: AiBlocksThinkingStrength; label: string}>;
 export type UnifiedGenerationPhase = 'requirements' | 'plan' | 'program';
 export type UnifiedGenerationEventType =
   | 'cache_hit'
@@ -110,6 +124,23 @@ export interface UnifiedGenerationRequest {
   proceed_with_defaults: boolean;
 }
 
+export interface ProjectManifestGenerationRequest extends UnifiedGenerationRequest {
+  scope: 'project';
+  project_context: AiBlocksProjectContext;
+  output_contract: 'project_manifest';
+}
+
+export interface ProjectProgramGenerationRequest extends UnifiedGenerationRequest {
+  scope: 'project';
+  project_context: AiBlocksProjectContext;
+  output_contract: 'project_program';
+  requirements: AiBlocksRequirements;
+  plan: AiBlocksPlan;
+  manifest: ProjectManifest;
+  program_target: ProjectManifest['program_targets'][number];
+  target_index: number;
+}
+
 export interface UnifiedGenerationEvent {
   type: UnifiedGenerationEventType;
   requestId: string;
@@ -158,12 +189,13 @@ function asData(payload: Record<string, unknown>): Record<string, unknown> {
     : {};
 }
 
-export async function streamUnifiedGeneration(
+async function streamGeneration(
+  path: string,
   request: UnifiedGenerationRequest,
   onEvent: (event: UnifiedGenerationEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch('/api/ai-blocks/generate-unified', {
+  const response = await fetch(path, {
     method: 'POST',
     headers: {Accept: 'text/event-stream', 'Content-Type': 'application/json'},
     body: JSON.stringify(request),
@@ -222,6 +254,30 @@ export async function streamUnifiedGeneration(
     reader.releaseLock();
   }
   if (!completed) throw new AiBlocksApiError('STREAM_INCOMPLETE', '统一生成连接意外中断');
+}
+
+export function streamUnifiedGeneration(
+  request: UnifiedGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  return streamGeneration('/api/ai-blocks/generate-unified', request, onEvent, signal);
+}
+
+export function streamProjectManifest(
+  request: ProjectManifestGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  return streamGeneration('/api/ai-blocks/generate', request, onEvent, signal);
+}
+
+export function streamProjectProgram(
+  request: ProjectProgramGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  return streamGeneration('/api/ai-blocks/generate', request, onEvent, signal);
 }
 
 export async function streamAiBlocksChat(

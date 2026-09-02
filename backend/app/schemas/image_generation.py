@@ -51,9 +51,11 @@ class ImageGenerationRequest(BaseModel):
     def validate_size_pair_placeholder(cls, value: int) -> int:
         return value
 
-    def validate_canvas_size(self) -> None:
+    @model_validator(mode='after')
+    def validate_canvas_size(self) -> 'ImageGenerationRequest':
         if (self.width, self.height) not in ALLOWED_SIZES:
             raise ValueError('width and height must be an allowed canvas pair')
+        return self
 
 
 class SheetLayout(BaseModel):

@@ -18,7 +18,9 @@ from ..schemas.ai_blocks import (
     ChatRequest,
     ProgramContractError,
     ProgramIR,
+    ProjectGenerationRequest,
     ProjectManifest,
+    ProjectProgramGenerationRequest,
     ResourceContractError,
     UnifiedGenerationRequest,
     ValidationRequest,
@@ -147,6 +149,51 @@ async def generate_unified(
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_ERROR', 'message': 'AI 生成暂时不可用，请稍后重试'})
             except Exception as exc:
                 logger.error('ai_unified_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__)
+                if not terminal:
+                    terminal = True
+                    yield _sse('error', {'request_id': body.request_id, 'code': 'AI_GENERATION_ERROR', 'message': 'AI 输出未完成，请重新生成'})
+
+    return StreamingResponse(
+        generate(),
+        media_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
+
+
+@router.post('/generate')
+async def generate_project_contract(
+    body: ProjectGenerationRequest,
+    provider: AgnesTextProvider = Depends(get_ai_blocks_provider),
+    semaphore: asyncio.Semaphore = Depends(get_ai_blocks_semaphore),
+    orchestrator: GenerationOrchestrator = Depends(get_ai_blocks_orchestrator),
+):
+    selected = _require_provider(provider, body.model_tier)
+
+    async def generate() -> AsyncIterator[str]:
+        terminal = False
+        async with semaphore:
+            try:
+                async with asyncio.timeout(get_settings().ai_blocks_provider_timeout_seconds):
+                    if isinstance(body, ProjectProgramGenerationRequest):
+                        stream = orchestrator.generate_project_program(body, selected)
+                    else:
+                        stream = orchestrator.generate_unified(body, selected)
+                    async for event in stream:
+                        yield _sse(event.type, event.payload())
+                        if event.type in {'complete', 'error'}:
+                            terminal = True
+                            return
+            except asyncio.TimeoutError:
+                if not terminal:
+                    terminal = True
+                    yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_TIMEOUT', 'message': 'AI 生成超时，请稍后重试'})
+            except AgnesTextProviderError:
+                logger.error('ai_project_contract_provider_failed request_id=%s', body.request_id)
+                if not terminal:
+                    terminal = True
+                    yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_ERROR', 'message': 'AI 生成暂时不可用，请稍后重试'})
+            except Exception as exc:
+                logger.error('ai_project_contract_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__)
                 if not terminal:
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_GENERATION_ERROR', 'message': 'AI 输出未完成，请重新生成'})

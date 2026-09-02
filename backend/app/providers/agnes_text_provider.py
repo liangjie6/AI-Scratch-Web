@@ -6,10 +6,13 @@ import logging
 
 import httpx
 
+from ..ai_blocks_contract import (
+    DEEPSEEK_REASONING_EFFORT,
+    THINKING_BUDGET_TOKENS,
+    ThinkingStrength,
+    provider_for_tier,
+)
 from ..config import Settings
-
-ThinkingStrength = Literal['low', 'medium', 'high', 'xhigh', 'max']
-THINKING_BUDGET_TOKENS: dict[str, int] = {'low': 1024, 'medium': 2048, 'high': 4096, 'xhigh': 8192, 'max': 16384}
 _STOP_SEQUENCES = ['\n---', '\n现在是 **Agnes**', '\n现在是 Agnes']
 logger = logging.getLogger(__name__)
 
@@ -27,7 +30,7 @@ class AgnesTextProvider:
         self.settings, self.http_client, self.provider = settings, http_client, provider
 
     def for_tier(self, tier: str) -> 'AgnesTextProvider':
-        return AgnesTextProvider(self.settings, self.http_client, {'normal': 'agnes', 'advanced': 'deepseek', 'super': 'gpt'}.get(tier, 'agnes'))
+        return AgnesTextProvider(self.settings, self.http_client, provider_for_tier(tier))
 
     @staticmethod
     def _log_request_content(messages: list[dict[str, str]]) -> None:
@@ -63,7 +66,7 @@ class AgnesTextProvider:
         return {'deepseek': self.settings.deepseek_chat_model, 'gpt': self.settings.gpt_chat_model}.get(self.provider, self.settings.agnes_chat_model)
 
     async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
-        async for delta in self._stream_responses(messages, thinking_enabled=False, thinking_strength='low', json_output=False) if self.provider == 'gpt' else self._stream_openai(messages, enable_thinking=None):
+        async for delta in self._stream_responses(messages, thinking_enabled=False, thinking_strength='low', json_output=False) if self.provider == 'gpt' else self._stream_openai(messages, enable_thinking=None, thinking_strength='low'):
             if delta.kind == 'content': yield delta.text
 
     async def stream_with_reasoning(
@@ -87,7 +90,13 @@ class AgnesTextProvider:
                 json_schema=json_schema,
             )
         else:
-            source = self._stream_openai(messages, enable_thinking=thinking_enabled, json_output=json_output, json_schema=json_schema)
+            source = self._stream_openai(
+                messages,
+                enable_thinking=thinking_enabled,
+                thinking_strength=thinking_strength,
+                json_output=json_output,
+                json_schema=json_schema,
+            )
         async for delta in source: yield delta
 
     async def _stream_openai(
@@ -95,13 +104,15 @@ class AgnesTextProvider:
         messages: list[dict[str, str]],
         *,
         enable_thinking: bool | None,
+        thinking_strength: ThinkingStrength = 'medium',
         json_output: bool = False,
         json_schema: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgnesStreamDelta]:
         payload: dict[str, Any] = {'model': self._model(), 'messages': messages, 'stream': True, 'stop': _STOP_SEQUENCES}
         if enable_thinking is not None and self.provider == 'agnes': payload['chat_template_kwargs'] = {'enable_thinking': enable_thinking}
         if self.provider == 'deepseek':
-            if enable_thinking: payload['reasoning_effort'] = 'high'
+            if enable_thinking:
+                payload['reasoning_effort'] = DEEPSEEK_REASONING_EFFORT[thinking_strength]
             if json_output:
                 payload['response_format'] = (
                     {'type': 'json_schema', 'json_schema': {'name': 'ai_blocks_segment', 'strict': True, 'schema': json_schema}}

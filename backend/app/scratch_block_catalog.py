@@ -13,9 +13,12 @@ class BlockContract:
     shape: BlockShape
     targets: frozenset[str]
     fields: frozenset[str]
+    required_fields: frozenset[str]
     resolved_fields: frozenset[str]
     inputs: Mapping[str, InputKind]
+    required_inputs: frozenset[str]
     substacks: frozenset[str]
+    required_substacks: frozenset[str]
 
 
 _BOTH = frozenset({'stage', 'sprite'})
@@ -29,16 +32,25 @@ def _block(
     *,
     fields: tuple[str, ...] = (),
     resolved_fields: tuple[str, ...] = (),
+    optional_fields: tuple[str, ...] = (),
     inputs: tuple[tuple[str, InputKind], ...] = (),
+    optional_inputs: tuple[str, ...] = (),
     substacks: tuple[str, ...] = (),
+    optional_substacks: tuple[str, ...] = (),
 ) -> BlockContract:
+    all_fields = frozenset((*fields, *resolved_fields))
+    all_inputs = MappingProxyType(dict(inputs))
+    all_substacks = frozenset(substacks)
     return BlockContract(
         shape=shape,
         targets=targets,
-        fields=frozenset((*fields, *resolved_fields)),
+        fields=all_fields,
+        required_fields=all_fields.difference(optional_fields),
         resolved_fields=frozenset(resolved_fields),
-        inputs=MappingProxyType(dict(inputs)),
-        substacks=frozenset(substacks),
+        inputs=all_inputs,
+        required_inputs=frozenset(all_inputs).difference(optional_inputs),
+        substacks=all_substacks,
+        required_substacks=all_substacks.difference(optional_substacks),
     )
 
 

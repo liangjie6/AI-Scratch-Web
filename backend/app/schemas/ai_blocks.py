@@ -7,8 +7,10 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BeforeValidator, BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
+from ..ai_blocks_contract import ModelTier, ThinkingStrength
 from ..resource_contract import RESOURCE_DIAGNOSTIC_CODES, bounded_actual
 from ..scratch_block_catalog import BLOCK_CONTRACTS
+from .image_generation import ALLOWED_SIZES
 
 MAX_BLOCKS = 120
 MAX_BLOCK_DEPTH = 12
@@ -69,11 +71,11 @@ class ProjectContext(StrictModel):
 
 class ThinkingSettings(StrictModel):
     enabled: bool = True
-    strength: Literal['low', 'medium', 'high', 'xhigh', 'max'] = 'medium'
+    strength: ThinkingStrength = 'medium'
 
 
 class AIBlocksRequestBase(StrictModel):
-    model_tier: Literal['normal', 'advanced', 'super'] = 'normal'
+    model_tier: ModelTier = 'normal'
     session_id: ShortString
     request_id: ShortString
     messages: list[ChatMessage] = Field(min_length=1, max_length=40)
@@ -175,6 +177,41 @@ class UnifiedGenerationRequest(AIBlocksRequestBase):
         if self.scope == 'single_sprite' and self.project_context is not None:
             raise ValueError('project_context is only valid for project generation')
         return self
+
+
+class ProjectManifestGenerationRequest(UnifiedGenerationRequest):
+    output_contract: Literal['project_manifest'] = 'project_manifest'
+
+    @model_validator(mode='after')
+    def validate_project_scope(self) -> 'ProjectManifestGenerationRequest':
+        if self.scope != 'project':
+            raise ValueError('project_manifest requires project scope')
+        return self
+
+
+class ProjectProgramGenerationRequest(UnifiedGenerationRequest):
+    output_contract: Literal['project_program'] = 'project_program'
+    requirements: RequirementsResponse
+    plan: Plan
+    manifest: ProjectManifest
+    program_target: ProjectProgramTarget
+    target_index: int = Field(ge=0)
+
+    @model_validator(mode='after')
+    def validate_program_target(self) -> 'ProjectProgramGenerationRequest':
+        if self.scope != 'project':
+            raise ValueError('project_program requires project scope')
+        if self.target_index >= len(self.manifest.program_targets):
+            raise ValueError('target_index is outside manifest.program_targets')
+        if self.manifest.program_targets[self.target_index] != self.program_target:
+            raise ValueError('program_target must match manifest.program_targets[target_index]')
+        return self
+
+
+ProjectGenerationRequest = Annotated[
+    ProjectManifestGenerationRequest | ProjectProgramGenerationRequest,
+    Field(discriminator='output_contract'),
+]
 
 
 class ValidationRequest(StrictModel):
@@ -375,19 +412,34 @@ def validate_program_for_mode(
     return program
 
 
-def validate_project_program_shared_state(program: ProgramIR, shared_state: ProjectSharedState) -> ProgramIR:
-    """Require each project program to repeat the manifest's global declarations exactly."""
+def validate_project_program_shared_state(
+    program: ProgramIR,
+    shared_state: ProjectSharedState,
+    target_kind: Literal['stage', 'sprite'] = 'sprite',
+) -> ProgramIR:
+    """Require project programs to repeat manifest globals using VM scope semantics."""
     issues: list[tuple[str, str]] = []
-    def dump_state(item: VariableDefinition | ListDefinition, is_list: bool) -> dict[str, Any]:
+
+    def effective_scope(item: VariableDefinition | ListDefinition) -> Literal['local', 'global']:
+        # Scratch stores all state on the stage when the target is the stage; on a
+        # sprite, an omitted scope is the existing local-variable default.
+        return 'global' if target_kind == 'stage' else (item.scope or 'local')
+
+    def dump_state(
+        item: VariableDefinition | ListDefinition,
+        is_list: bool,
+        scope: Literal['local', 'global'],
+    ) -> dict[str, Any]:
         value = item.model_dump(mode='json')
+        value['scope'] = scope
         if is_list and value['value'] is None:
             value['value'] = []
         return value
 
-    expected_variables = sorted((dump_state(item, False) for item in shared_state.variables), key=lambda item: item['name'])
-    expected_lists = sorted((dump_state(item, True) for item in shared_state.lists), key=lambda item: item['name'])
-    actual_variables = sorted((dump_state(item, False) for item in program.variables if item.scope == 'global'), key=lambda item: item['name'])
-    actual_lists = sorted((dump_state(item, True) for item in program.lists if item.scope == 'global'), key=lambda item: item['name'])
+    expected_variables = sorted((dump_state(item, False, 'global') for item in shared_state.variables), key=lambda item: item['name'])
+    expected_lists = sorted((dump_state(item, True, 'global') for item in shared_state.lists), key=lambda item: item['name'])
+    actual_variables = sorted((dump_state(item, False, 'global') for item in program.variables if effective_scope(item) == 'global'), key=lambda item: item['name'])
+    actual_lists = sorted((dump_state(item, True, 'global') for item in program.lists if effective_scope(item) == 'global'), key=lambda item: item['name'])
     if actual_variables != expected_variables:
         issues.append(('$.variables', 'project program global variables must exactly repeat manifest.shared_state.variables'))
     if actual_lists != expected_lists:
@@ -396,7 +448,7 @@ def validate_project_program_shared_state(program: ProgramIR, shared_state: Proj
         issues.append(('$.broadcasts', 'project program broadcasts must exactly repeat manifest.shared_state.broadcasts'))
     global_names = {item['name'] for item in expected_variables} | {item['name'] for item in expected_lists}
     for path, values in (('$.variables', program.variables), ('$.lists', program.lists)):
-        if any(item.scope != 'global' and item.name in global_names for item in values):
+        if any(effective_scope(item) != 'global' and item.name in global_names for item in values):
             issues.append((path, 'target-local state cannot reuse a manifest global name'))
     if issues:
         raise ProgramContractError(issues)
@@ -459,7 +511,7 @@ def validate_program_contracts(
         for name in block.fields:
             if name not in contract.fields:
                 issue(f'{path}.fields.{name}', 'unknown field')
-        for name in contract.fields:
+        for name in contract.required_fields:
             if name not in block.fields:
                 issue(f'{path}.fields.{name}', 'required field is missing')
         for name in contract.resolved_fields:
@@ -483,14 +535,14 @@ def validate_program_contracts(
                 issue(input_path, 'boolean input requires a nested boolean block')
             elif expected != 'any' and value.kind != expected:
                 issue(f'{input_path}.kind', f'expected {expected}')
-        for name in contract.inputs:
+        for name in contract.required_inputs:
             if name not in block.inputs:
                 issue(f'{path}.inputs.{name}', 'required input is missing')
 
         for name in block.substacks:
             if name not in contract.substacks:
                 issue(f'{path}.substacks.{name}', 'substack not allowed for opcode')
-        for name in contract.substacks:
+        for name in contract.required_substacks:
             if name not in block.substacks:
                 issue(f'{path}.substacks.{name}', 'required substack is missing')
         for name, stack in block.substacks.items():
@@ -584,9 +636,15 @@ class ImageGenerationSource(StrictModel):
     prompt: LongString
     style: ShortString
     custom_style: ShortString | None = None
-    width: Literal[512, 768, 1024]
-    height: Literal[512, 768, 1024]
+    width: int = Field(ge=1, le=2_000)
+    height: int = Field(ge=1, le=2_000)
     sheet_layout: Literal['1x1']
+
+    @model_validator(mode='after')
+    def validate_size_pair(self) -> 'ImageGenerationSource':
+        if (self.width, self.height) not in ALLOWED_SIZES:
+            raise ValueError('width and height must be an allowed image size pair')
+        return self
 
 
 CostumeSource = Annotated[ScratchCostumeLibrarySource | ImageGenerationSource, Field(discriminator='kind')]
@@ -840,4 +898,6 @@ ProjectProgramTarget.model_rebuild()
 ProjectManifest.model_rebuild()
 ProjectProgramResponse.model_rebuild()
 UnifiedGenerationRequest.model_rebuild()
+ProjectManifestGenerationRequest.model_rebuild()
+ProjectProgramGenerationRequest.model_rebuild()
 

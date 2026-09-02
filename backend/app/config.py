@@ -27,8 +27,6 @@ class Settings(BaseSettings):
     ai_blocks_max_repair_rounds: int = Field(
         default=2, ge=0, le=3, validation_alias='AI_BLOCKS_MAX_REPAIR_ROUNDS',
     )
-    max_prompt_length: int = Field(default=800, ge=10, le=2_000)
-
     provider_base_url: str = 'https://sui-xiang.com/v1'
     provider_model: str = 'gpt-image-2'
     agnes_api_base: str = 'https://api.agnes-ai.cn/v1/'
@@ -37,7 +35,6 @@ class Settings(BaseSettings):
     deepseek_chat_model: str = 'deepseek-v4-flash'
     gpt_api_base: str = 'https://apexapi.roixw.com'
     gpt_chat_model: str = 'gpt-5.6-sol'
-    gpt_reasoning_effort: str = Field(default='high', validation_alias='GPT_REASONING_EFFORT')
 
     def require_api_key(self) -> str:
         if not self.sui_xiang_api_key:

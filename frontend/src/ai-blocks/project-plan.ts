@@ -1,4 +1,5 @@
-import type {ProgramIR, ValidationIssue, ValidationResult} from './program-ir';
+import type {ProgramIR, TargetKind, ValidationIssue, ValidationResult} from './program-ir';
+import {CANVAS_SIZES} from '../ai/image-generation-types';
 import {
   RESOURCE_CONTRACT_VERSION,
   RESOURCE_OPERATION_CONTRACT,
@@ -107,8 +108,10 @@ function validateSource(value: unknown, path: string, issues: ValidationIssue[],
   }
   for (const field of ['reason', 'prompt', 'style']) if (!isString(value[field])) issues.push(contractIssue(path + '/' + field, 'must be a non-empty string', 'resource', 'FIELD_INVALID', value[field]));
   if (value.custom_style !== undefined && !isString(value.custom_style, 120)) issues.push(contractIssue(path + '/custom_style', 'must be a non-empty string when present', 'resource', 'FIELD_INVALID', value.custom_style));
-  if (!isFiniteNumber(value.width) || ![512, 768, 1024].includes(value.width)) issues.push(contractIssue(path + '/width', 'must be 512, 768, or 1024', 'resource', 'FIELD_INVALID', value.width));
-  if (!isFiniteNumber(value.height) || ![512, 768, 1024].includes(value.height)) issues.push(contractIssue(path + '/height', 'must be 512, 768, or 1024', 'resource', 'FIELD_INVALID', value.height));
+  const validImageSize = CANVAS_SIZES.some(size => size.width === value.width && size.height === value.height);
+  if (!isFiniteNumber(value.width) || !isFiniteNumber(value.height) || !validImageSize) {
+    issues.push(contractIssue(path, 'must use one of the supported image size pairs', 'resource', 'FIELD_INVALID', {width: value.width, height: value.height}));
+  }
   if (value.sheet_layout !== '1x1') issues.push(contractIssue(path + '/sheet_layout', 'must be 1x1', 'resource', 'FIELD_INVALID', value.sheet_layout));
 }
 
@@ -308,21 +311,22 @@ export function assertProjectManifest(value: unknown, existingSpriteNames?: stri
   if (!result.valid) throw new Error(result.issues.map(item => item.path + ': ' + item.message).join('; '));
 }
 
-function namedStateValue(value: {name: string; value?: unknown; scope?: string}, list: boolean) {
-  return {name: value.name, value: value.value === undefined ? (list ? [] : null) : value.value, scope: value.scope};
+function namedStateValue(value: {name: string; value?: unknown; scope?: string}, list: boolean, scope = value.scope) {
+  return {name: value.name, value: value.value === undefined ? (list ? [] : null) : value.value, scope};
 }
 
-export function validateProjectProgramSharedState(program: ProgramIR, sharedState: ProjectSharedState): ValidationResult {
+export function validateProjectProgramSharedState(program: ProgramIR, sharedState: ProjectSharedState, targetKind: TargetKind = 'sprite'): ValidationResult {
   const issues: ValidationIssue[] = [];
-  const expectedVariables = sharedState.variables.map(item => namedStateValue(item, false)).sort((left, right) => left.name.localeCompare(right.name));
-  const expectedLists = sharedState.lists.map(item => namedStateValue(item, true)).sort((left, right) => left.name.localeCompare(right.name));
-  const actualVariables = program.variables.filter(item => item.scope === 'global').map(item => namedStateValue(item, false)).sort((left, right) => left.name.localeCompare(right.name));
-  const actualLists = program.lists.filter(item => item.scope === 'global').map(item => namedStateValue(item, true)).sort((left, right) => left.name.localeCompare(right.name));
+  const effectiveScope = (scope: 'local' | 'global' | undefined): 'local' | 'global' => targetKind === 'stage' ? 'global' : (scope ?? 'local');
+  const expectedVariables = sharedState.variables.map(item => namedStateValue(item, false, 'global')).sort((left, right) => left.name.localeCompare(right.name));
+  const expectedLists = sharedState.lists.map(item => namedStateValue(item, true, 'global')).sort((left, right) => left.name.localeCompare(right.name));
+  const actualVariables = program.variables.filter(item => effectiveScope(item.scope) === 'global').map(item => namedStateValue(item, false, 'global')).sort((left, right) => left.name.localeCompare(right.name));
+  const actualLists = program.lists.filter(item => effectiveScope(item.scope) === 'global').map(item => namedStateValue(item, true, 'global')).sort((left, right) => left.name.localeCompare(right.name));
   if (JSON.stringify(actualVariables) !== JSON.stringify(expectedVariables)) issues.push(contractIssue('/variables', 'project program global variables must exactly repeat manifest.shared_state.variables', 'program', 'SHARED_STATE_MISMATCH', actualVariables));
   if (JSON.stringify(actualLists) !== JSON.stringify(expectedLists)) issues.push(contractIssue('/lists', 'project program global lists must exactly repeat manifest.shared_state.lists', 'program', 'SHARED_STATE_MISMATCH', actualLists));
   if (JSON.stringify([...program.broadcasts].sort()) !== JSON.stringify([...sharedState.broadcasts].sort())) issues.push(contractIssue('/broadcasts', 'project program broadcasts must exactly repeat manifest.shared_state.broadcasts', 'program', 'SHARED_STATE_MISMATCH', program.broadcasts));
   const globalNames = new Set([...sharedState.variables, ...sharedState.lists].map(item => item.name));
-  if (program.variables.some(item => item.scope !== 'global' && globalNames.has(item.name))) issues.push(contractIssue('/variables', 'target-local state cannot reuse a manifest global name', 'program', 'SHARED_STATE_NAME_CONFLICT', program.variables));
-  if (program.lists.some(item => item.scope !== 'global' && globalNames.has(item.name))) issues.push(contractIssue('/lists', 'target-local state cannot reuse a manifest global name', 'program', 'SHARED_STATE_NAME_CONFLICT', program.lists));
+  if (program.variables.some(item => effectiveScope(item.scope) !== 'global' && globalNames.has(item.name))) issues.push(contractIssue('/variables', 'target-local state cannot reuse a manifest global name', 'program', 'SHARED_STATE_NAME_CONFLICT', program.variables));
+  if (program.lists.some(item => effectiveScope(item.scope) !== 'global' && globalNames.has(item.name))) issues.push(contractIssue('/lists', 'target-local state cannot reuse a manifest global name', 'program', 'SHARED_STATE_NAME_CONFLICT', program.lists));
   return {valid: issues.length === 0, issues};
 }

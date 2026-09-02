@@ -72,6 +72,8 @@ async def health():
         'status': 'ok',
         'provider_configured': bool(settings.sui_xiang_api_key),
         'agnes_configured': bool(settings.agnes_api_key),
+        'deepseek_configured': bool(settings.deepseek_api_key),
+        'gpt_configured': bool(settings.gpt_api_key),
     }
 
 

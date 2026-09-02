@@ -42,7 +42,7 @@
 
 ~~~json
 {"op":"add_builtin_sprite","op_id":"sprite_1","name":"红包","x":0,"y":0,"size":60,"tags":["红包"],"source":{"kind":"scratch_library","asset_type":"sprite","search_terms":["gift","红包"]}}
-{"op":"add_sprite","op_id":"sprite_2","name":"自定义角色","x":0,"y":0,"size":100,"tags":["角色"],"costumes":[{"name":"默认造型","source":{"kind":"image_generation","reason":"内置库没有该主题","prompt":"一个清晰的 Scratch 角色","style":"cartoon","width":512,"height":512,"sheet_layout":"1x1"},"tags":[]}]}
+{"op":"add_sprite","op_id":"sprite_2","name":"自定义角色","x":0,"y":0,"size":100,"tags":["角色"],"costumes":[{"name":"默认造型","source":{"kind":"image_generation","reason":"内置库没有该主题","prompt":"一个清晰的 Scratch 角色","style":"cartoon","width":480,"height":360,"sheet_layout":"1x1"},"tags":[]}]}
 {"op":"add_costume","op_id":"costume_1","target":{"kind":"current_target"},"name":"帽子","source":{"kind":"scratch_library","asset_type":"costume","search_terms":["hat","帽子"]},"tags":["帽子"],"select_after":true}
 {"op":"add_backdrop","op_id":"backdrop_1","name":"森林","source":{"kind":"scratch_library","asset_type":"backdrop","search_terms":["forest","森林"]},"tags":["森林"],"select_after":true}
 {"op":"select_backdrop","op_id":"backdrop_2","name":"已有背景"}

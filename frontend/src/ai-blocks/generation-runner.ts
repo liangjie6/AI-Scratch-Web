@@ -15,12 +15,14 @@ import {
 } from './program-ir';
 import {validateProgramIR} from './program-compiler';
 import {
+  streamProjectManifest,
   streamUnifiedGeneration,
   type AiBlocksMode,
   type AiBlocksPlan,
   type AiBlocksRequirements,
   type UnifiedGenerationDraft,
   type UnifiedGenerationEvent,
+  type ProjectManifestGenerationRequest,
   type UnifiedGenerationRequest,
   type UnifiedProgramDraft
 } from './ai-blocks-api';
@@ -66,6 +68,7 @@ export interface UnifiedCommitOptions {
   signal?: AbortSignal;
   onProgress?: (progress: AiGenerationProgress) => void;
   generatedAssets?: GeneratedAsset[];
+  generateProgram?: (context: {targetIndex: number; targetRef: TargetRef; mode: AiBlocksMode; snapshot: AiTargetSnapshot}) => Promise<ProgramIR>;
 }
 
 interface PreparedProgram {
@@ -421,7 +424,7 @@ export class UnifiedGenerationRunner {
     const scripts = new Map<number, ScriptIR[]>();
     const scriptTotals = new Map<number, number>();
 
-    await streamUnifiedGeneration(request, event => {
+    const handleEvent = (event: UnifiedGenerationEvent) => {
       onEvent?.(event);
       if (event.type === 'repair') {
         // 服务端校验失败后进入自修复重试：重置局部帧收集器，等待修复轮重新输出
@@ -472,7 +475,18 @@ export class UnifiedGenerationRunner {
           program
         });
       }
-    }, signal);
+    };
+    if (request.scope === 'project') {
+      const manifestRequest: ProjectManifestGenerationRequest = {
+        ...request,
+        scope: 'project',
+        project_context: request.project_context!,
+        output_contract: 'project_manifest'
+      };
+      await streamProjectManifest(manifestRequest, handleEvent, signal);
+    } else {
+      await streamUnifiedGeneration(request, handleEvent, signal);
+    }
 
     assertSnapshotIsCurrent(this.bridge, snapshot);
     if (projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, projectSnapshot);
@@ -483,13 +497,14 @@ export class UnifiedGenerationRunner {
     }
     const ordered = [...programs.values()].sort((left, right) => left.targetIndex - right.targetIndex);
     if (request.scope === 'single_sprite' && ordered.length !== 1) throw new Error('统一生成流缺少当前目标程序');
-    if (request.scope === 'project' && ordered.length !== manifest.value!.program_targets.length) throw new Error('统一生成流缺少项目目标程序');
+    if (request.scope === 'project' && ordered.length !== 0 && ordered.length !== manifest.value!.program_targets.length) throw new Error('统一生成流缺少项目目标程序');
     for (const item of ordered) {
       const planForTarget = targetPlan(request, manifest.value, item.targetIndex);
-      const result = validateProgramIR(item.program, planForTarget.targetRef.kind === 'stage' ? 'stage' : 'sprite');
+      const targetKind = planForTarget.targetRef.kind === 'stage' || (planForTarget.targetRef.kind === 'current_target' && snapshot.isStage) ? 'stage' : 'sprite';
+      const result = validateProgramIR(item.program, targetKind);
       if (!result.valid) throw new ProgramIRValidationError(result.issues);
       if (request.scope === 'project') {
-        const sharedResult = validateProjectProgramSharedState(item.program!, manifest.value!.shared_state);
+        const sharedResult = validateProjectProgramSharedState(item.program!, manifest.value!.shared_state, targetKind);
         if (!sharedResult.valid) throw new ProgramIRValidationError(sharedResult.issues);
       }
     }
@@ -531,27 +546,56 @@ export class UnifiedGenerationRunner {
           onProgress: (current, total, label) => options.onProgress?.({current, total, label})
         }, transaction);
       }
-      for (let index = 0; index < draft.programs.length; index += 1) {
+      const programCount = options.generateProgram && draft.manifest
+        ? draft.manifest.program_targets.length
+        : draft.programs.length;
+      const isProjectCommit = Boolean(draft.request.scope === 'project' && draft.manifest);
+      for (let index = 0; index < programCount; index += 1) {
         transactionLock!.assertActive();
         throwIfAborted(options.signal);
-        const item = draft.programs[index];
-        const targetPlanForProgram = targetPlan(draft.request, draft.manifest, item.targetIndex);
+        let targetIndex = index;
+        if (!options.generateProgram) {
+          const item = draft.programs[index];
+          if (!item) throw new Error('项目程序草稿序号无效：' + index);
+          targetIndex = item.targetIndex;
+        }
+        const targetPlanForProgram = targetPlan(draft.request, draft.manifest, targetIndex);
         const targetId = targetIdForRef(this.bridge, targetPlanForProgram.targetRef, draft.snapshot.targetId, project);
         const target = targetById(this.bridge, targetId);
         transactionLock!.assertActive();
         this.bridge.currentVm?.setEditingTarget?.(targetId);
         transactionLock!.assertActive();
         const targetSnapshot = readAiTargetSnapshot(this.bridge, targetPlanForProgram.mode, target);
-        const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, item.program!);
-        journal.push({kind: 'program', targetId, scriptIds: item.program!.scripts.map(script => script.id)});
-        const apply = () => applyCompiledProgram(this.bridge, target, prepared.compiled, prepared.removeTopIds, prepared.pending, options.signal, progress => options.onProgress?.({...progress, current: progress.current + index}), targetSnapshot.targetName);
+        let program: ProgramIR;
+        if (options.generateProgram) {
+          program = await options.generateProgram({targetIndex, targetRef: targetPlanForProgram.targetRef, mode: targetPlanForProgram.mode, snapshot: targetSnapshot});
+        } else {
+          const item = draft.programs[index];
+          if (!item?.program) throw new Error('项目程序草稿缺失：' + index);
+          program = item.program;
+        }
+        const programValidation = validateProgramIR(program, targetSnapshot.isStage ? 'stage' : 'sprite');
+        if (!programValidation.valid) throw new ProgramIRValidationError(programValidation.issues);
+        if (draft.request.scope === 'project' && draft.manifest) {
+          const sharedValidation = validateProjectProgramSharedState(program, draft.manifest.shared_state, targetSnapshot.isStage ? 'stage' : 'sprite');
+          if (!sharedValidation.valid) throw new ProgramIRValidationError(sharedValidation.issues);
+        }
+        const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, program);
+        journal.push({kind: 'program', targetId, scriptIds: program.scripts.map(script => script.id)});
+        const apply = () => applyCompiledProgram(this.bridge, target, prepared.compiled, prepared.removeTopIds, prepared.pending, options.signal, progress => {
+          if (isProjectCommit) {
+            options.onProgress?.({current: index, total: programCount, label: targetSnapshot.targetName + ' · ' + progress.current + '/' + progress.total + ' · ' + progress.label});
+          } else {
+            options.onProgress?.({...progress, current: progress.current + index});
+          }
+        }, targetSnapshot.targetName);
         const applied = typeof this.bridge.runProjectTransactionMutation === 'function'
           ? this.bridge.runProjectTransactionMutation(apply)
           : apply();
         transactionLock!.assertActive();
         appliedPrograms.push(applied);
         project?.appliedPrograms.push({target_id: applied.targetId, added_blocks: applied.addedBlocks, added_scripts: applied.addedScripts, removed_scripts: applied.removedScripts});
-        if (options.onProgress) options.onProgress({current: index + 1, total: draft.programs.length, label: targetSnapshot.targetName + ' 的程序已写入'});
+        if (options.onProgress) options.onProgress({current: index + 1, total: programCount, label: targetSnapshot.targetName + ' 的程序已写入'});
       }
       transactionLock!.assertActive();
       this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId);

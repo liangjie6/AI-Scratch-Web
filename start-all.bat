@@ -9,7 +9,7 @@ set "FRONTEND_DIR=%CD%\frontend"
 if not exist "%BACKEND_PYTHON%" (
   echo [ERROR] Backend virtual environment was not found.
   echo Run: python -m venv backend\.venv
-  echo Then: backend\.venv\Scripts\python.exe -m pip install -e ".\backend[test]"
+  echo Then: backend\.venv\Scripts\python.exe -m pip install -e ".\backend"
   pause
   exit /b 1
 )

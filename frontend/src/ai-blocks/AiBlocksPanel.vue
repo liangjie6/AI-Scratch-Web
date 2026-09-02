@@ -3,7 +3,10 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
 import {AlertTriangle, Blocks, Bot, BrainCircuit, Check, ChevronDown, CircleStop, History, LayoutGrid, LoaderCircle, MessageSquare, Pencil, Play, Plus, RefreshCw, Send, Sparkles, Trash2, Undo2} from 'lucide-vue-next';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
+  AI_BLOCKS_MODEL_OPTIONS,
+  AI_BLOCKS_THINKING_OPTIONS,
   streamAiBlocksChat,
+  streamProjectProgram,
   type AiBlocksChatRequest,
   type AiBlocksMessage,
   type AiBlocksMode,
@@ -11,6 +14,7 @@ import {
   type AiBlocksThinkingSettings,
   type AiBlocksThinkingStrength,
   type AiBlocksTargetContext,
+  type ProjectProgramGenerationRequest,
   type UnifiedGenerationEvent,
   type UnifiedGenerationRequest
 } from './ai-blocks-api';
@@ -26,6 +30,7 @@ import type {CanvasPreparedAsset} from '../canvas/CanvasWorkspace.vue';
 import type {ScratchLibraryItem, ScratchSpriteItem} from '../ai/scratch-library';
 import type {GeneratedAsset} from '../ai/asset-library-store';
 import {createId} from '../shared/create-id';
+import type {ProgramIR} from './program-ir';
 
 const props = defineProps<{bridge: ScratchGuiBridge | null}>();
 const emit = defineEmits<{
@@ -45,7 +50,7 @@ const projectAssetsEnabled = import.meta.env.VITE_AI_PROJECT_ASSETS_ENABLED !== 
 function loadThinkingSettings(): AiBlocksThinkingSettings {
   try {
     const value = JSON.parse(localStorage.getItem(THINKING_STORAGE_KEY) ?? 'null');
-    if (typeof value?.enabled === 'boolean' && ['low', 'medium', 'high', 'xhigh', 'max'].includes(value.strength)) return value;
+    if (typeof value?.enabled === 'boolean' && AI_BLOCKS_THINKING_OPTIONS.some(item => item.value === value.strength)) return value;
   } catch {
     // Browser storage is optional.
   }
@@ -112,6 +117,7 @@ const phaseTitle = computed(() => {
   if (phaseName.value === 'review') return '等待资源确认';
   if (phaseName.value === 'preparing') return '正在准备项目资源';
   if (phaseName.value === 'committing') return '正在写入积木';
+  if (phaseName.value === 'repair') return '正在自动修复';
   return 'AI 正在处理';
 });
 const progressPercent = computed(() => progress.value.total ? Math.min(100, Math.round(progress.value.current / progress.value.total * 100)) : 0);
@@ -261,6 +267,12 @@ function handleEvent(event: UnifiedGenerationEvent) {
   if (event.type === 'phase_start') {
     phaseName.value = event.phase ?? '';
     phaseMessage.value = String(event.data.message ?? '');
+    if (event.phase === 'program' && typeof event.data.target_index === 'number') {
+      const targetIndex = event.data.target_index;
+      const targetCount = typeof event.data.target_count === 'number' ? event.data.target_count : 0;
+      const targetName = String(event.data.target_name ?? '');
+      phaseMessage.value = targetName || (targetCount > 1 ? '目标 ' + (targetIndex + 1) + '/' + targetCount : '当前目标');
+    }
   }
   if (event.type === 'phase_complete' && event.phase === 'requirements') {
     requirements.value = event.data as typeof requirements.value;
@@ -275,16 +287,30 @@ function handleEvent(event: UnifiedGenerationEvent) {
     }
   }
   if (event.type === 'script_ready') {
-    progress.value = {current: Number(event.data.index ?? 0) + 1, total: Number(event.data.total ?? 0), label: String(event.data.target_index ?? '') + ' · 脚本已校验'};
+    const targetIndex = Number(event.data.target_index ?? 0);
+    const targetCount = Number(event.data.target_count ?? 0);
+    const scriptIndex = Number(event.data.index ?? 0);
+    const scriptTotal = Number(event.data.total ?? 0);
+    const targetLabel = String(event.data.target_name ?? '') || (targetCount > 1 ? '目标 ' + (targetIndex + 1) + '/' + targetCount : '当前目标');
+    const isCommittingProject = state.value === 'committing' && scope.value === 'project' && targetCount > 0;
+    progress.value = isCommittingProject
+      ? {current: Math.min(targetIndex, targetCount), total: targetCount, label: targetLabel + ' · 脚本 ' + (scriptIndex + 1) + '/' + scriptTotal}
+      : {current: scriptIndex + 1, total: scriptTotal, label: targetLabel + ' · 脚本 ' + (scriptIndex + 1) + '/' + scriptTotal};
   }
   if (event.type === 'phase_complete' && event.phase === 'program') {
-    progress.value = {current: progress.value.current, total: progress.value.total, label: '程序校验完成'};
+    const targetIndex = Number(event.data.target_index ?? 0);
+    const targetCount = Number(event.data.target_count ?? 0);
+    const targetLabel = String(event.data.target_name ?? '') || (targetCount > 1 ? '目标 ' + (targetIndex + 1) + '/' + targetCount : '当前目标');
+    const isCommittingProject = state.value === 'committing' && scope.value === 'project' && targetCount > 0;
+    progress.value = isCommittingProject
+      ? {current: Math.min(targetIndex, targetCount), total: targetCount, label: targetLabel + ' · 程序已校验'}
+      : {current: progress.value.total, total: progress.value.total, label: targetLabel + ' · 程序已校验'};
   }
   if (event.type === 'repair') {
     const attempt = Number(event.data.attempt ?? 1);
     const maxRounds = Number(event.data.max_rounds ?? 1);
     const phase = String(event.data.phase ?? '');
-    phaseName.value = '自动修复';
+    phaseName.value = 'repair';
     phaseMessage.value = '校验未通过，AI 正在自动修正（第 ' + attempt + '/' + maxRounds + ' 次）';
     noticeMessage.value = 'AI 输出未通过校验，正在自动修正' + (phase ? '（' + phase + ' 阶段' : '') + '，请稍候。' + (attempt >= maxRounds ? '若仍有问题将显示具体原因。' : '');
   }
@@ -331,7 +357,8 @@ async function sendMessage() {
       state.value = 'committing';
       phaseName.value = 'committing';
       progress.value = {current: 0, total: 0, label: '正在写入积木…'};
-      const result = await commitDraft(nextDraft, runner, controller.signal);
+      const result = await commitDraft(nextDraft, runner, controller.signal, undefined, undefined, handleEvent);
+      projectManifest.value = null;
       state.value = 'chat';
       phaseName.value = '';
       settleTurn('success', '已完成统一生成并写入 ' + result.programs.length + ' 个目标。');
@@ -362,7 +389,8 @@ async function commitDraft(
   runner: UnifiedGenerationRunner,
   signal?: AbortSignal,
   resources?: Map<string, PreparedResource>,
-  generatedAssets?: GeneratedAsset[]
+  generatedAssets?: GeneratedAsset[],
+  onEvent?: (event: UnifiedGenerationEvent) => void
 ): Promise<UnifiedCommitResult> {
   if (!props.bridge) throw new Error('Scratch 编辑器尚未就绪');
   const result = await runner.commit(draftValue, {
@@ -370,7 +398,36 @@ async function commitDraft(
     resourceExecutor: draftValue.manifest ? createProjectResourceExecutor({bridge: props.bridge, currentTargetId: draftValue.snapshot.targetId}) : undefined,
     signal,
     generatedAssets,
-    onProgress: value => { progress.value = value; }
+    onProgress: value => { progress.value = value; },
+    generateProgram: draftValue.request.scope === 'project' && draftValue.manifest
+      ? async context => {
+          const freshProject = buildProjectContext(props.bridge!, context.snapshot);
+          const programTarget = draftValue.manifest!.program_targets[context.targetIndex];
+          if (!programTarget) throw new Error('找不到项目目标程序清单：' + context.targetIndex);
+          const request: ProjectProgramGenerationRequest = {
+            ...draftValue.request,
+            scope: 'project',
+            target: context.snapshot.context,
+            project_context: freshProject,
+            output_contract: 'project_program',
+            requirements: draftValue.requirements,
+            plan: draftValue.plan,
+            manifest: draftValue.manifest!,
+            program_target: programTarget,
+            target_index: context.targetIndex,
+            request_id: createId()
+          };
+          let program: ProgramIR | undefined;
+          await streamProjectProgram(request, event => {
+            onEvent?.(event);
+            if (event.type === 'complete' && event.data.program && typeof event.data.program === 'object' && !Array.isArray(event.data.program)) {
+              program = event.data.program as ProgramIR;
+            }
+          }, signal);
+          if (!program) throw new Error('项目目标未返回有效 ProgramIR：' + context.targetIndex);
+          return program;
+        }
+      : undefined
   });
   generationResult.value = result;
   generationDraft.value = null;
@@ -401,7 +458,8 @@ async function confirmProjectManifest(confirmedGenerationIds: string[], selectio
     state.value = 'committing';
     phaseName.value = 'committing';
     progress.value = {current: 0, total: 0, label: '正在写入积木与资源…'};
-    const result = await commitDraft(draftValue, new UnifiedGenerationRunner(props.bridge), controller.signal, prepared.prepared, prepared.generatedAssets);
+    const result = await commitDraft(draftValue, new UnifiedGenerationRunner(props.bridge), controller.signal, prepared.prepared, prepared.generatedAssets, handleEvent);
+    projectManifest.value = null;
     state.value = 'chat';
     phaseName.value = '';
     settleTurn('success', '已完成统一生成并写入 ' + result.programs.length + ' 个目标。');
@@ -425,9 +483,11 @@ async function confirmProjectManifest(confirmedGenerationIds: string[], selectio
 }
 /** 关闭资源确认对话框：当前轮次卡片保留草稿状态，而不是移除思考过程与任务清单 */
 function cancelResourceReview() {
+  const wasBusy = isBusy.value;
+  if (wasBusy) controller?.abort();
   projectManifest.value = null;
   const card = cardForTurn();
-  if (card && card.status === 'streaming') {
+  if (!wasBusy && card && card.status === 'streaming') {
     settleTurn('success', '程序草稿已校验，可在“重新打开资源确认”继续提交。');
   }
 }
@@ -595,7 +655,7 @@ defineExpose({acceptCanvasPrepared});
     </div>
     <form class="ai-blocks-composer" @submit.prevent="sendMessage">
       <textarea v-model="draft" rows="3" maxlength="2000" :disabled="isBusy" aria-label="描述要实现的积木功能" placeholder="描述希望实现的效果" @keydown.enter.exact.prevent="sendMessage" />
-      <div class="ai-blocks-composer__actions"><button class="button button--quiet" type="button" :disabled="isBusy || !snapshot" @click="openChatHelp"><Bot :size="15" />问 AI</button><div class="ai-blocks-composer__submit"><label class="ai-blocks-thinking-toggle"><input v-model="thinkingEnabled" type="checkbox" role="switch" :disabled="isBusy" /><BrainCircuit :size="15" /><span>思考</span></label><label class="ai-blocks-thinking-strength"><select v-model="thinkingStrength" aria-label="思考强度" :disabled="!thinkingEnabled || isBusy"><option value="low">低</option><option value="medium">中</option><option value="high">高</option><option value="xhigh">超高</option><option value="max">最大</option></select></label><label class="ai-blocks-model-select"><select v-model="modelTier" aria-label="模型" :disabled="isBusy"><option value="normal">普通</option><option value="advanced">高级</option><option value="super">超级</option></select></label><button class="icon-button ai-blocks-send" type="submit" :disabled="!canSend" title="发送" aria-label="发送需求"><Send :size="16" /></button></div></div>
+      <div class="ai-blocks-composer__actions"><button class="button button--quiet" type="button" :disabled="isBusy || !snapshot" @click="openChatHelp"><Bot :size="15" />问 AI</button><div class="ai-blocks-composer__submit"><label class="ai-blocks-thinking-toggle"><input v-model="thinkingEnabled" type="checkbox" role="switch" :disabled="isBusy" /><BrainCircuit :size="15" /><span>思考</span></label><label class="ai-blocks-thinking-strength"><select v-model="thinkingStrength" aria-label="思考强度" :disabled="!thinkingEnabled || isBusy"><option v-for="item in AI_BLOCKS_THINKING_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</option></select></label><label class="ai-blocks-model-select"><select v-model="modelTier" aria-label="模型" :disabled="isBusy"><option v-for="item in AI_BLOCKS_MODEL_OPTIONS" :key="item.value" :value="item.value" :title="item.model">{{ item.label }}</option></select></label><button class="icon-button ai-blocks-send" type="submit" :disabled="!canSend" title="发送" aria-label="发送需求"><Send :size="16" /></button></div></div>
     </form>
     <section v-if="requirements && state === 'review' && !projectManifest" class="ai-blocks-review"><div class="ai-blocks-review__title"><Sparkles :size="17" /><div><span>需求已整理</span><h3>{{ requirements.title }}</h3></div></div><p>{{ requirements.goal }}</p><ol><li v-for="step in requirements.behavior_steps" :key="step">{{ step }}</li></ol></section>
     <ResourcePlanReview :open="Boolean(projectManifest)" :plan="projectManifest" @cancel="cancelResourceReview" @confirm="confirmProjectManifest" />

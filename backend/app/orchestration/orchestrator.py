@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from openai.lib._pydantic import to_strict_json_schema
 from pydantic import TypeAdapter, ValidationError
@@ -31,6 +31,7 @@ from ..schemas.ai_blocks import (
     validate_program_for_mode,
     validate_project_program_shared_state,
 )
+from .error_messages import repair_hint
 from .streaming_parser import StreamFrame, StreamProtocolError, UnifiedFrameParser, parse_json
 
 
@@ -259,6 +260,145 @@ class GenerationOrchestrator:
         yield repair_failure
         yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
 
+    async def generate_project_program(
+        self,
+        request: UnifiedGenerationRequest,
+        provider: AgnesTextProvider,
+    ) -> AsyncIterator[GenerationEvent]:
+        """Generate exactly one validated ProgramIR for an existing manifest target."""
+        project = self._project_context(request)
+        manifest = getattr(request, 'manifest', None)
+        requirements = getattr(request, 'requirements', None)
+        plan = getattr(request, 'plan', None)
+        target_index = getattr(request, 'target_index', None)
+        program_target = getattr(request, 'program_target', None)
+        if manifest is None or requirements is None or plan is None or not isinstance(target_index, int) or program_target is None:
+            yield GenerationEvent('error', request.request_id, data={'code': 'INVALID_PROJECT_PROGRAM_REQUEST', 'message': '项目程序请求缺少清单上下文'})
+            return
+        target = self._target_context_for_manifest_target(request, manifest, target_index, program_target.mode)
+        target_count = len(manifest.program_targets)
+        target_data = {
+            'target_index': target_index,
+            'target_name': target.name,
+            'target_count': target_count,
+        }
+        yield GenerationEvent('phase_start', request.request_id, phase='program', data=target_data)
+        state = _GenerationState(
+            requirements=requirements,
+            plan=plan,
+            manifest=manifest,
+            phase_started={'requirements', 'plan'},
+            phase_completed={'requirements', 'plan'},
+            expected_program_indices={target_index},
+        )
+        program_context = {
+            'requirements': requirements.model_dump(mode='json'),
+            'plan': plan.model_dump(mode='json'),
+            'manifest': manifest.model_dump(mode='json'),
+            'target': program_target.model_dump(mode='json'),
+        }
+
+        def decode_program(frames: list[StreamFrame]) -> tuple[ProgramIR, list[GenerationEvent]]:
+            if len(frames) == 1 and frames[0].kind == 'program':
+                output = ProgramIR.model_validate(parse_json(frames[0].content))
+                target_kind, mode, current_program = self._target_contract(request, state, target_index)
+                validate_program_contracts(output, target_kind)
+                validate_program_for_mode(output, mode, current_program)
+                validate_project_program_shared_state(output, manifest.shared_state, target_kind)
+                state.programs[target_index] = output
+                dumped = output.model_dump(mode='json')
+                child_events = [
+                    GenerationEvent('metadata', request.request_id, phase='program', data={
+                        **target_data,
+                        'schema_version': dumped['schema_version'],
+                        'summary': dumped['summary'],
+                        'remove_script_ids': dumped['remove_script_ids'],
+                    }),
+                    GenerationEvent('shared_state', request.request_id, phase='program', data={
+                        **target_data,
+                        'variables': dumped['variables'],
+                        'lists': dumped['lists'],
+                        'broadcasts': dumped['broadcasts'],
+                    }),
+                ]
+                child_events.extend(GenerationEvent('script_ready', request.request_id, phase='program', data={
+                    **target_data,
+                    'index': index,
+                    'total': len(output.scripts),
+                    'script': script,
+                }) for index, script in enumerate(dumped['scripts']))
+                child_events.append(GenerationEvent('phase_complete', request.request_id, phase='program', data={
+                    **target_data,
+                    'script_count': len(output.scripts),
+                    'summary': output.summary,
+                }))
+                return output, child_events
+
+            local = _GenerationState(
+                requirements=requirements,
+                plan=plan,
+                manifest=manifest,
+                phase_started={'requirements', 'plan'},
+                phase_completed={'requirements', 'plan'},
+                expected_program_indices={target_index},
+            )
+            child_events: list[GenerationEvent] = []
+            for frame in self._program_segment_frames(frames, target_index):
+                frame_events, frame_failure = self._consume_frame(request, local, frame)
+                if frame_failure is not None:
+                    raise _SegmentValidationFailure(frame_failure)
+                child_events.extend(frame_events)
+            if target_index not in local.programs:
+                raise StreamProtocolError('program segment did not produce a complete target')
+            return local.programs[target_index], child_events
+
+        value, events, failure, _ = await self._run_segment_with_repair(
+            request,
+            provider,
+            'program',
+            lambda context: self.prompt_builder.build_segment_prompt(project, target, request, 'program', context, target_index=target_index),
+            decode_program,
+            program_context,
+            max_rounds=self._repair_budget('program'),
+            target_index=target_index,
+        )
+        for event in events:
+            if event.type == 'phase_start':
+                continue
+            yield GenerationEvent(
+                event.type,
+                event.request_id,
+                event.phase,
+                data={**target_data, **event.data},
+            )
+        if failure is not None:
+            yield GenerationEvent(
+                failure.type,
+                failure.request_id,
+                failure.phase,
+                data={**target_data, **failure.data},
+            )
+            yield GenerationEvent('error', request.request_id, data={
+                'code': 'OUTPUT_VALIDATION_ERROR',
+                'message': 'AI 输出未通过协议校验',
+                **target_data,
+            })
+            return
+        if not isinstance(value, ProgramIR):
+            yield GenerationEvent('error', request.request_id, data={
+                'code': 'PROGRAM_MISSING',
+                'message': 'AI 未完成当前目标程序输出',
+                **target_data,
+            })
+            return
+        yield GenerationEvent('complete', request.request_id, data={
+            **target_data,
+            'scope': 'project',
+            'output_contract': 'project_program',
+            'program_count': 1,
+            'program': value.model_dump(mode='json'),
+        })
+
     async def _generate_segmented_project(
         self,
         request: UnifiedGenerationRequest,
@@ -269,7 +409,6 @@ class GenerationOrchestrator:
         state = _GenerationState()
 
         requirements_context = {'scope': request.scope, 'contract_version': 2}
-        yield GenerationEvent('cache_hit', request.request_id, data=self.prompt_builder.build_segment_prompt(project, target, request, 'requirements', requirements_context)[1].as_dict())
         requirements, events, failure, _ = await self._run_segment_with_repair(
             request,
             provider,
@@ -413,6 +552,13 @@ class GenerationOrchestrator:
             'manifest': state.manifest.model_dump(mode='json'),
             'normalizations': manifest_normalizations,
         })
+        if getattr(request, 'output_contract', None) == 'project_manifest':
+            yield GenerationEvent('complete', request.request_id, data={
+                'scope': 'project',
+                'output_contract': 'project_manifest',
+                'program_count': 0,
+            })
+            return
 
         target_count = len(state.manifest.program_targets)
         if target_count == 0:
@@ -423,9 +569,28 @@ class GenerationOrchestrator:
         yield GenerationEvent('phase_start', request.request_id, phase='program', data={'target_index': 0})
         semaphore = asyncio.Semaphore(self.max_concurrency)
 
-        async def run_target(index: int) -> tuple[int, Any, list[GenerationEvent], GenerationEvent | None]:
+        async def run_target(
+            index: int,
+            emit_event: Callable[[GenerationEvent], None] | None = None,
+        ) -> tuple[int, Any, list[GenerationEvent], GenerationEvent | None]:
             async with semaphore:
                 target_context = self._target_context_for_manifest_target(request, state.manifest, index)
+
+                def emit_target_event(event: GenerationEvent) -> None:
+                    if emit_event is None or event.type == 'phase_start':
+                        return
+                    emit_event(GenerationEvent(
+                        event.type,
+                        event.request_id,
+                        event.phase,
+                        data={
+                            'target_index': index,
+                            'target_name': target_context.name,
+                            'target_count': target_count,
+                            **event.data,
+                        },
+                    ))
+
                 program_context = {
                     'requirements': requirements.model_dump(mode='json'),
                     'plan': plan.model_dump(mode='json'),
@@ -439,28 +604,36 @@ class GenerationOrchestrator:
                         target_kind, mode, current_program = self._target_contract(request, state, index)
                         validate_program_contracts(output, target_kind)
                         validate_program_for_mode(output, mode, current_program)
-                        validate_project_program_shared_state(output, state.manifest.shared_state)
+                        validate_project_program_shared_state(output, state.manifest.shared_state, target_kind)
                         dumped = output.model_dump(mode='json')
                         total = len(output.scripts)
                         child_events = [GenerationEvent('metadata', request.request_id, phase='program', data={
                             'target_index': index,
+                            'target_name': target_context.name,
+                            'target_count': target_count,
                             'schema_version': dumped['schema_version'],
                             'summary': dumped['summary'],
                             'remove_script_ids': dumped['remove_script_ids'],
                         }), GenerationEvent('shared_state', request.request_id, phase='program', data={
                             'target_index': index,
+                            'target_name': target_context.name,
+                            'target_count': target_count,
                             'variables': dumped['variables'],
                             'lists': dumped['lists'],
                             'broadcasts': dumped['broadcasts'],
                         })]
                         child_events.extend(GenerationEvent('script_ready', request.request_id, phase='program', data={
                             'target_index': index,
+                            'target_name': target_context.name,
+                            'target_count': target_count,
                             'index': script_index,
                             'total': total,
                             'script': dumped['scripts'][script_index],
                         }) for script_index, _ in enumerate(output.scripts))
                         child_events.append(GenerationEvent('phase_complete', request.request_id, phase='program', data={
                             'target_index': index,
+                            'target_name': target_context.name,
+                            'target_count': target_count,
                             'script_count': total,
                             'summary': output.summary,
                         }))
@@ -492,38 +665,58 @@ class GenerationOrchestrator:
                     program_context,
                     max_rounds=self._repair_budget('program'),
                     target_index=index,
+                    emit_event=emit_target_event if emit_event is not None else None,
                 )
                 return index, value, segment_events, segment_failure
 
-        target_results = await asyncio.gather(*(run_target(index) for index in range(target_count)))
-        target_results.sort(key=lambda item: item[0])
-        had_repair = any(event.type == 'repair' for _, _, events, _ in target_results for event in events)
-        if had_repair:
-            for index, _, events, _ in target_results:
-                for event in events:
-                    if event.type in {'validation_error', 'repair'}:
-                        yield event
-            for index, value, events, failure in target_results:
-                if failure is not None:
-                    continue
-                last_repair = max((position for position, event in enumerate(events) if event.type == 'repair'), default=-1)
-                for event in events[last_repair + 1:]:
-                    if event.type != 'phase_start':
-                        yield event
-                state.programs[index] = value
-        else:
-            for index, value, events, failure in target_results:
-                for event in events:
-                    if event.type != 'phase_start':
-                        yield event
-                if failure is None:
-                    state.programs[index] = value
-        failed_target = next((item for item in target_results if item[3] is not None), None)
-        if failed_target is not None:
-            yield failed_target[3]
-            yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
-            return
+        # Keep target order stable so each validated program can be consumed immediately.
+        # A later target must not overtake an earlier one or hide a repair failure.
+        for index in range(target_count):
+            if index > 0:
+                yield GenerationEvent('phase_start', request.request_id, phase='program', data={'target_index': index})
+            event_queue: asyncio.Queue[GenerationEvent | None] = asyncio.Queue()
+            target_result: list[tuple[int, Any, list[GenerationEvent], GenerationEvent | None]] = []
+
+            async def execute_target() -> None:
+                try:
+                    target_result.append(await run_target(index, event_queue.put_nowait))
+                finally:
+                    event_queue.put_nowait(None)
+
+            target_task = asyncio.create_task(execute_target())
+            try:
+                while True:
+                    event = await event_queue.get()
+                    if event is None:
+                        break
+                    yield event
+                await target_task
+            finally:
+                if not target_task.done():
+                    target_task.cancel()
+                    try:
+                        await target_task
+                    except asyncio.CancelledError:
+                        pass
+
+            target_index, value, _segment_events, segment_failure = target_result[0]
+            if segment_failure is not None:
+                # The live sink already emitted the terminal validation event.
+                yield GenerationEvent('error', request.request_id, data={'code': 'OUTPUT_VALIDATION_ERROR', 'message': 'AI 输出未通过协议校验'})
+                return
+            state.programs[target_index] = value
+
         yield GenerationEvent('complete', request.request_id, data={'scope': request.scope, 'program_count': len(state.programs)})
+
+    @staticmethod
+    def _record_event(
+        events: list[GenerationEvent],
+        event: GenerationEvent,
+        emit_event: Callable[[GenerationEvent], None] | None = None,
+    ) -> None:
+        events.append(event)
+        if emit_event is not None:
+            emit_event(event)
 
     async def _run_segment_with_repair(
         self,
@@ -537,6 +730,7 @@ class GenerationOrchestrator:
         max_rounds: int,
         target_index: int | None = None,
         resource_op_index: int | None = None,
+        emit_event: Callable[[GenerationEvent], None] | None = None,
     ) -> tuple[Any, list[GenerationEvent], GenerationEvent | None, Any]:
         events: list[GenerationEvent] = []
         failure: GenerationEvent | None = None
@@ -547,7 +741,14 @@ class GenerationOrchestrator:
             if failure is not None:
                 context['failure'] = failure.data
                 context['failed_object'] = failed_payload
-            messages, _ = build_messages(context)
+            messages, cache = build_messages(context)
+            cache_event = GenerationEvent(
+                'cache_hit',
+                request.request_id,
+                phase=self._segment_phase(segment),
+                data={'segment': segment, **cache.as_dict()},
+            )
+            self._record_event(events, cache_event, emit_event)
             result = await self._run_segment_once(
                 request,
                 provider,
@@ -556,6 +757,7 @@ class GenerationOrchestrator:
                 decode,
                 target_index=target_index,
                 resource_op_index=resource_op_index,
+                emit_event=emit_event,
             )
             if result.failure is None:
                 events.extend(result.events)
@@ -566,8 +768,11 @@ class GenerationOrchestrator:
                 events.extend(event for event in result.events if event.type not in {'validation_error', 'content_delta'})
             failure = result.failure
             failed_payload = result.payload
+            if emit_event is not None:
+                emit_event(failure)
             if attempt < max_rounds:
-                events.append(self._repair_event(request, failure, segment, attempt + 1, max_rounds, target_index=target_index, resource_op_index=resource_op_index))
+                repair_event = self._repair_event(request, failure, segment, attempt + 1, max_rounds, target_index=target_index, resource_op_index=resource_op_index)
+                self._record_event(events, repair_event, emit_event)
         return None, events, failure, failed_payload
 
     async def _run_segment_once(
@@ -580,6 +785,7 @@ class GenerationOrchestrator:
         *,
         target_index: int | None = None,
         resource_op_index: int | None = None,
+        emit_event: Callable[[GenerationEvent], None] | None = None,
     ) -> _SegmentAttempt:
         result = _SegmentAttempt()
         raw_output = ''
@@ -598,9 +804,23 @@ class GenerationOrchestrator:
             stream = provider.stream_with_reasoning(messages, **stream_kwargs)
             async for delta in stream:
                 if delta.kind == 'reasoning' and delta.text:
-                    result.events.append(GenerationEvent('reasoning_delta', request.request_id, data={'text': delta.text, **({'target_index': target_index} if target_index is not None else {})}))
+                    self._record_event(
+                        result.events,
+                        GenerationEvent('reasoning_delta', request.request_id, data={'text': delta.text, **({'target_index': target_index} if target_index is not None else {})}),
+                        emit_event,
+                    )
                 elif delta.kind == 'content' and delta.text:
                     raw_output += delta.text
+                    self._record_event(
+                        result.events,
+                        GenerationEvent(
+                            'content_delta',
+                            request.request_id,
+                            phase=self._segment_phase(segment),
+                            data={'text': delta.text, **({'target_index': target_index} if target_index is not None else {})},
+                        ),
+                        emit_event,
+                    )
                     if not structured_output:
                         frames.extend(parser.feed(delta.text))
             if structured_output:
@@ -613,13 +833,12 @@ class GenerationOrchestrator:
         except (ValidationError, ValueError, StreamProtocolError) as exc:
             result.failure = self._validation_event(request, self._segment_phase(segment), exc, StreamFrame(segment))
             return result
-        if raw_output:
-            result.events.append(GenerationEvent('content_delta', request.request_id, phase=self._segment_phase(segment), data={'text': raw_output, **({'target_index': target_index} if target_index is not None else {})}))
         try:
             decoded = decode(frames)
             if isinstance(decoded, tuple) and len(decoded) == 2 and isinstance(decoded[0], ProgramIR) and isinstance(decoded[1], list):
                 result.value = decoded[0]
-                result.events.extend(decoded[1])
+                for event in decoded[1]:
+                    self._record_event(result.events, event, emit_event)
             else:
                 result.value = decoded
             result.payload = self._segment_payload(frames, segment, target_index)
@@ -753,14 +972,22 @@ class GenerationOrchestrator:
         operations = manifest['resource_ops']
         return operations[index] if index < len(operations) else None
 
-    def _target_context_for_manifest_target(self, request: UnifiedGenerationRequest, manifest: ProjectManifest, index: int) -> TargetContext:
+    def _target_context_for_manifest_target(
+        self,
+        request: UnifiedGenerationRequest,
+        manifest: ProjectManifest,
+        index: int,
+        mode: Literal['modify', 'append', 'rewrite'] | None = None,
+    ) -> TargetContext:
         target_ref = manifest.program_targets[index].target
         if target_ref.kind == 'current_target':
-            return self._target_context(request)
+            target = self._target_context(request)
+            return target if mode is None else target.model_copy(update={'mode': mode})
+        target_mode = mode or 'append'
         if target_ref.kind == 'created_sprite':
             operation = next((item for item in manifest.resource_ops if item.op_id == target_ref.op_id), None)
             name = operation.name if operation is not None and hasattr(operation, 'name') else target_ref.op_id
-            return TargetContext(name=name, mode='append', sprite_names=tuple(item.name for item in request.project_context.targets if not item.is_stage))
+            return TargetContext(name=name, mode=target_mode, sprite_names=tuple(item.name for item in request.project_context.targets if not item.is_stage))
         if request.project_context is None:
             raise StreamProtocolError('project context is required for a manifest target')
         if target_ref.kind == 'stage':
@@ -776,7 +1003,7 @@ class GenerationOrchestrator:
             name=item.name,
             is_stage=item.is_stage,
             has_scripts=item.has_scripts,
-            mode='append',
+            mode=target_mode,
             costumes=tuple(item.costumes),
             sounds=tuple(item.sounds),
             sprite_names=tuple(item.sprite_names),
@@ -1062,7 +1289,7 @@ class GenerationOrchestrator:
         validate_program_contracts(output, target_kind)
         validate_program_for_mode(output, mode, current_program)
         if request.scope == 'project' and state.manifest is not None:
-            validate_project_program_shared_state(output, state.manifest.shared_state)
+            validate_project_program_shared_state(output, state.manifest.shared_state, target_kind)
         state.programs[program.target_index] = output
         state.active_program = None
         state.phase_completed.add('program')
@@ -1285,8 +1512,10 @@ class GenerationOrchestrator:
             'program': '从第一个 <program> 标签开始重新输出全部程序（保持已通过的 requirements、plan 和 manifest 不变）',
         }
         detail = failure.data.get('detail') or failure.data.get('message') or '未知校验错误'
+        hint = repair_hint(failure.phase, failure.data.get('path'), str(detail))
         content = (
             f'上一次输出的以下内容未通过服务端校验：{detail}。'
+            f'修复重点：{hint}'
             f'请立即修正并{instructions[resume_kind]}。'
             '只输出标签和严格 JSON，禁止 markdown、解释、代码围栏或任何标签外文本；'
             '先对照 FINAL OUTPUT CONTRACT 逐条检查报错所指字段，再输出修正后的内容。'

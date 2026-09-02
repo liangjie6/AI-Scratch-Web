@@ -55,14 +55,19 @@ function costumeFromLibrary(item: ScratchCostumeItem, blob: Blob): CostumeExport
 }
 
 function costumeFromGenerated(name: string, result: ImageGenerationResponse): CostumeExport {
+  const assetWidth = result.sheet_width;
+  const assetHeight = result.sheet_height;
+  if (!Number.isInteger(assetWidth) || assetWidth <= 0 || !Number.isInteger(assetHeight) || assetHeight <= 0) {
+    throw new Error('生图响应缺少有效的实际图片尺寸');
+  }
   return {
     name,
     blob: imageBlob(result),
     dataFormat: 'png',
-    assetWidth: result.requested_canvas.width * 2,
-    assetHeight: result.requested_canvas.height * 2,
-    rotationCenterX: result.requested_canvas.width,
-    rotationCenterY: result.requested_canvas.height,
+    assetWidth,
+    assetHeight,
+    rotationCenterX: assetWidth / 2,
+    rotationCenterY: assetHeight / 2,
     bitmapResolution: 2
   };
 }
