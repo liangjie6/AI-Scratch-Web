@@ -798,17 +798,65 @@ def normalize_resource_op(
     return normalized, diagnostics
 
 
+def _normalize_target_reference(value: Any, path: str) -> tuple[Any, list[ResourceContractIssue]]:
+    if not isinstance(value, dict):
+        return value, []
+    kind = value.get('kind')
+    allowed = {'kind'}
+    if kind == 'existing_sprite':
+        allowed.add('name')
+    elif kind == 'created_sprite':
+        allowed.add('op_id')
+    elif kind not in {'current_target', 'stage'}:
+        return value, []
+    removed = {key: value[key] for key in value if key not in allowed and key in {'name', 'op_id'}}
+    if not removed:
+        return value, []
+    normalized = {key: item for key, item in value.items() if key not in removed}
+    diagnostics = [
+        ResourceContractIssue(
+            'REDUNDANT_TARGET_FIELD_REMOVED',
+            f'{path}/{key}',
+            'manifest',
+            item,
+            f'target kind={kind} does not use {key}; the redundant field was removed',
+            repair_scope='manifest',
+        )
+        for key, item in removed.items()
+    ]
+    return normalized, diagnostics
+
+
 def normalize_project_manifest_payload(raw: Any) -> tuple[Any, list[ResourceContractIssue]]:
-    if not isinstance(raw, dict) or not isinstance(raw.get('resource_ops'), list):
+    if not isinstance(raw, dict):
         return raw, []
     normalized = dict(raw)
-    operations: list[Any] = []
     diagnostics: list[ResourceContractIssue] = []
-    for index, operation in enumerate(raw['resource_ops']):
-        value, operation_diagnostics = normalize_resource_op(operation, path=f'/resource_ops/{index}')
-        operations.append(value)
-        diagnostics.extend(operation_diagnostics)
-    normalized['resource_ops'] = operations
+    if isinstance(raw.get('resource_ops'), list):
+        operations: list[Any] = []
+        for index, operation in enumerate(raw['resource_ops']):
+            operation_input = operation
+            if isinstance(operation, dict) and 'target' in operation:
+                target, target_diagnostics = _normalize_target_reference(operation['target'], f'/resource_ops/{index}/target')
+                operation_input = dict(operation)
+                operation_input['target'] = target
+                diagnostics.extend(target_diagnostics)
+            value, operation_diagnostics = normalize_resource_op(operation_input, path=f'/resource_ops/{index}')
+            operations.append(value)
+            diagnostics.extend(operation_diagnostics)
+        normalized['resource_ops'] = operations
+    if isinstance(raw.get('program_targets'), list):
+        targets: list[Any] = []
+        for index, program_target in enumerate(raw['program_targets']):
+            if not isinstance(program_target, dict) or 'target' not in program_target:
+                targets.append(program_target)
+                continue
+            target, target_diagnostics = _normalize_target_reference(program_target['target'], f'/program_targets/{index}/target')
+            item = dict(program_target)
+            item['target'] = target
+            targets.append(item)
+            diagnostics.extend(target_diagnostics)
+        normalized['program_targets'] = targets
     return normalized, diagnostics
 
 

@@ -26,7 +26,7 @@ import {
   type UnifiedGenerationRequest,
   type UnifiedProgramDraft
 } from './ai-blocks-api';
-import {assertProjectManifest, validateProjectProgramSharedState, type ProjectManifest, type TargetRef} from './project-plan';
+import {assertProjectManifest, normalizeProjectManifestTargets, validateProjectProgramSharedState, type ProjectManifest, type TargetRef} from './project-plan';
 import {assertProjectSnapshotIsCurrent, assertSnapshotIsCurrent, isAiEditableScript, readAiProjectSnapshot, readAiTargetSnapshot, type AiProjectSnapshot, type AiTargetSnapshot} from './target-context';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
@@ -437,7 +437,7 @@ export class UnifiedGenerationRunner {
       if (event.type === 'phase_complete' && event.phase === 'requirements') requirements.value = asRequirements(event);
       if (event.type === 'phase_complete' && event.phase === 'plan') {
         plan.value = asPlan(event);
-        if (event.data.manifest) manifest.value = event.data.manifest as ProjectManifest;
+        if (event.data.manifest) manifest.value = normalizeProjectManifestTargets(event.data.manifest as ProjectManifest);
       }
       if (event.type === 'metadata') {
         const index = readFrameIndex(event.data.target_index, 'metadata target_index');

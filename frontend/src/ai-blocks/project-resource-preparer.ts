@@ -2,7 +2,7 @@ import {generateImage} from '../ai/image-generation-api';
 import type {ImageGenerationRequest, ImageGenerationResponse, ImageStyle} from '../ai/image-generation-types';
 import {deleteGeneratedAsset, saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
 import {preloadScratchAsset, searchScratchLibrary, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
-import type {ProjectManifest, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
+import type {ImageGenerationSource, ProjectManifest, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
 import type {PreparedResource} from './project-resource-runner';
 import type {CostumeExport} from '../scratch/asset-adapter';
 
@@ -20,6 +20,7 @@ export interface ResourcePreparationOptions {
   plan: ProjectManifest;
   assetPolicy?: AssetPolicy;
   selections?: Map<string, ScratchSpriteItem | ScratchLibraryItem>;
+  generationFallbacks?: Map<string, ImageGenerationSource>;
   confirmGeneration?: (request: GenerationConfirmation) => Promise<boolean> | boolean;
   signal?: AbortSignal;
   maxConcurrency?: number;
@@ -79,9 +80,10 @@ async function generateCostume(
   tags: string[],
   options: ResourcePreparationOptions,
   generatedAssets: GeneratedAsset[],
+  resourceKey = op.op_id + ':' + name,
 ): Promise<CostumeExport> {
   const confirmed = options.confirmGeneration
-    ? await options.confirmGeneration({op, resource_key: op.op_id + ':' + name, reason: source.reason, prompt: source.prompt, style: source.style, width: source.width, height: source.height, tags})
+    ? await options.confirmGeneration({op, resource_key: resourceKey, reason: source.reason, prompt: source.prompt, style: source.style, width: source.width, height: source.height, tags})
     : false;
   if (!confirmed) throw new DOMException('Image generation declined', 'AbortError');
   abortIfNeeded(options.signal);
@@ -160,7 +162,14 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
   if (op.op === 'delete_sprite') return {op_id: op.op_id, kind: 'builtin_sprite', value: null};
   if (op.op === 'add_builtin_sprite') {
     const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(op.source, options, op.op_id);
-    if (!selected || !('costumes' in selected)) throw new Error('未找到可用的 Scratch 角色素材：' + op.name);
+    if (!selected) {
+      const fallback = options.generationFallbacks?.get(op.op_id);
+      if (!fallback) throw new Error('未找到可用的 Scratch 角色素材：' + op.name);
+      assertSourceAllowed(fallback, options.assetPolicy);
+      const costume = await generateCostume(op, op.name, fallback, op.tags ?? [], options, generatedAssets, op.op_id);
+      return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes: [costume]}};
+    }
+    if (!('costumes' in selected)) throw new Error('Scratch 角色素材没有可用造型：' + op.name);
     const costumes: CostumeExport[] = [];
     for (const item of (selected as ScratchSpriteItem).costumes) costumes.push(costumeFromLibrary(item, await preloadScratchAsset(item)));
     return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes}};
@@ -176,7 +185,12 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
         const selected = options.selections?.get(selectionKey)
           ?? options.selections?.get(op.op_id)
           ?? await resolveLibrarySelection(source, options, selectionKey);
-        costumes.push(await prepareLibraryCostume(selected, costume.name));
+        const fallback = options.generationFallbacks?.get(selectionKey) ?? options.generationFallbacks?.get(op.op_id);
+        if (selected) costumes.push(await prepareLibraryCostume(selected, costume.name));
+        else if (fallback) {
+          assertSourceAllowed(fallback, options.assetPolicy);
+          costumes.push(await generateCostume(op, costume.name, fallback, costume.tags ?? [], options, generatedAssets));
+        } else costumes.push(await prepareLibraryCostume(undefined, costume.name));
       } else {
         costumes.push(await generateCostume(op, costume.name, source, costume.tags ?? [], options, generatedAssets));
       }
@@ -189,9 +203,16 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
   assertSourceAllowed(source, options.assetPolicy);
   if (source.kind === 'scratch_library') {
     const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(source, options, op.op_id);
-    return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value: await prepareLibraryCostume(selected, op.name)};
+    if (selected) return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value: await prepareLibraryCostume(selected, op.name)};
+    const fallback = options.generationFallbacks?.get(op.op_id);
+    if (fallback) {
+      assertSourceAllowed(fallback, options.assetPolicy);
+      const value = await generateCostume(op, op.name, fallback, op.tags ?? [], options, generatedAssets, op.op_id);
+      return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value};
+    }
+    return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value: await prepareLibraryCostume(undefined, op.name)};
   }
-  const value = await generateCostume(op, op.name, source, op.tags ?? [], options, generatedAssets);
+  const value = await generateCostume(op, op.name, source, op.tags ?? [], options, generatedAssets, op.op_id);
   return {op_id: op.op_id, kind: op.op === 'add_backdrop' ? 'backdrop' : 'costume', value};
 }
 

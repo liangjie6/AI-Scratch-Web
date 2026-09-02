@@ -21,7 +21,7 @@ import {
 import {readAiTargetSnapshot, type AiTargetSnapshot} from './target-context';
 import {UnifiedGenerationRunner, undoUnifiedGeneration, type AiGenerationProgress, type UnifiedCommitResult} from './generation-runner';
 import ResourcePlanReview from './ResourcePlanReview.vue';
-import {assertProjectManifest, type AiBlocksScope, type AssetPolicy, type ProjectManifest} from './project-plan';
+import {type AiBlocksScope, type AssetPolicy, type ImageGenerationSource, type ProjectManifest} from './project-plan';
 import {prepareProjectResources} from './project-resource-preparer';
 import {createProjectResourceExecutor} from './project-resource-executor';
 import type {PreparedResource} from './project-resource-runner';
@@ -281,10 +281,6 @@ function handleEvent(event: UnifiedGenerationEvent) {
     const card = turnCard.value;
     const steps = Array.isArray(event.data.steps) ? event.data.steps.filter((item): item is string => typeof item === 'string') : [];
     if (card) card.plan = steps;
-    if (event.data.manifest) {
-      projectManifest.value = event.data.manifest as ProjectManifest;
-      assertProjectManifest(projectManifest.value);
-    }
   }
   if (event.type === 'script_ready') {
     const targetIndex = Number(event.data.target_index ?? 0);
@@ -341,7 +337,7 @@ async function sendMessage() {
     const nextDraft = await runner.prepare(request, handleEvent, controller.signal);
     generationDraft.value = nextDraft;
     requirements.value = nextDraft.requirements;
-    projectManifest.value = nextDraft.manifest ?? null;
+    projectManifest.value = nextDraft.manifest?.resource_ops.length ? nextDraft.manifest : null;
     const card = turnCard.value;
     if (card) {
       card.plan = nextDraft.plan.steps;
@@ -436,7 +432,7 @@ async function commitDraft(
 function openResourceReview() {
   if (generationDraft.value?.manifest) projectManifest.value = generationDraft.value.manifest;
 }
-async function confirmProjectManifest(confirmedGenerationIds: string[], selections: Record<string, ScratchSpriteItem | ScratchLibraryItem>) {
+async function confirmProjectManifest(confirmedGenerationIds: string[], selections: Record<string, ScratchSpriteItem | ScratchLibraryItem>, generationFallbacks: Record<string, ImageGenerationSource> = {}) {
   const draftValue = generationDraft.value;
   if (!draftValue?.manifest || !props.bridge || isBusy.value) return;
   state.value = 'preparing';
@@ -450,6 +446,7 @@ async function confirmProjectManifest(confirmedGenerationIds: string[], selectio
       plan: draftValue.manifest,
       assetPolicy: draftValue.request.asset_policy,
       selections: new Map(Object.entries(selections)) as never,
+      generationFallbacks: new Map(Object.entries(generationFallbacks)),
       confirmGeneration: request => confirmedGenerationIds.includes(request.resource_key),
       signal: controller.signal,
       onProgress: (current, total, label) => { progress.value = {current, total, label}; }
@@ -658,6 +655,6 @@ defineExpose({acceptCanvasPrepared});
       <div class="ai-blocks-composer__actions"><button class="button button--quiet" type="button" :disabled="isBusy || !snapshot" @click="openChatHelp"><Bot :size="15" />问 AI</button><div class="ai-blocks-composer__submit"><label class="ai-blocks-thinking-toggle"><input v-model="thinkingEnabled" type="checkbox" role="switch" :disabled="isBusy" /><BrainCircuit :size="15" /><span>思考</span></label><label class="ai-blocks-thinking-strength"><select v-model="thinkingStrength" aria-label="思考强度" :disabled="!thinkingEnabled || isBusy"><option v-for="item in AI_BLOCKS_THINKING_OPTIONS" :key="item.value" :value="item.value">{{ item.label }}</option></select></label><label class="ai-blocks-model-select"><select v-model="modelTier" aria-label="模型" :disabled="isBusy"><option v-for="item in AI_BLOCKS_MODEL_OPTIONS" :key="item.value" :value="item.value" :title="item.model">{{ item.label }}</option></select></label><button class="icon-button ai-blocks-send" type="submit" :disabled="!canSend" title="发送" aria-label="发送需求"><Send :size="16" /></button></div></div>
     </form>
     <section v-if="requirements && state === 'review' && !projectManifest" class="ai-blocks-review"><div class="ai-blocks-review__title"><Sparkles :size="17" /><div><span>需求已整理</span><h3>{{ requirements.title }}</h3></div></div><p>{{ requirements.goal }}</p><ol><li v-for="step in requirements.behavior_steps" :key="step">{{ step }}</li></ol></section>
-    <ResourcePlanReview :open="Boolean(projectManifest)" :plan="projectManifest" @cancel="cancelResourceReview" @confirm="confirmProjectManifest" />
+    <ResourcePlanReview :open="Boolean(projectManifest)" :plan="projectManifest" :asset-policy="assetPolicy" @cancel="cancelResourceReview" @confirm="confirmProjectManifest" />
   </section>
 </template>

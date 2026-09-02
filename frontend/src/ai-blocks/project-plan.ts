@@ -26,6 +26,36 @@ export type TargetRef =
   | {kind: 'stage'}
   | {kind: 'existing_sprite'; name: string}
   | {kind: 'created_sprite'; op_id: string};
+
+export function normalizeProjectManifestTargets(value: ProjectManifest): ProjectManifest {
+  const normalizeTarget = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const target = raw as Record<string, unknown>;
+    if (target.kind === 'stage' || target.kind === 'current_target') return {kind: target.kind};
+    if (target.kind === 'existing_sprite') return {kind: 'existing_sprite', name: target.name};
+    if (target.kind === 'created_sprite') return {kind: 'created_sprite', op_id: target.op_id};
+    return raw;
+  };
+  const resourceOps = value.resource_ops.map(operation => {
+    const raw = operation as unknown as Record<string, unknown>;
+    if (!raw || typeof raw !== 'object' || !('target' in raw)) return operation;
+    const target = normalizeTarget(raw.target);
+    if (raw.op === 'add_backdrop' && target && typeof target === 'object' && !Array.isArray(target) && (target as Record<string, unknown>).kind === 'stage') {
+      const withoutTarget = {...raw};
+      delete withoutTarget.target;
+      return withoutTarget as unknown as ResourceOp;
+    }
+    return {...raw, target} as unknown as ResourceOp;
+  });
+  return {
+    ...value,
+    resource_ops: resourceOps,
+    program_targets: value.program_targets.map(item => {
+      const target = normalizeTarget(item.target);
+      return target && typeof target === 'object' && !Array.isArray(target) ? {...item, target: target as TargetRef} : item;
+    })
+  };
+}
 export type ScratchLibrarySource = {
   kind: 'scratch_library';
   asset_type: 'sprite' | 'costume' | 'backdrop';
