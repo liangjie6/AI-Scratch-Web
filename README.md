@@ -566,18 +566,11 @@ python scripts\\generate-resource-contract.py --check
 
 ## 相关文档
 
-审计、设计和实施文档包含方案演进、已修复问题和历史验收记录；阅读当前接口时以上文档说明和当前代码优先。
+文档目录与维护约定见 [docs/README.md](docs/README.md)。AI 写积木的当前实施契约以 [完整优化方案](docs/实施文档/AI写积木与ScratchEditor深度集成完整优化方案.md) 为准。
 
-- [AI 写积木架构重构设计](docs/实施文档/cc-AI写积木架构重构设计方案.md)
-- [AI 写积木大 JSON 拆分与渐进提交方案](docs/实施文档/AI写积木大JSON拆分与渐进提交实施方案.md)
-- [AI 写积木资源功能实施文档](docs/实施文档/AI写积木扩展角色与舞台资源功能实施文档.md)
-- [AI 写积木生成逻辑审计报告](docs/实施文档/AI写积木生成逻辑深度审计报告.md)
-- [ProjectManifest 生成提示词](docs/scratch项目清单生成提示词.md)
-- [ProgramIR 生成提示词](docs/scratch代码生成提示词.md)
-- [Scratch 项目计划生成提示词](docs/scratch项目计划生成提示词.md)
-- [Scratch 语法规范](docs/scratch语法规范.md)
-- [Scratch 代码规范](docs/scratch代码规范.md)
-- [无边画布功能设计](docs/开发文档/无边画布功能文档设计.md)
-- [开发计划](docs/开发文档/计划大纲.md)
-- [Scratch VM 研究报告](docs/scratch-vm/01-scratch-vm研究报告.md)
-- [Scratch VM 说明](docs/scratch-vm/README.md)
+- [ProgramIR v1 运行时生成提示词](docs/参考资料/ProgramIR-v1生成提示词.md)
+- [Scratch 3 语法与 SB3 约束](docs/参考资料/Scratch-3语法规范.md)
+- [ProgramIR v1 代码规范](docs/参考资料/ProgramIR-v1代码规范.md)
+- [无边画布功能设计](docs/产品设计/无边画布功能文档设计.md)
+- [产品开发计划](docs/产品设计/计划大纲.md)
+- [Scratch VM 研究资料](docs/参考资料/scratch-vm/README.md)

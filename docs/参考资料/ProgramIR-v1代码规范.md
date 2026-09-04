@@ -4,7 +4,7 @@
 >
 > 本文规范 AI 与应用之间交换的 ProgramIR，不是最终 project.json。ProgramIR 由前端编译为 VM block graph，再注入当前 GUI 使用的 VM；SB3 导出时才由 VM 生成 project.json。
 >
-> 底层 Scratch 3 的 project.json、SB3 资源、opcode 语义和 VM 往返约束见 scratch语法规范.md。两份文档不可混用。
+> 底层 Scratch 3 的 project.json、SB3 资源、opcode 语义和 VM 往返约束见 [Scratch-3语法规范.md](Scratch-3语法规范.md)。两份文档不可混用。
 
 ## 1. 数据流与边界
 
@@ -216,7 +216,7 @@ ProgramIR 通过后，前端 compileProgramIR 负责生成 VM 图。编译结果
 - 注释 ID 由顶层 block ID 派生，格式为 <topLevelId>_comment。
 - 注入失败时前端删除本次新增内容并恢复生成前状态。
 
-ProgramIR 校验通过不等于 SB3 已完成验收。最终导出仍应按 scratch语法规范完成 VM load、保存、ZIP 资源和新 VM reload 检查。
+ProgramIR 校验通过不等于 SB3 已完成验收。最终导出仍应按 [Scratch-3语法规范.md](Scratch-3语法规范.md) 完成 VM load、保存、ZIP 资源和新 VM reload 检查。
 
 ## 8. 后端 SSE 合同
 

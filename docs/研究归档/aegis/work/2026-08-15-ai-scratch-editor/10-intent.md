@@ -3,7 +3,7 @@
 ## Requested outcome
 
 Build and verify the local Scratch editor and AI image workflow defined in
-`计划大纲.md`.
+[计划大纲](../../../../产品设计/计划大纲.md)。
 
 ## Goal
 
@@ -43,7 +43,7 @@ the saved competitor snapshot.
 
 ## Baseline read set
 
-- `计划大纲.md`: intent, ownership, compatibility, verification, and drift
+- [计划大纲](../../../../产品设计/计划大纲.md): intent, ownership, compatibility, verification, and drift
   constraints.
 - `D:/ywj/各种参考文档/Scratch网页竞品/图形化编程-自由创作区.html`: UI and
   initialization reference only.
@@ -79,4 +79,3 @@ VM target internals.
 - Test obligations: focused tests per batch and final browser/offline/SB3 audit.
 - Review gates: API contract, public VM asset path, key/external-link scan, UI.
 - Drift rule: pause before direct mutation of VM target internals.
-

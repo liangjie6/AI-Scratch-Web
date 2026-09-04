@@ -8,7 +8,7 @@
   public asset import surfaces, and scaffold the project.
 - Completed: plan read; no-CodeGraph check; runtime check; competitor reference
   read; provider contract read; Git baseline `d9f4256` created.
-- Evidence: `计划大纲.md`; npm package metadata for `@scratch/*` 15.0.1; Git log.
+- Evidence: [计划大纲](../../../../产品设计/计划大纲.md); npm package metadata for `@scratch/*` 15.0.1; Git log.
 - Blockers: none. Python 3.12 satisfies the 3.11+ requirement.
 - Next: install dependencies in a minimal scaffold and inspect the installed
   GUI/VM source before implementing the bridge and asset adapter.
@@ -27,4 +27,3 @@ Start from `main` at or after `d9f4256`. Re-read this checkpoint and
 - Evidence state: sufficient to begin scaffolding, not sufficient for any
   product completion claim.
 - Decision: continue.
-

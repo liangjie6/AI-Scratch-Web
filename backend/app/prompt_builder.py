@@ -213,7 +213,7 @@ class PromptBuilder:
         if self._knowledge_base_override is not None:
             source = self._knowledge_base_override
         else:
-            path = Path(__file__).resolve().parents[2] / 'docs' / 'scratch代码生成提示词.md'
+            path = Path(__file__).resolve().parents[2] / 'docs' / '参考资料' / 'ProgramIR-v1生成提示词.md'
             source = path.read_text(encoding='utf-8').strip() if path.exists() else ''
         catalog = {
             opcode: {
