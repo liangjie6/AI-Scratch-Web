@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "packages": {
+    "scratch_gui": "15.1.1",
+    "scratch_vm": "15.1.1",
+    "scratch_storage": "15.1.1"
+  },
+  "standalone": {
+    "file": "scratch-gui-standalone.js",
+    "sha256": "4d426edc48885a4ae9d4ed8453b617a3c34911e8102442ee4c784fa0797a1673"
+  },
+  "library_manifest_sha256": {
+    "sprites.json": "27c7c90c8daec1fad15948cbd29e3384b7e3e0d62927af29ceb8caa5a17db787",
+    "costumes.json": "eec1eb5e1754720e0b5a7ed576281f262440cf820529c37a8b9ab7dedac3c19f",
+    "backdrops.json": "8a8d787439b43b03e28ae891d10f482b988fc132df1758998da7cce2b195c521",
+    "sounds.json": "ee5b9e0d02656ec58bd7d07f95bce62c8c8c2248db1e230276cf686b3d368089"
+  },
+  "library_asset_count": 1347
+}

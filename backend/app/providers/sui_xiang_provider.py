@@ -44,9 +44,9 @@ class SuiXiangProvider:
             status_code = getattr(exc, 'status_code', None)
             upstream_request_id = getattr(exc, 'request_id', None)
             logger.error(
-                'sui_xiang_generate_failed duration_ms=%s error_type=%s status_code=%s upstream_request_id=%s error=%s',
+                'sui_xiang_generate_failed duration_ms=%s error_type=%s status_code=%s upstream_request_id=%s',
                 round((time.perf_counter() - started_at) * 1000), type(exc).__name__,
-                status_code, upstream_request_id, str(exc)[:500], exc_info=True,
+                status_code, upstream_request_id,
             )
             raise ProviderError('provider request failed') from exc
 
@@ -72,8 +72,8 @@ class SuiXiangProvider:
                 return ProviderImage(request_id, 'image/png', image_data)
             except Exception as exc:
                 logger.error(
-                    'sui_xiang_generate_invalid_base64 upstream_request_id=%s error_type=%s error=%s',
-                    request_id, type(exc).__name__, str(exc)[:300], exc_info=True,
+                    'sui_xiang_generate_invalid_base64 upstream_request_id=%s error_type=%s',
+                    request_id, type(exc).__name__,
                 )
                 raise ProviderError('provider returned invalid base64 image') from exc
 
@@ -99,4 +99,3 @@ class SuiXiangProvider:
             raise
         except Exception as exc:
             raise ProviderError('provider image download failed') from exc
-

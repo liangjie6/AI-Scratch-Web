@@ -1,5 +1,6 @@
 import type {AiBlocksMode, AiBlocksTargetContext} from './ai-blocks-api';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
+import {createScratchProgramPort} from '../scratch/scratch-program-port';
 import {getBlockSpec} from './block-catalog';
 
 interface NormalizedBlock {
@@ -104,10 +105,11 @@ function stableValue(value: unknown, seen = new Set<object>()): unknown {
   return output;
 }
 
-function targetStateSignature(target: ScratchTargetLike) {
-  const blocks = target.blocks
-    ? Object.values(target.blocks._blocks).map(block => stableValue(block)).sort((left, right) => (JSON.stringify(left) ?? '').localeCompare(JSON.stringify(right) ?? ''))
-    : [];
+function targetStateSignature(bridge: ScratchGuiBridge, target: ScratchTargetLike) {
+  const programPort = createScratchProgramPort(bridge);
+  const blocks = programPort.listBlocks(target)
+    .map(block => stableValue(block))
+    .sort((left, right) => (JSON.stringify(left) ?? '').localeCompare(JSON.stringify(right) ?? ''));
   const costumes = (target.getCostumes?.() ?? []).map(costume => ({
     name: costume.name,
     assetId: costume.assetId,
@@ -132,11 +134,14 @@ function targetStateSignature(target: ScratchTargetLike) {
 }
 
 function listVariables(target: ScratchTargetLike | undefined) {
-  return Object.values(target?.variables ?? {}).map(variable => ({
-    name: variable.name,
-    type: variable.type,
-    value: variable.value
-  }));
+  return Object.values(target?.variables ?? {}).map(variable => {
+    if (variable.type === 'list') {
+      const values = Array.isArray(variable.value) ? variable.value : [];
+      return {name: variable.name, type: variable.type, length: values.length, preview: values.slice(0, 5)};
+    }
+    const value = typeof variable.value === 'string' ? variable.value.slice(0, 120) : variable.value;
+    return {name: variable.name, type: variable.type, value};
+  });
 }
 
 export function readAiTargetSnapshot(
@@ -146,8 +151,9 @@ export function readAiTargetSnapshot(
 ): AiTargetSnapshot {
   const vm = bridge.currentVm;
   const target = targetOverride ?? vm?.editingTarget;
-  const blocks = target?.blocks;
-  if (!vm || !target || !blocks) throw new Error('请等待 Scratch 编辑器加载完成');
+  if (!vm || !target) throw new Error('请等待 Scratch 编辑器加载完成');
+  const programPort = createScratchProgramPort(bridge);
+  const blocks = programPort.read(target);
 
   const topLevelIds = [...blocks.getScripts()].sort((left, right) => {
     const a = blocks.getBlock(left);
@@ -179,7 +185,7 @@ export function readAiTargetSnapshot(
     global_variables: listVariables(stage)
   };
   const targetName = target.getName?.() ?? target.sprite?.name ?? (target.isStage ? '舞台' : '未命名角色');
-  const blockCount = Object.values(blocks._blocks).filter(block => !block.shadow).length;
+  const blockCount = programPort.countVisibleBlocks(target);
 
   return {
     targetId: target.id,
@@ -190,7 +196,7 @@ export function readAiTargetSnapshot(
     hasScripts: topLevelIds.length > 0,
     scriptRefs,
     targetRef: target,
-    stateSignature: targetStateSignature(target),
+    stateSignature: targetStateSignature(bridge, target),
     context: {
       name: targetName,
       is_stage: Boolean(target.isStage),
@@ -199,6 +205,9 @@ export function readAiTargetSnapshot(
       costumes: (target.getCostumes?.() ?? [])
         .map(costume => String(costume.name ?? ''))
         .filter(Boolean),
+      backdrops: target.isStage ? (target.getCostumes?.() ?? [])
+        .map(costume => String(costume.name ?? ''))
+        .filter(Boolean) : [],
       sounds: (target.getSounds?.() ?? [])
         .map(sound => String(sound.name ?? ''))
         .filter(Boolean),
@@ -221,7 +230,7 @@ export function readAiProjectSnapshot(bridge: ScratchGuiBridge): AiProjectSnapsh
     targetIds: targets.map(target => target.id),
     targetRefs: [...targets],
     targetSignatures: targets.map(targetSignature),
-    targetStateSignatures: targets.map(targetStateSignature)
+    targetStateSignatures: targets.map(target => targetStateSignature(bridge, target))
   };
 }
 
@@ -242,7 +251,7 @@ export function assertProjectSnapshotIsCurrent(bridge: ScratchGuiBridge, snapsho
   if (snapshot.targetSignatures && targets.some((target, index) => targetSignature(target) !== snapshot.targetSignatures?.[index])) {
     throw new Error('确认需求后项目角色属性发生了变化，请重新生成计划');
   }
-  if (snapshot.targetStateSignatures && targets.some((target, index) => targetStateSignature(target) !== snapshot.targetStateSignatures?.[index])) {
+  if (snapshot.targetStateSignatures && targets.some((target, index) => targetStateSignature(bridge, target) !== snapshot.targetStateSignatures?.[index])) {
     throw new Error('确认需求后项目目标内容发生了变化，请重新生成计划');
   }
 }
@@ -257,7 +266,7 @@ export function assertSnapshotIsCurrent(bridge: ScratchGuiBridge, snapshot: AiTa
   if (bridge.projectRevision !== snapshot.revision) {
     throw new Error('确认需求后项目代码发生了变化，请重新生成计划');
   }
-  if (snapshot.stateSignature && targetStateSignature(target) !== snapshot.stateSignature) {
+  if (snapshot.stateSignature && targetStateSignature(bridge, target) !== snapshot.stateSignature) {
     throw new Error('确认需求后当前目标内容发生了变化，请重新生成计划');
   }
 }

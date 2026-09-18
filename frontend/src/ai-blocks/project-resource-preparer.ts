@@ -1,10 +1,10 @@
 import {generateImage} from '../ai/image-generation-api';
 import type {ImageGenerationRequest, ImageGenerationResponse, ImageStyle} from '../ai/image-generation-types';
-import {deleteGeneratedAsset, saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
-import {preloadScratchAsset, searchScratchLibrary, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSpriteItem} from '../ai/scratch-library';
+import {saveGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
+import {preloadScratchAsset, type ScratchCostumeItem, type ScratchLibraryItem, type ScratchSoundItem, type ScratchSpriteItem} from '../ai/scratch-library';
 import type {ImageGenerationSource, ProjectManifest, ProjectManifestResourceSource, ResourceOp, CostumeResource, AssetPolicy} from './project-plan';
 import type {PreparedResource} from './project-resource-runner';
-import type {CostumeExport} from '../scratch/asset-adapter';
+import type {CostumeExport, SoundExport} from '../scratch/asset-adapter';
 
 export interface GenerationConfirmation {
   op: ResourceOp;
@@ -19,7 +19,7 @@ export interface GenerationConfirmation {
 export interface ResourcePreparationOptions {
   plan: ProjectManifest;
   assetPolicy?: AssetPolicy;
-  selections?: Map<string, ScratchSpriteItem | ScratchLibraryItem>;
+  selections?: Map<string, ScratchSpriteItem | ScratchLibraryItem | ScratchSoundItem>;
   generationFallbacks?: Map<string, ImageGenerationSource>;
   confirmGeneration?: (request: GenerationConfirmation) => Promise<boolean> | boolean;
   signal?: AbortSignal;
@@ -53,6 +53,10 @@ function costumeFromLibrary(item: ScratchCostumeItem, blob: Blob): CostumeExport
     rotationCenterY: item.rotationCenterY,
     bitmapResolution: item.bitmapResolution
   };
+}
+
+function soundFromLibrary(item: ScratchSoundItem, blob: Blob): SoundExport {
+  return {name: item.name, blob, dataFormat: item.dataFormat, rate: item.rate, sampleCount: item.sampleCount};
 }
 
 function costumeFromGenerated(name: string, result: ImageGenerationResponse): CostumeExport {
@@ -102,20 +106,16 @@ async function generateCostume(
 }
 
 async function resolveLibrarySelection(
-  source: Extract<ProjectManifestResourceSource, {kind: 'scratch_library'}>,
+  _source: Extract<ProjectManifestResourceSource, {kind: 'scratch_library'}>,
   options: ResourcePreparationOptions,
   key: string,
-): Promise<ScratchSpriteItem | ScratchLibraryItem | undefined> {
-  const selected = options.selections?.get(key);
-  if (selected) return selected;
-  const matches = source.asset_type === 'sprite'
-    ? await searchScratchLibrary('sprite', source.search_terms, 1)
-    : await searchScratchLibrary(source.asset_type, source.search_terms, 1);
-  return matches[0];
+): Promise<ScratchSpriteItem | ScratchLibraryItem | ScratchSoundItem | undefined> {
+  return options.selections?.get(key);
 }
 
-async function prepareLibraryCostume(selection: ScratchSpriteItem | ScratchLibraryItem | undefined, label: string): Promise<CostumeExport> {
+async function prepareLibraryCostume(selection: ScratchSpriteItem | ScratchLibraryItem | ScratchSoundItem | undefined, label: string): Promise<CostumeExport> {
   if (!selection) throw new Error('未找到可用的 Scratch 素材：' + label);
+  if ('assetType' in selection && selection.assetType === 'sound') throw new Error('声音不能作为角色造型：' + label);
   const item: ScratchCostumeItem | undefined = 'costumes' in selection
     ? (selection as ScratchSpriteItem).costumes[0]
     : selection as ScratchLibraryItem;
@@ -123,16 +123,15 @@ async function prepareLibraryCostume(selection: ScratchSpriteItem | ScratchLibra
   return costumeFromLibrary(item, await preloadScratchAsset(item));
 }
 
+async function prepareLibrarySound(selection: ScratchSpriteItem | ScratchLibraryItem | ScratchSoundItem | undefined, label: string): Promise<SoundExport> {
+  if (!selection || !('assetType' in selection) || selection.assetType !== 'sound') throw new Error('未找到可用的 Scratch 声音：' + label);
+  return soundFromLibrary(selection, await preloadScratchAsset(selection));
+}
+
 function assertSourceAllowed(source: ProjectManifestResourceSource, policy?: AssetPolicy) {
   if (policy === 'existing_only' && source.kind === 'image_generation') {
     throw new Error('当前素材策略为“仅已有素材”，已拒绝生图资源：' + source.prompt);
   }
-}
-
-async function cleanupGeneratedAssets(assets: readonly GeneratedAsset[]) {
-  const outcomes = await Promise.allSettled(assets.map(asset => deleteGeneratedAsset(asset.id)));
-  const failures = outcomes.filter(outcome => outcome.status === 'rejected');
-  if (failures.length) throw new Error(failures.length + ' 个生成素材清理失败');
 }
 
 async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
@@ -160,6 +159,7 @@ async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, work
 async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, generatedAssets: GeneratedAsset[]): Promise<PreparedResource> {
   abortIfNeeded(options.signal);
   if (op.op === 'delete_sprite') return {op_id: op.op_id, kind: 'builtin_sprite', value: null};
+  if (op.op === 'delete_sound') throw new Error('删除声音需要单独的影响确认，当前版本未开放自动执行');
   if (op.op === 'add_builtin_sprite') {
     const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(op.source, options, op.op_id);
     if (!selected) {
@@ -172,7 +172,15 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
     if (!('costumes' in selected)) throw new Error('Scratch 角色素材没有可用造型：' + op.name);
     const costumes: CostumeExport[] = [];
     for (const item of (selected as ScratchSpriteItem).costumes) costumes.push(costumeFromLibrary(item, await preloadScratchAsset(item)));
-    return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes}};
+    const sounds: SoundExport[] = [];
+    if (op.include_sounds !== 'none') {
+      const librarySounds = (selected as ScratchSpriteItem).sounds;
+      if (op.include_sounds === 'all' && !Array.isArray(librarySounds)) {
+        throw new Error('Scratch 角色素材缺少完整原生声音清单：' + op.name);
+      }
+      for (const item of librarySounds ?? []) sounds.push(soundFromLibrary(item, await preloadScratchAsset(item)));
+    }
+    return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes, sounds}};
   }
   if (op.op === 'add_sprite') {
     const specs: CostumeResource[] = op.costumes;
@@ -197,6 +205,11 @@ async function prepareOne(op: ResourceOp, options: ResourcePreparationOptions, g
     }
     if (!costumes.length) throw new Error('新增角色至少需要一个造型资源：' + op.name);
     return {op_id: op.op_id, kind: 'builtin_sprite', value: {name: op.name, initialSize: op.size, x: op.x, y: op.y, costumes}};
+  }
+  if (op.op === 'add_sound') {
+    if (op.source.kind === 'audio_generation') throw new Error('音频生成能力尚未开放，不能提交音频生成资源');
+    const selected = options.selections?.get(op.op_id) ?? await resolveLibrarySelection(op.source, options, op.op_id);
+    return {op_id: op.op_id, kind: 'sound', value: await prepareLibrarySound(selected, op.name)};
   }
   if (op.op === 'select_backdrop') return {op_id: op.op_id, kind: 'backdrop_selection', value: {name: op.name}};
   const source = op.source;
@@ -231,17 +244,12 @@ export async function prepareProjectResources(options: ResourcePreparationOption
       abortIfNeeded(options.signal);
       const op = operations[index];
       prepared.set(op.op_id, preparedValues[index]);
-      options.onProgress?.(index + 1, total, op.name);
+    options.onProgress?.(index + 1, total, op.op === 'delete_sound' ? '删除声音 ' + op.sound.name : op.name);
     }
     return {prepared, generatedAssets};
   } catch (error) {
-    let cleanupError: unknown;
-    try {
-      await cleanupGeneratedAssets(generatedAssets);
-    } catch (caught) {
-      cleanupError = caught;
-    }
-    if (cleanupError) throw new Error('资源准备失败且无法清理已生成素材：' + (cleanupError instanceof Error ? cleanupError.message : '未知错误'));
+    // Keep generated media in the local library as unattached output so a
+    // failed project run does not discard an expensive result.
     throw error;
   }
 }

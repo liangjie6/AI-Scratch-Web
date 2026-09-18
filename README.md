@@ -170,6 +170,8 @@ npm run dev
 
 启动后可以访问 http://127.0.0.1:8000/health 查看服务状态。
 
+`start-all.bat` 默认以 DEBUG 级别启动后端，并开启 `AI_BLOCKS_VERBOSE_LOGGING=true`。AI 写积木日志会按 request_ref、阶段、模型、repair 轮次、响应长度、schema 路径、实际值/期望值和有限模型输出片段打印，输出片段最多 12000 个字符；不会打印 API Key。生产环境建议保持 `AI_BLOCKS_VERBOSE_LOGGING=false`，只保留结构化诊断字段。
+
 ## 配置
 
 ### API Key
@@ -190,7 +192,7 @@ npm run dev
 | 档位 | 前端名称 | Provider | 模型 | 必需密钥 |
 | --- | --- | --- | --- | --- |
 | normal | 普通 | Agnes | agnes-2.5-flash | AGNES_API_KEY |
-| advanced | 高级 | DeepSeek | deepseek-v4-flash | DEEPSEEK_API_KEY |
+| advanced | 高级 | DeepSeek | deepseek-v4.1-flash-expires-on-0910 | DEEPSEEK_API_KEY |
 | super | 超级 | GPT | gpt-5.6-sol | GPT_API_KEY |
 
 图片服务使用固定的 Sui Xiang 模型 gpt-image-2，不受 model_tier 选择影响。文本扩写固定使用 Agnes。
@@ -222,7 +224,7 @@ DeepSeek 当前只接受 low、medium、high，因此 xhigh 和 max 在服务端
 | AI_BLOCKS_MAX_REQUEST_BYTES | 262144 | AI 写积木请求体上限 |
 | AI_BLOCKS_MAX_CONCURRENCY | 2 | 同时运行的 AI 写积木请求数 |
 | AI_BLOCKS_PROVIDER_TIMEOUT_SECONDS | 480 | 单次 AI 写积木供应商超时，范围 10-720 秒 |
-| AI_BLOCKS_MAX_REPAIR_ROUNDS | 2 | 每个生成段的最大修复轮次，范围 0-3 |
+| AI_BLOCKS_MAX_REPAIR_ROUNDS | 3 | 每个生成段的最大修复轮次，范围 0-3 |
 
 配置使用 pydantic-settings 校验。未知环境变量不会变成新的模型档位或思考档位。
 

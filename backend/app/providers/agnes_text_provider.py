@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 import json
 import logging
+import time
 
 import httpx
 
@@ -32,27 +33,29 @@ class AgnesTextProvider:
     def for_tier(self, tier: str) -> 'AgnesTextProvider':
         return AgnesTextProvider(self.settings, self.http_client, provider_for_tier(tier))
 
-    @staticmethod
-    def _log_request_content(messages: list[dict[str, str]]) -> None:
-        """AI 写积木：把每次模型请求里 messages 的 content 打印到后端控制台（只打印 content）。"""
-        for index, message in enumerate(messages, start=1):
-            content = message.get('content', '') if isinstance(message, dict) else ''
-            if isinstance(content, (list, dict, tuple)):
-                content = json.dumps(content, ensure_ascii=False)
-            logger.info('[AI写积木] 模型请求 content[%d]: %s', index, content)
+    def _log_request_metadata(self, messages: list[dict[str, str]]) -> None:
+        """Keep observability without persisting student prompts or project content."""
+        logger.info(
+            'ai_provider_request provider=%s model=%s base_url=%s message_count=%d content_chars=%d',
+            self.provider,
+            self._model(),
+            self._base_url(),
+            len(messages),
+            sum(len(str(message.get('content', ''))) for message in messages if isinstance(message, dict)),
+        )
 
     def ensure_configured(self) -> None:
         self._api_key()
 
     def supports_structured_output(self, segment: str | None = None) -> bool:
         """Return true only for segments supported by the provider's JSON transport."""
-        return self.provider in {'deepseek', 'gpt'} and segment in {'requirements', 'plan', 'manifest', 'resource_op', 'program'}
+        return self.provider in {'deepseek', 'gpt'} and segment in {'requirements', 'task_spec', 'blueprint', 'plan', 'manifest', 'resource_op', 'program'}
 
     def supports_json_schema(self, segment: str | None = None) -> bool:
         """Return true only for ChatGPT 5.6-safe strict JSON Schema segments."""
         # Manifest/resource_op use unions and program uses dynamic Scratch maps;
         # send those as JSON objects and keep validation on the backend.
-        return self.provider == 'gpt' and segment in {'requirements', 'plan'}
+        return self.provider == 'gpt' and segment in {'requirements', 'task_spec', 'blueprint', 'plan'}
 
     def _api_key(self) -> str:
         if self.provider == 'deepseek': return self.settings.require_deepseek_api_key()
@@ -78,26 +81,52 @@ class AgnesTextProvider:
         json_output: bool = False,
         json_schema: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgnesStreamDelta]:
-        self._log_request_content(messages)
-        if thinking_enabled and self.provider == 'agnes':
-            source = self._stream_anthropic(messages, thinking_strength)
-        elif self.provider == 'gpt':
-            source = self._stream_responses(
-                messages,
-                thinking_enabled=thinking_enabled,
-                thinking_strength=thinking_strength,
-                json_output=json_output,
-                json_schema=json_schema,
+        self._log_request_metadata([{**message, '_provider': self.provider} for message in messages])
+        endpoint = 'messages' if thinking_enabled and self.provider == 'agnes' else 'responses' if self.provider == 'gpt' else 'chat/completions'
+        started = time.monotonic()
+        delta_count = 0
+        logger.info(
+            'ai_provider_stream_start provider=%s model=%s endpoint=%s json_output=%s '
+            'json_schema=%s thinking_enabled=%s thinking_strength=%s',
+            self.provider,
+            self._model(),
+            endpoint,
+            json_output,
+            json_schema is not None,
+            thinking_enabled,
+            thinking_strength,
+        )
+        try:
+            if thinking_enabled and self.provider == 'agnes':
+                source = self._stream_anthropic(messages, thinking_strength)
+            elif self.provider == 'gpt':
+                source = self._stream_responses(
+                    messages,
+                    thinking_enabled=thinking_enabled,
+                    thinking_strength=thinking_strength,
+                    json_output=json_output,
+                    json_schema=json_schema,
+                )
+            else:
+                source = self._stream_openai(
+                    messages,
+                    enable_thinking=thinking_enabled,
+                    thinking_strength=thinking_strength,
+                    json_output=json_output,
+                    json_schema=json_schema,
+                )
+            async for delta in source:
+                delta_count += 1
+                yield delta
+        finally:
+            logger.info(
+                'ai_provider_stream_end provider=%s model=%s endpoint=%s delta_count=%d duration_ms=%d',
+                self.provider,
+                self._model(),
+                endpoint,
+                delta_count,
+                max(0, round((time.monotonic() - started) * 1000)),
             )
-        else:
-            source = self._stream_openai(
-                messages,
-                enable_thinking=thinking_enabled,
-                thinking_strength=thinking_strength,
-                json_output=json_output,
-                json_schema=json_schema,
-            )
-        async for delta in source: yield delta
 
     async def _stream_openai(
         self,
@@ -108,7 +137,13 @@ class AgnesTextProvider:
         json_output: bool = False,
         json_schema: dict[str, Any] | None = None,
     ) -> AsyncIterator[AgnesStreamDelta]:
-        payload: dict[str, Any] = {'model': self._model(), 'messages': messages, 'stream': True, 'stop': _STOP_SEQUENCES}
+        payload: dict[str, Any] = {
+            'model': self._model(),
+            'messages': messages,
+            'stream': True,
+            'stream_options': {'include_usage': True},
+            'stop': _STOP_SEQUENCES,
+        }
         if enable_thinking is not None and self.provider == 'agnes': payload['chat_template_kwargs'] = {'enable_thinking': enable_thinking}
         if self.provider == 'deepseek':
             if enable_thinking:
@@ -184,6 +219,9 @@ class AgnesTextProvider:
             try: item=json.loads(raw)
             except json.JSONDecodeError as exc: raise AgnesTextProviderError('AI provider returned invalid stream') from exc
             if not isinstance(item,dict) or item.get('error'): raise AgnesTextProviderError('AI provider stream failed')
+            usage = item.get('usage')
+            if isinstance(usage, dict):
+                yield AgnesStreamDelta('usage', usage=AgnesTextProvider._normalize_usage(usage))
             choices=item.get('choices'); delta=choices[0].get('delta',{}) if isinstance(choices,list) and choices and isinstance(choices[0],dict) else {}
             if not isinstance(delta,dict): continue
             reasoning=delta.get('reasoning_content') or delta.get('reasoning'); content=delta.get('content')
@@ -213,8 +251,12 @@ class AgnesTextProvider:
                 response=item.get('response', {}); usage=response.get('usage') if isinstance(response,dict) else None
                 usage=usage or item.get('usage')
                 if isinstance(usage,dict):
-                    normalized={k:int(usage.get(k,0) or 0) for k in ('input_tokens','output_tokens','total_tokens')}
-                    yield AgnesStreamDelta('usage', usage=normalized)
+                    yield AgnesStreamDelta('usage', usage=AgnesTextProvider._normalize_usage(usage))
+                # Responses SSE streams may keep the HTTP connection alive
+                # after the terminal event. Stop at the protocol terminator
+                # instead of waiting for EOF (which can consume the full
+                # provider timeout on later generation segments).
+                return
 
     @staticmethod
     async def _parse_anthropic_lines(lines: AsyncIterator[str]) -> AsyncIterator[AgnesStreamDelta]:
@@ -226,8 +268,32 @@ class AgnesTextProvider:
             try: item=json.loads(raw)
             except json.JSONDecodeError as exc: raise AgnesTextProviderError('AI provider returned invalid stream') from exc
             if not isinstance(item,dict) or item.get('type')=='error' or item.get('error'): raise AgnesTextProviderError('AI provider stream failed')
+            if item.get('type') in {'message_start', 'message_delta'}:
+                message = item.get('message')
+                usage = message.get('usage') if isinstance(message, dict) else item.get('usage')
+                if isinstance(usage, dict):
+                    yield AgnesStreamDelta('usage', usage=AgnesTextProvider._normalize_usage(usage))
+                continue
             if item.get('type')!='content_block_delta': continue
             delta=item.get('delta')
             if not isinstance(delta,dict): continue
             if delta.get('type')=='thinking_delta' and isinstance(delta.get('thinking'),str): yield AgnesStreamDelta('reasoning', delta['thinking'])
             elif delta.get('type')=='text_delta' and isinstance(delta.get('text'),str): yield AgnesStreamDelta('content', delta['text'])
+
+    @staticmethod
+    def _normalize_usage(usage: dict[str, Any]) -> dict[str, int]:
+        input_tokens = int(usage.get('input_tokens', usage.get('prompt_tokens', 0)) or 0)
+        output_tokens = int(usage.get('output_tokens', usage.get('completion_tokens', 0)) or 0)
+        total_tokens = int(usage.get('total_tokens', input_tokens + output_tokens) or 0)
+        normalized = {
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': total_tokens,
+        }
+        details = usage.get('input_tokens_details') or usage.get('prompt_tokens_details')
+        cached_tokens = details.get('cached_tokens') if isinstance(details, dict) else None
+        if cached_tokens is None:
+            cached_tokens = usage.get('cached_input_tokens', usage.get('cache_read_input_tokens'))
+        if cached_tokens is not None:
+            normalized['cached_input_tokens'] = int(cached_tokens or 0)
+        return normalized

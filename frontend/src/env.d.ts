@@ -101,7 +101,14 @@ declare global {
       rotationCenterX?: number;
       rotationCenterY?: number;
     }>;
-    getSounds?: () => Array<{name?: string}>;
+    getSounds?: () => Array<{
+      name?: string;
+      assetId?: string | number;
+      dataFormat?: string;
+      format?: string;
+      rate?: number;
+      sampleCount?: number;
+    }>;
     createVariable?(id: string, name: string, type: '' | 'list' | 'broadcast_msg', isCloud?: boolean): void;
     deleteVariable?(id: string): void;
     lookupVariableByNameAndType?(
@@ -146,12 +153,19 @@ declare global {
       getTargetById?: (targetId: string) => ScratchTargetLike | null;
       getTargetForStage?: () => ScratchTargetLike;
       emitProjectChanged?: () => void;
+      extensionManager?: {
+        isExtensionLoaded?(extensionId: string): boolean;
+        loadExtensionURL?(extensionId: string): Promise<unknown>;
+        loadExtensionIdSync?(extensionId: string): void;
+      };
     };
     on?: (event: string, listener: (...args: unknown[]) => void) => void;
     addListener?: (event: string, listener: (...args: unknown[]) => void) => void;
     removeListener?: (event: string, listener: (...args: unknown[]) => void) => void;
     addCostume(md5ext: string, costume: Record<string, unknown>, targetId?: string): Promise<void>;
     addBackdrop(md5ext: string, backdrop: Record<string, unknown>): Promise<void>;
+    addSound?(sound: Record<string, unknown>, targetId?: string): Promise<void>;
+    deleteSound?(soundIndex: number): unknown;
     addSprite(input: string | Record<string, unknown>): Promise<void>;
     deleteCostume?(costumeIndex: number): unknown;
     deleteSprite(targetId: string): unknown;

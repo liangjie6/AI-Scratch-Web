@@ -1,4 +1,5 @@
-import type {CostumeExport, ImportedSpriteResult, SpriteImportExpectation} from './asset-adapter';
+import type {CostumeExport, ImportedSpriteResult, SoundExport, SpriteImportExpectation, SpriteSoundExpectation} from './asset-adapter';
+import type {ScratchEditorPort} from './scratch-editor-port';
 
 type Listener = () => void;
 
@@ -7,7 +8,7 @@ export interface ProjectTransactionHandle {
   release(): void;
 }
 
-export class ScratchGuiBridge {
+export class ScratchGuiBridge implements ScratchEditorPort {
   private vm: ScratchVmLike | null = null;
   private vmListenerCleanups: Array<() => void> = [];
   private storage: ScratchStorageLike | null = null;
@@ -74,7 +75,11 @@ export class ScratchGuiBridge {
       if (this.vm === vm) this.markProjectLoaded();
     };
     const onProjectChanged = () => {
-      if (this.vm !== vm || this.projectTransactionMutationDepth > 0) return;
+      // A project transaction owns all writes until release. Scratch may emit
+      // PROJECT_CHANGED asynchronously after addSprite/setEditingTarget
+      // resolves; treating that event as an external edit invalidates the
+      // transaction immediately after a valid resource import.
+      if (this.vm !== vm || this.projectTransactionMutationDepth > 0 || this.projectTransactionActive) return;
       this.revision += 1;
       this.projectListeners.forEach(listener => listener());
     };
@@ -137,6 +142,35 @@ export class ScratchGuiBridge {
 
   get currentStorage() {
     return this.storage;
+  }
+
+  getLibraryAssetUrl(assetId: string | number, dataFormat: string) {
+    const id = String(assetId).toLowerCase();
+    const format = String(dataFormat).toLowerCase();
+    if (!/^[a-f0-9]{32}$/.test(id) || !/^(?:svg|png|wav|mp3)$/.test(format)) {
+      throw new Error('Scratch 素材标识或格式无效');
+    }
+    return `/assets/scratch/library-assets/${id}.${format}`;
+  }
+
+  get builtinExtensionLoaderAvailable() {
+    const manager = this.vm?.runtime.extensionManager;
+    return Boolean(manager?.isExtensionLoaded && manager.loadExtensionIdSync);
+  }
+
+  ensureBuiltinExtensions(extensionIds: readonly ('pen' | 'music' | 'text2speech')[]): void {
+    const manager = this.vm?.runtime.extensionManager;
+    if (!manager?.isExtensionLoaded || !this.builtinExtensionLoaderAvailable) {
+      throw new Error('当前 Scratch VM 不支持受控内置扩展加载');
+    }
+    for (const extensionId of extensionIds) {
+      if (manager.isExtensionLoaded(extensionId)) continue;
+      // Commit must not enter the generic URL/worker extension path. These IDs
+      // are the fixed, bundled Scratch extensions accepted by the contract.
+      manager.loadExtensionIdSync?.(extensionId);
+      if (!manager.isExtensionLoaded(extensionId)) throw new Error('Scratch 未能加载内置扩展：' + extensionId);
+    }
+    this.refreshWorkspace();
   }
 
   get importIsFatal() {
@@ -243,7 +277,8 @@ export class ScratchGuiBridge {
 
   async commitSpriteImport(
     spriteJson: Record<string, unknown>,
-    expectations: SpriteImportExpectation[]
+    expectations: SpriteImportExpectation[],
+    soundExpectations: SpriteSoundExpectation[] = []
   ): Promise<ImportedSpriteResult> {
     const vm = this.requireVm();
     const lifecycleToken = this.lifecycleToken;
@@ -282,8 +317,19 @@ export class ScratchGuiBridge {
           throw new Error('Scratch 造型元数据校验失败：' + expected.name + '（' + mismatches.join('；') + '）');
         }
       });
+      const installedSounds = target.getSounds?.() ?? [];
+      if (installedSounds.length !== soundExpectations.length) throw new Error('Scratch 声音数量校验失败');
+      soundExpectations.forEach((expected, index) => {
+        const actual = installedSounds[index];
+        if (!actual || actual.name !== expected.name || String(actual.assetId ?? '') !== expected.assetId || String(actual.dataFormat ?? actual.format ?? '') !== expected.dataFormat) {
+          throw new Error('Scratch 声音元数据校验失败：' + expected.name);
+        }
+      });
 
-      vm.setEditingTarget(target.id);
+      // Scratch GUI can emit PROJECT_CHANGED when the selected target changes.
+      // Keep that editor-side update inside the transaction mutation window so
+      // it does not advance the revision and invalidate the active commit.
+      this.runMaybeProjectTransactionMutation(() => vm.setEditingTarget(target.id));
       return {
         targetId: target.id,
         costumeAssetIds: installed.map(costume => String(costume.assetId ?? ''))
@@ -336,7 +382,7 @@ export class ScratchGuiBridge {
       });
       this.assertVmStillBound(vm, lifecycleToken);
     }
-    return {assetId: asset.assetId, name: costume.name, costumeIndex: installedIndex};
+    return {assetId: asset.assetId, name: String(installed[installedIndex]?.name ?? costume.name), costumeIndex: installedIndex};
   }
 
   async addBackdropToStage(costume: CostumeExport, selectAfter = true) {
@@ -362,7 +408,44 @@ export class ScratchGuiBridge {
       });
       this.assertVmStillBound(vm, lifecycleToken);
     }
-    return {assetId: asset.assetId, name: costume.name, costumeIndex: installedIndex};
+    return {assetId: asset.assetId, name: String(installed[installedIndex]?.name ?? costume.name), costumeIndex: installedIndex};
+  }
+
+  async addSoundToTarget(targetId: string, sound: SoundExport) {
+    const vm = this.requireVm();
+    const storage = this.currentStorage;
+    if (!storage?.createAsset || !vm.addSound) throw new Error('当前 Scratch 编辑器不支持添加声音');
+    const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
+    if (!target) throw new Error('找不到声音目标');
+    const bytes = new Uint8Array(await sound.blob.arrayBuffer());
+    if (!bytes.length) throw new Error('声音文件为空');
+    const dataFormat = sound.dataFormat === 'wav' ? storage.DataFormat.WAV : storage.DataFormat.MP3;
+    const asset = storage.createAsset(storage.AssetType.Sound, dataFormat, bytes, null, true);
+    const assetId = String(asset?.assetId ?? '');
+    if (!assetId) throw new Error('无法创建 Scratch 声音资源');
+    const before = target.getSounds?.().length ?? 0;
+    await this.runMaybeProjectTransactionMutationAsync(() => vm.addSound!({
+      name: sound.name || '声音', asset, assetId, md5ext: assetId + '.' + sound.dataFormat,
+      dataFormat: sound.dataFormat, format: sound.dataFormat, rate: sound.rate ?? 44100, sampleCount: sound.sampleCount ?? 0
+    }, targetId));
+    const installed = target.getSounds?.() ?? [];
+    const result = installed[installed.length - 1];
+    if (installed.length !== before + 1 || !result) throw new Error('Scratch 未能安装声音');
+    return {assetId, name: String(result.name ?? sound.name), soundIndex: installed.length - 1};
+  }
+
+  async removeSoundFromTarget(targetId: string, soundIndex: number, assetId: string, compensation = false): Promise<void> {
+    const vm = this.requireVm();
+    const target = vm.runtime.getTargetById?.(targetId) ?? vm.runtime.targets.find(item => item.id === targetId);
+    const sound = target?.getSounds?.()[soundIndex];
+    if (!target || !sound || String(sound.assetId ?? '') !== assetId || !vm.deleteSound) throw new Error('待补偿的声音已经变化');
+    const previousEditingTargetId = vm.editingTarget?.id;
+    const mutate = compensation
+      ? (operation: () => Promise<unknown> | unknown) => this.projectTransactionActive ? this.runProjectTransactionCompensationAsync(operation) : Promise.resolve(operation())
+      : (operation: () => Promise<unknown> | unknown) => this.runMaybeProjectTransactionMutationAsync(operation);
+    if (previousEditingTargetId !== targetId) vm.setEditingTarget(targetId);
+    await mutate(() => vm.deleteSound!(soundIndex));
+    if (previousEditingTargetId && previousEditingTargetId !== targetId && this.vm === vm) vm.setEditingTarget(previousEditingTargetId);
   }
 
   selectBackdropByName(name: string) {

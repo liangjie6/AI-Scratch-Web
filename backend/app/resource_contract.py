@@ -5,7 +5,10 @@ import json
 from typing import Any
 
 
-RESOURCE_CONTRACT_VERSION = 2
+# Version 3 carries immutable Blueprint lineage into every executable operation.
+# Do not make this backwards compatible: a v2 manifest has no stable need/entity IDs
+# and therefore cannot be safely preflighted as a project transaction.
+RESOURCE_CONTRACT_VERSION = 3
 
 
 def bounded_actual(value: Any, limit: int = 2048) -> Any:
@@ -31,6 +34,7 @@ class ResourceOperationSpec:
     source_kinds: tuple[str, ...] = ('scratch_library', 'image_generation')
     nested_costumes_min: int | None = None
     nested_costumes_max: int | None = None
+    requires_destructive_approval: bool = False
     description: str = ''
 
     def as_dict(self) -> dict[str, Any]:
@@ -52,8 +56,9 @@ class ResourceOperationSpec:
 RESOURCE_OPERATION_SPECS: tuple[ResourceOperationSpec, ...] = (
     ResourceOperationSpec(
         name='add_builtin_sprite',
-        required_fields=('op', 'op_id', 'name', 'x', 'y', 'size', 'source'),
-        optional_fields=('tags',),
+        required_fields=('op', 'op_id', 'source_need_id', 'owner_entity_id', 'name', 'x', 'y', 'size', 'source', 'include_costumes'),
+        optional_fields=('tags', 'include_sounds'),
+        defaults=(('include_sounds', 'all'),),
         forbidden_fields=('target', 'select_after', 'costumes'),
         source_asset_types=('sprite',),
         source_kinds=('scratch_library',),
@@ -61,7 +66,7 @@ RESOURCE_OPERATION_SPECS: tuple[ResourceOperationSpec, ...] = (
     ),
     ResourceOperationSpec(
         name='add_sprite',
-        required_fields=('op', 'op_id', 'name', 'x', 'y', 'size', 'costumes'),
+        required_fields=('op', 'op_id', 'source_need_id', 'owner_entity_id', 'name', 'x', 'y', 'size', 'costumes'),
         optional_fields=('tags',),
         forbidden_fields=('target', 'source', 'select_after'),
         source_asset_types=('costume',),
@@ -74,11 +79,12 @@ RESOURCE_OPERATION_SPECS: tuple[ResourceOperationSpec, ...] = (
         required_fields=('op', 'op_id', 'name', 'target'),
         forbidden_fields=('source', 'x', 'y', 'size', 'tags', 'select_after', 'costumes'),
         target_kinds=('existing_sprite',),
+        requires_destructive_approval=True,
         description='Delete an existing sprite.',
     ),
     ResourceOperationSpec(
         name='add_costume',
-        required_fields=('op', 'op_id', 'target', 'name', 'source'),
+        required_fields=('op', 'op_id', 'source_need_id', 'target', 'name', 'source'),
         optional_fields=('tags', 'select_after'),
         defaults=(('select_after', False),),
         forbidden_fields=('x', 'y', 'size', 'costumes'),
@@ -88,12 +94,28 @@ RESOURCE_OPERATION_SPECS: tuple[ResourceOperationSpec, ...] = (
     ),
     ResourceOperationSpec(
         name='add_backdrop',
-        required_fields=('op', 'op_id', 'name', 'source'),
+        required_fields=('op', 'op_id', 'source_need_id', 'name', 'source'),
         optional_fields=('tags', 'select_after'),
         defaults=(('select_after', False),),
         forbidden_fields=('target', 'x', 'y', 'size', 'costumes'),
         source_asset_types=('backdrop',),
         description='Add a backdrop to the stage.',
+    ),
+    ResourceOperationSpec(
+        name='add_sound',
+        required_fields=('op', 'op_id', 'source_need_id', 'target', 'name', 'source'),
+        optional_fields=('tags',),
+        target_kinds=('current_target', 'stage', 'existing_sprite', 'created_sprite'),
+        source_asset_types=('sound',),
+        source_kinds=('scratch_library', 'audio_generation'),
+        description='Add a Scratch sound to a stage or sprite.',
+    ),
+    ResourceOperationSpec(
+        name='delete_sound',
+        required_fields=('op', 'op_id', 'target', 'sound'),
+        target_kinds=('current_target', 'stage', 'existing_sprite', 'created_sprite'),
+        requires_destructive_approval=True,
+        description='Delete an existing sound after an explicit destructive-edit approval.',
     ),
     ResourceOperationSpec(
         name='select_backdrop',
@@ -110,12 +132,18 @@ RESOURCE_SOURCE_SPECS: tuple[dict[str, Any], ...] = (
         'kind': 'scratch_library',
         'required_fields': ('kind', 'asset_type', 'search_terms'),
         'optional_fields': (),
-        'asset_types': ('sprite', 'costume', 'backdrop'),
+        'asset_types': ('sprite', 'costume', 'backdrop', 'sound'),
     },
     {
         'kind': 'image_generation',
         'required_fields': ('kind', 'reason', 'prompt', 'style', 'width', 'height', 'sheet_layout'),
         'optional_fields': ('custom_style',),
+        'asset_types': (),
+    },
+    {
+        'kind': 'audio_generation',
+        'required_fields': ('kind', 'reason', 'prompt', 'audio_kind', 'max_duration_seconds'),
+        'optional_fields': (),
         'asset_types': (),
     },
 )
@@ -138,23 +166,31 @@ RESOURCE_ERROR_CODES = (
 )
 
 
-def resource_operation_matrix() -> list[dict[str, Any]]:
-    return [item.as_dict() for item in RESOURCE_OPERATION_SPECS]
+def _active_resource_operation_specs(allow_destructive_resource_ops: bool) -> tuple[ResourceOperationSpec, ...]:
+    return tuple(
+        item for item in RESOURCE_OPERATION_SPECS
+        if allow_destructive_resource_ops or not item.requires_destructive_approval
+    )
 
 
-def resource_operation_contract_json() -> str:
-    return json.dumps(resource_operation_matrix(), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+def resource_operation_matrix(allow_destructive_resource_ops: bool = True) -> list[dict[str, Any]]:
+    return [item.as_dict() for item in _active_resource_operation_specs(allow_destructive_resource_ops)]
 
 
-def render_resource_operation_contract() -> str:
+def resource_operation_contract_json(allow_destructive_resource_ops: bool = True) -> str:
+    return json.dumps(resource_operation_matrix(allow_destructive_resource_ops), ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+
+def render_resource_operation_contract(allow_destructive_resource_ops: bool = True) -> str:
+    active_specs = _active_resource_operation_specs(allow_destructive_resource_ops)
     rows = [
-        'RESOURCE_OPERATION_CONTRACT (schema_version=2; generated from backend/app/resource_contract.py):',
+        f'RESOURCE_OPERATION_CONTRACT (schema_version={RESOURCE_CONTRACT_VERSION}; generated from backend/app/resource_contract.py):',
         'Every resource operation must contain only required and optional fields. Never add a forbidden field.',
         '',
         '| op | required fields | optional/default fields | forbidden fields |',
         '| --- | --- | --- | --- |',
     ]
-    for spec in RESOURCE_OPERATION_SPECS:
+    for spec in active_specs:
         optional = ', '.join(spec.optional_fields) or 'none'
         if spec.defaults:
             optional += ' (' + ', '.join(f'{key}={value!r}' for key, value in spec.defaults) + ')'
@@ -165,19 +201,19 @@ def render_resource_operation_contract() -> str:
         '',
         'Source kinds by operation: ' + '; '.join(
             f'{spec.name}={", ".join(spec.source_kinds) or "none"}'
-            for spec in RESOURCE_OPERATION_SPECS
+            for spec in active_specs
         ) + '.',
         'Source asset types by operation: ' + '; '.join(
             f'{spec.name}={", ".join(spec.source_asset_types) or "none"}'
-            for spec in RESOURCE_OPERATION_SPECS
+            for spec in active_specs
         ) + '.',
         'Target kinds by operation: ' + '; '.join(
             f'{spec.name}={", ".join(spec.target_kinds) or "none"}'
-            for spec in RESOURCE_OPERATION_SPECS
+            for spec in active_specs
         ) + '.',
-        'The add_sprite costumes array contains 1..12 entries. Each entry has name, source, and optional tags; the source must be a costume or image_generation source.',
+        'The add_sprite costumes array contains 1..12 entries. Each entry has name, source, and optional tags; the source must be a costume or image_generation source. add_sound accepts only a Scratch library sound source.',
         '',
         'RESOURCE_SOURCE_CONTRACT_JSON=' + json.dumps(list(RESOURCE_SOURCE_SPECS), ensure_ascii=False, sort_keys=True, separators=(',', ':')),
-        'RESOURCE_OPERATION_CONTRACT_JSON=' + resource_operation_contract_json(),
+        'RESOURCE_OPERATION_CONTRACT_JSON=' + resource_operation_contract_json(allow_destructive_resource_ops),
     ])
     return '\n'.join(rows)

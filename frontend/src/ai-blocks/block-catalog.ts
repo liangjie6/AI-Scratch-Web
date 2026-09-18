@@ -2,19 +2,24 @@ import type {InputKind, TargetKind} from './program-ir';
 
 export type BlockShape = 'hat' | 'stack' | 'cap' | 'reporter' | 'boolean';
 export type FieldResolverKind = 'variable' | 'list' | 'broadcast';
+export type ResourceMenuAssetType = 'sprite' | 'costume' | 'backdrop' | 'sound';
 
 export interface InputSpec {
   kind: InputKind | 'boolean' | 'any';
   required?: boolean;
-  shadow?: Exclude<InputKind, 'block'>;
+  shadow?: Exclude<InputKind, 'block' | 'resource_ref' | 'existing_asset_ref'>;
   shadowOpcode?: string;
   shadowField?: string;
   shadowResolver?: FieldResolverKind;
+  /** A resource ref is valid only for this concrete Scratch menu. */
+  resourceType?: ResourceMenuAssetType;
 }
 
 export interface FieldSpec {
   required?: boolean;
   resolver?: FieldResolverKind;
+  /** A logical resource ref is valid only for this concrete Scratch field menu. */
+  resourceType?: ResourceMenuAssetType;
 }
 
 export interface BlockSpec {
@@ -35,7 +40,7 @@ export const BLOCK_CATALOG = {
   event_whenkeypressed: {shape: 'hat', targets: both, fields: fields('KEY_OPTION')},
   event_whenthisspriteclicked: {shape: 'hat', targets: sprite},
   event_whenstageclicked: {shape: 'hat', targets: ['stage']},
-  event_whenbackdropswitchesto: {shape: 'hat', targets: both, fields: fields('BACKDROP')},
+  event_whenbackdropswitchesto: {shape: 'hat', targets: both, fields: {BACKDROP: {required: true, resourceType: 'backdrop'}}},
   event_whengreaterthan: {shape: 'hat', targets: both, fields: fields('WHENGREATERTHANMENU'), inputs: {VALUE: input('number', 'number')}},
   event_whenbroadcastreceived: {shape: 'hat', targets: both, fields: {BROADCAST_OPTION: {required: true, resolver: 'broadcast'}}},
   event_broadcast: {shape: 'stack', targets: both, inputs: {BROADCAST_INPUT: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'event_broadcast_menu', shadowField: 'BROADCAST_OPTION', shadowResolver: 'broadcast'}}},
@@ -44,12 +49,12 @@ export const BLOCK_CATALOG = {
   motion_movesteps: {shape: 'stack', targets: sprite, inputs: {STEPS: input('number', 'number')}},
   motion_turnright: {shape: 'stack', targets: sprite, inputs: {DEGREES: input('number', 'number')}},
   motion_turnleft: {shape: 'stack', targets: sprite, inputs: {DEGREES: input('number', 'number')}},
-  motion_goto: {shape: 'stack', targets: sprite, inputs: {TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_goto_menu', shadowField: 'TO'}}},
+  motion_goto: {shape: 'stack', targets: sprite, inputs: {TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_goto_menu', shadowField: 'TO', resourceType: 'sprite'}}},
   motion_gotoxy: {shape: 'stack', targets: sprite, inputs: {X: input('number', 'number'), Y: input('number', 'number')}},
-  motion_glideto: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_glideto_menu', shadowField: 'TO'}}},
+  motion_glideto: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), TO: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_glideto_menu', shadowField: 'TO', resourceType: 'sprite'}}},
   motion_glidesecstoxy: {shape: 'stack', targets: sprite, inputs: {SECS: input('number', 'number'), X: input('number', 'number'), Y: input('number', 'number')}},
   motion_pointindirection: {shape: 'stack', targets: sprite, inputs: {DIRECTION: input('angle', 'angle')}},
-  motion_pointtowards: {shape: 'stack', targets: sprite, inputs: {TOWARDS: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_pointtowards_menu', shadowField: 'TOWARDS'}}},
+  motion_pointtowards: {shape: 'stack', targets: sprite, inputs: {TOWARDS: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'motion_pointtowards_menu', shadowField: 'TOWARDS', resourceType: 'sprite'}}},
   motion_changexby: {shape: 'stack', targets: sprite, inputs: {DX: input('number', 'number')}},
   motion_setx: {shape: 'stack', targets: sprite, inputs: {X: input('number', 'number')}},
   motion_changeyby: {shape: 'stack', targets: sprite, inputs: {DY: input('number', 'number')}},
@@ -64,9 +69,9 @@ export const BLOCK_CATALOG = {
   looks_say: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text')}},
   looks_thinkforsecs: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text'), SECS: input('number', 'number')}},
   looks_think: {shape: 'stack', targets: sprite, inputs: {MESSAGE: input('text', 'text')}},
-  looks_switchcostumeto: {shape: 'stack', targets: sprite, inputs: {COSTUME: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_costume', shadowField: 'COSTUME'}}},
+  looks_switchcostumeto: {shape: 'stack', targets: sprite, inputs: {COSTUME: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_costume', shadowField: 'COSTUME', resourceType: 'costume'}}},
   looks_nextcostume: {shape: 'stack', targets: sprite},
-  looks_switchbackdropto: {shape: 'stack', targets: both, inputs: {BACKDROP: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_backdrops', shadowField: 'BACKDROP'}}},
+  looks_switchbackdropto: {shape: 'stack', targets: both, inputs: {BACKDROP: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'looks_backdrops', shadowField: 'BACKDROP', resourceType: 'backdrop'}}},
   looks_nextbackdrop: {shape: 'stack', targets: both},
   looks_changesizeby: {shape: 'stack', targets: sprite, inputs: {CHANGE: input('number', 'number')}},
   looks_setsizeto: {shape: 'stack', targets: sprite, inputs: {SIZE: input('number', 'number')}},
@@ -81,8 +86,8 @@ export const BLOCK_CATALOG = {
   looks_backdropnumbername: {shape: 'reporter', targets: both, fields: fields('NUMBER_NAME')},
   looks_size: {shape: 'reporter', targets: sprite},
 
-  sound_playuntildone: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU'}}},
-  sound_play: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU'}}},
+  sound_playuntildone: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU', resourceType: 'sound'}}},
+  sound_play: {shape: 'stack', targets: both, inputs: {SOUND_MENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sound_sounds_menu', shadowField: 'SOUND_MENU', resourceType: 'sound'}}},
   sound_stopallsounds: {shape: 'stack', targets: both},
   sound_changeeffectby: {shape: 'stack', targets: both, fields: fields('EFFECT'), inputs: {VALUE: input('number', 'number')}},
   sound_seteffectto: {shape: 'stack', targets: both, fields: fields('EFFECT'), inputs: {VALUE: input('number', 'number')}},
@@ -100,13 +105,13 @@ export const BLOCK_CATALOG = {
   control_repeat_until: {shape: 'stack', targets: both, inputs: {CONDITION: input('boolean')}, substacks: ['SUBSTACK']},
   control_stop: {shape: 'cap', targets: both, fields: fields('STOP_OPTION')},
   control_start_as_clone: {shape: 'hat', targets: sprite},
-  control_create_clone_of: {shape: 'stack', targets: both, inputs: {CLONE_OPTION: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'control_create_clone_of_menu', shadowField: 'CLONE_OPTION'}}},
+  control_create_clone_of: {shape: 'stack', targets: both, inputs: {CLONE_OPTION: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'control_create_clone_of_menu', shadowField: 'CLONE_OPTION', resourceType: 'sprite'}}},
   control_delete_this_clone: {shape: 'cap', targets: sprite},
 
-  sensing_touchingobject: {shape: 'boolean', targets: sprite, inputs: {TOUCHINGOBJECTMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_touchingobjectmenu', shadowField: 'TOUCHINGOBJECTMENU'}}},
+  sensing_touchingobject: {shape: 'boolean', targets: sprite, inputs: {TOUCHINGOBJECTMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_touchingobjectmenu', shadowField: 'TOUCHINGOBJECTMENU', resourceType: 'sprite'}}},
   sensing_touchingcolor: {shape: 'boolean', targets: sprite, inputs: {COLOR: input('color', 'color')}},
   sensing_coloristouchingcolor: {shape: 'boolean', targets: sprite, inputs: {COLOR: input('color', 'color'), COLOR2: input('color', 'color')}},
-  sensing_distanceto: {shape: 'reporter', targets: sprite, inputs: {DISTANCETOMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_distancetomenu', shadowField: 'DISTANCETOMENU'}}},
+  sensing_distanceto: {shape: 'reporter', targets: sprite, inputs: {DISTANCETOMENU: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_distancetomenu', shadowField: 'DISTANCETOMENU', resourceType: 'sprite'}}},
   sensing_askandwait: {shape: 'stack', targets: both, inputs: {QUESTION: input('text', 'text')}},
   sensing_answer: {shape: 'reporter', targets: both},
   sensing_keypressed: {shape: 'boolean', targets: both, inputs: {KEY_OPTION: {kind: 'text', required: true, shadow: 'text', shadowOpcode: 'sensing_keyoptions', shadowField: 'KEY_OPTION'}}},
@@ -156,10 +161,44 @@ export const BLOCK_CATALOG = {
   data_lengthoflist: {shape: 'reporter', targets: both, fields: {LIST: {required: true, resolver: 'list'}}},
   data_listcontainsitem: {shape: 'boolean', targets: both, fields: {LIST: {required: true, resolver: 'list'}}, inputs: {ITEM: input('text', 'text')}},
   data_showlist: {shape: 'stack', targets: both, fields: {LIST: {required: true, resolver: 'list'}}},
-  data_hidelist: {shape: 'stack', targets: both, fields: {LIST: {required: true, resolver: 'list'}}}
+  data_hidelist: {shape: 'stack', targets: both, fields: {LIST: {required: true, resolver: 'list'}}},
+
+  // The compiler accepts these only after the manifest declares `pen` and
+  // the browser's verified built-in extension capability is enabled.
+  pen_clear: {shape: 'stack', targets: both},
+  pen_stamp: {shape: 'stack', targets: sprite},
+  pen_penDown: {shape: 'stack', targets: sprite},
+  pen_penUp: {shape: 'stack', targets: sprite},
+  pen_setPenColorToColor: {shape: 'stack', targets: sprite, inputs: {COLOR: input('color', 'color')}},
+  pen_changePenColorParamBy: {shape: 'stack', targets: sprite, inputs: {COLOR_PARAM: input('text', 'text'), VALUE: input('number', 'number')}},
+  pen_setPenColorParamTo: {shape: 'stack', targets: sprite, inputs: {COLOR_PARAM: input('text', 'text'), VALUE: input('number', 'number')}},
+  pen_changePenSizeBy: {shape: 'stack', targets: sprite, inputs: {SIZE: input('number', 'number')}},
+  pen_setPenSizeTo: {shape: 'stack', targets: sprite, inputs: {SIZE: input('number', 'number')}},
+
+  // Public Scratch Music blocks. The manifest declaration and paired feature
+  // flags are still required before a ProgramIR may use them.
+  music_playDrumForBeats: {shape: 'stack', targets: both, inputs: {DRUM: input('number', 'number'), BEATS: input('number', 'number')}},
+  music_restForBeats: {shape: 'stack', targets: both, inputs: {BEATS: input('number', 'number')}},
+  music_playNoteForBeats: {shape: 'stack', targets: both, inputs: {NOTE: input('number', 'number'), BEATS: input('number', 'number')}},
+  music_setInstrument: {shape: 'stack', targets: both, inputs: {INSTRUMENT: input('number', 'number')}},
+  music_setTempo: {shape: 'stack', targets: both, inputs: {TEMPO: input('number', 'number')}},
+  music_changeTempo: {shape: 'stack', targets: both, inputs: {TEMPO: input('number', 'number')}},
+  music_getTempo: {shape: 'reporter', targets: both},
+
+  text2speech_speakAndWait: {shape: 'stack', targets: both, inputs: {WORDS: input('text', 'text')}},
+  text2speech_setVoice: {shape: 'stack', targets: both, inputs: {VOICE: input('text', 'text')}},
+  text2speech_setLanguage: {shape: 'stack', targets: both, inputs: {LANGUAGE: input('text', 'text')}},
 } as const satisfies Record<string, BlockSpec>;
 
 export type NativeOpcode = keyof typeof BLOCK_CATALOG;
 
 export const getBlockSpec = (opcode: string): BlockSpec | undefined =>
   (BLOCK_CATALOG as Record<string, BlockSpec>)[opcode];
+
+export type BuiltinAiExtension = 'pen' | 'music' | 'text2speech';
+
+export const isBuiltinAiExtension = (value: unknown): value is BuiltinAiExtension =>
+  value === 'pen' || value === 'music' || value === 'text2speech';
+
+export const extensionForOpcode = (opcode: string): BuiltinAiExtension | undefined =>
+  opcode.startsWith('pen_') ? 'pen' : opcode.startsWith('music_') ? 'music' : opcode.startsWith('text2speech_') ? 'text2speech' : undefined;

@@ -89,6 +89,9 @@ function closeOnEscape(event: KeyboardEvent) {
                 <p :title="asset.prompt">{{ asset.prompt }}</p>
                 <div class="asset-card__meta">
                   <span>{{ styleLabel(asset) }}</span>
+                  <span class="asset-card__attachment" :title="asset.attachment === 'attached' ? '该素材已被已验证的 AI 项目写入使用' : '该素材尚未写入已验证的 AI 项目'">
+                    {{ asset.attachment === 'attached' ? '已挂载' : '未挂载' }}
+                  </span>
                   <time :datetime="new Date(asset.createdAt).toISOString()">{{ dateFormatter.format(asset.createdAt) }}</time>
                 </div>
                 <div class="asset-card__actions">

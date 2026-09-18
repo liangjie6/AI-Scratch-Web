@@ -6,7 +6,7 @@ import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 
 export interface PreparedResource {
   op_id: string;
-  kind: 'builtin_sprite' | 'costume' | 'backdrop' | 'backdrop_selection';
+  kind: 'builtin_sprite' | 'costume' | 'backdrop' | 'sound' | 'backdrop_selection';
   value: unknown;
 }
 
@@ -14,6 +14,7 @@ export type ApplyEntry =
   | {kind: 'sprite'; targetId: string; opId: string}
   | {kind: 'costume'; targetId: string; costumeIndex: number; assetId: string; opId: string}
   | {kind: 'backdrop'; targetId: string; costumeIndex: number; assetId: string; opId: string}
+  | {kind: 'sound'; targetId: string; soundIndex: number; assetId: string; opId: string}
   | {kind: 'backdrop_selection'; targetId: string; previousCostumeIndex: number; opId: string}
   | {kind: 'deleted_sprite'; restore: () => Promise<void> | void; opId: string}
   | {kind: 'program'; targetId: string; scriptIds: string[]}
@@ -24,6 +25,7 @@ export interface ProjectApplyResult {
   addedTargets: Array<{op_id: string; target_id: string; name: string}>;
   addedCostumes: Array<{op_id: string; target_id: string; asset_id: string; name: string}>;
   addedBackdrops: Array<{op_id: string; asset_id: string; name: string}>;
+  addedSounds: Array<{op_id: string; target_id: string; asset_id: string; name: string}>;
   selectedBackdrop?: {op_id: string; asset_id: string; name: string};
   appliedPrograms: Array<{target_id: string; added_blocks: number; added_scripts: number; removed_scripts: number}>;
   original_target_id: string;
@@ -49,6 +51,7 @@ export interface ProjectTransaction {
   result: ProjectApplyResult;
   journal?: ApplyEntry[];
   assertActive?: () => void;
+  onResourceApplied?: (operation: ResourceOp) => Promise<void> | void;
 }
 
 function throwIfAborted(signal?: AbortSignal) {
@@ -66,6 +69,7 @@ export function createProjectApplyResult(snapshot: AiTargetSnapshot, backup: Uin
     addedTargets: [],
     addedCostumes: [],
     addedBackdrops: [],
+    addedSounds: [],
     appliedPrograms: [],
     original_target_id: snapshot.targetId,
     revision_at_complete: snapshot.revision,
@@ -99,11 +103,21 @@ export async function applyProjectResources(
       if (boundaryIndex >= 0) transaction.journal.splice(boundaryIndex, 1);
       if (entry) transaction.journal.push(entry);
     }
+    await transaction.onResourceApplied?.(operation);
     transaction.assertActive?.();
-    options.onProgress?.(index + 1, operations.length, operation.name);
+    options.onProgress?.(
+      index + 1,
+      operations.length,
+      operation.op === 'delete_sound' ? '删除声音 ' + operation.sound.name : operation.name,
+    );
   }
   transaction.assertActive?.();
-  options.bridge.currentVm?.setEditingTarget?.(options.snapshot.targetId);
+  // Target selection is editor state, but Scratch may emit PROJECT_CHANGED for
+  // it. Keep it inside the transaction mutation depth so it cannot invalidate
+  // the project revision while resources are being committed.
+  if (options.bridge.currentVm?.setEditingTarget) {
+    options.bridge.runProjectTransactionMutation(() => options.bridge.currentVm?.setEditingTarget?.(options.snapshot.targetId));
+  }
   options.bridge.refreshWorkspace();
   transaction.assertActive?.();
   transaction.result.revision_at_complete = options.bridge.projectRevision;

@@ -1,11 +1,11 @@
-import {getBlockSpec} from './block-catalog';
-import {deleteGeneratedAsset, type GeneratedAsset} from '../ai/asset-library-store';
+import {markGeneratedAssetsAttached, type GeneratedAsset} from '../ai/asset-library-store';
+import {LOCAL_PROJECT_STORAGE_KEY} from './run-checkpoint-store';
 import {
   compileProgramIR,
   validateCompiledGraph,
+  validateProgramIR,
   type CompiledProgram,
-  type ProgramResolver,
-  type VMBlock
+  type ProgramResolver
 } from './program-compiler';
 import {
   ProgramIRValidationError,
@@ -13,7 +13,8 @@ import {
   type ScriptIR,
   type TargetKind
 } from './program-ir';
-import {validateProgramIR} from './program-compiler';
+import {preflightProgram} from './program-preflight';
+import {isBuiltinAiExtension, type BuiltinAiExtension} from './block-catalog';
 import {
   streamProjectManifest,
   streamUnifiedGeneration,
@@ -26,7 +27,8 @@ import {
   type UnifiedGenerationRequest,
   type UnifiedProgramDraft
 } from './ai-blocks-api';
-import {assertProjectManifest, normalizeProjectManifestTargets, validateProjectProgramSharedState, type ProjectManifest, type TargetRef} from './project-plan';
+import {assertProjectManifest, frontendEnabledBuiltinExtensions, normalizeProjectManifestTargets, validateProjectProgramSharedState, validateProjectProgramStateRefs, type ProjectManifest, type TargetRef} from './project-plan';
+import {contractSha256, projectBlueprintToManifest, projectTaskSpecToBlueprint, type ProjectBlueprint, type ScratchTaskSpec} from './project-contract';
 import {assertProjectSnapshotIsCurrent, assertSnapshotIsCurrent, isAiEditableScript, readAiProjectSnapshot, readAiTargetSnapshot, type AiProjectSnapshot, type AiTargetSnapshot} from './target-context';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
@@ -38,6 +40,18 @@ import {
   type ProjectResourceExecutor
 } from './project-resource-runner';
 import {createProjectResourceExecutor} from './project-resource-executor';
+import {
+  createCheckpointStore,
+  createEditorSessionId,
+  fingerprintBytes,
+  hashCheckpointPlan,
+  type AiRunCheckpointStore,
+  type LogicalTargetLocator,
+  type SerializableApplyReceipt
+} from './run-checkpoint-store';
+import {prewarmCandidateVerificationRuntime, verifyCandidateSb3, type CandidateVerificationFailureCode} from './verification-service';
+import {createScratchProgramPort, type PendingScratchVariable} from '../scratch/scratch-program-port';
+import {toRaw} from 'vue';
 
 export interface AiGenerationProgress {
   current: number;
@@ -60,6 +74,18 @@ export interface UnifiedCommitResult {
   revisionAtComplete: number;
   programs: AiGenerationResult[];
   project?: ProjectApplyResult;
+  checkpointRunId?: string;
+}
+
+export interface CommitTelemetry {
+  outcome: 'COMPLETED' | 'ROLLED_BACK' | 'FAILED_NEEDS_RECOVERY' | 'REJECTED_BEFORE_WRITE';
+  commitDurationMs: number;
+  verifyDurationMs: number;
+  behaviorTestCount: number;
+  behaviorPassedCount: number;
+  behaviorMustCount: number;
+  behaviorMustPassedCount: number;
+  errorCode?: 'COMMIT_FAILED' | 'COMMIT_CONFLICT' | 'COMMIT_RECOVERY_FAILED' | CandidateVerificationFailureCode;
 }
 
 export interface UnifiedCommitOptions {
@@ -68,8 +94,19 @@ export interface UnifiedCommitOptions {
   signal?: AbortSignal;
   onProgress?: (progress: AiGenerationProgress) => void;
   generatedAssets?: GeneratedAsset[];
-  generateProgram?: (context: {targetIndex: number; targetRef: TargetRef; mode: AiBlocksMode; snapshot: AiTargetSnapshot}) => Promise<ProgramIR>;
+  runId?: string;
+  checkpointStore?: AiRunCheckpointStore;
+  /** The commit path is fail-closed when browser recovery is disabled. */
+  checkpointEnabled?: boolean;
+  /** Synchronous only: callers must defer telemetry I/O until the transaction releases. */
+  onCommitTelemetry?: (telemetry: CommitTelemetry) => void;
 }
+
+export type ProjectManifestEventSource = (
+  request: ProjectManifestGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal,
+) => Promise<void>;
 
 interface PreparedProgram {
   targetIndex: number;
@@ -78,18 +115,36 @@ interface PreparedProgram {
   program: ProgramIR;
 }
 
-interface PendingVariable {
-  owner: ScratchTargetLike;
-  id: string;
-  name: string;
-  type: ScratchVariableLike['type'];
-  value: ScratchVariableLike['value'];
-}
+type LogicalResourceBindings = Map<string, {resourceType: 'sprite' | 'costume' | 'backdrop' | 'sound'; name: string}>;
+type LogicalStateBindings = Map<string, {stateKind: 'variable' | 'list' | 'broadcast'; name: string; id: string}>;
 
-const clone = <T>(value: T): T => structuredClone(value);
+function clone<T>(value: T): T {
+  const seen = new WeakMap<object, unknown>();
+  const unwrap = (input: unknown): unknown => {
+    if (!input || typeof input !== 'object') return input;
+    const raw = toRaw(input as object) as object;
+    const cached = seen.get(raw);
+    if (cached) return cached;
+    if (Array.isArray(raw)) {
+      const output: unknown[] = [];
+      seen.set(raw, output);
+      raw.forEach(item => output.push(unwrap(item)));
+      return output;
+    }
+    const output: Record<string, unknown> = {};
+    seen.set(raw, output);
+    for (const [key, item] of Object.entries(raw)) output[key] = unwrap(item);
+    return output;
+  };
+  return structuredClone(unwrap(value)) as T;
+}
 
 function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw new DOMException('AI block generation cancelled', 'AbortError');
+}
+
+function monotonicNow(): number {
+  return globalThis.performance?.now?.() ?? Date.now();
 }
 
 async function compensateJournal(bridge: ScratchGuiBridge, journal: readonly ApplyEntry[]): Promise<boolean> {
@@ -100,7 +155,8 @@ async function compensateJournal(bridge: ScratchGuiBridge, journal: readonly App
       if (entry.kind === 'program' || entry.kind === 'resource_batch') {
         requiresBackupRestore = true;
       } else if (entry.kind === 'asset') {
-        await deleteGeneratedAsset(entry.assetId);
+        // Generated media is intentionally retained as unattached output when
+        // the project transaction fails; deleting it would lose paid work.
       } else if (entry.kind === 'sprite') {
         const vm = bridge.currentVm;
         if (!vm) throw new Error('Scratch VM 尚未就绪');
@@ -112,6 +168,9 @@ async function compensateJournal(bridge: ScratchGuiBridge, journal: readonly App
       } else if (entry.kind === 'costume' || entry.kind === 'backdrop') {
         if (typeof bridge.removeCostumeFromTarget !== 'function') throw new Error('Scratch 不支持素材补偿删除');
         await bridge.removeCostumeFromTarget(entry.targetId, entry.costumeIndex, entry.assetId, true);
+      } else if (entry.kind === 'sound') {
+        if (typeof bridge.removeSoundFromTarget !== 'function') throw new Error('Scratch 不支持声音补偿删除');
+        await bridge.removeSoundFromTarget(entry.targetId, entry.soundIndex, entry.assetId, true);
       } else if (entry.kind === 'backdrop_selection') {
         if (typeof bridge.restoreCostumeSelection !== 'function') throw new Error('Scratch 不支持背景选择补偿');
         bridge.restoreCostumeSelection(entry.targetId, entry.previousCostumeIndex, true);
@@ -147,15 +206,103 @@ function stageFor(bridge: ScratchGuiBridge): ScratchTargetLike {
   return stage;
 }
 
+function buildLogicalResourceBindings(result: ProjectApplyResult | undefined): LogicalResourceBindings {
+  const bindings: LogicalResourceBindings = new Map();
+  if (!result) return bindings;
+  for (const item of result.addedTargets) bindings.set(item.op_id, {resourceType: 'sprite', name: item.name});
+  for (const item of result.addedCostumes) bindings.set(item.op_id, {resourceType: 'costume', name: item.name});
+  for (const item of result.addedBackdrops) bindings.set(item.op_id, {resourceType: 'backdrop', name: item.name});
+  for (const item of result.addedSounds) bindings.set(item.op_id, {resourceType: 'sound', name: item.name});
+  return bindings;
+}
+
 function ownVariable(target: ScratchTargetLike, name: string, type: ScratchVariableLike['type']) {
   return Object.values(target.variables ?? {}).find(variable => variable.name === name && variable.type === type);
 }
 
+/** Materialize v3 manifest state before compiling any ProgramIR against the post-resource VM. */
+function installManifestState(
+  bridge: ScratchGuiBridge,
+  manifest: ProjectManifest,
+  originalTargetId: string,
+  result: ProjectApplyResult | undefined,
+): void {
+  const create = (owner: ScratchTargetLike, name: string, type: ScratchVariableLike['type'], value: ScratchVariableLike['value']) => {
+    const existing = ownVariable(owner, name, type);
+    if (existing) return;
+    const id = randomId(type === 'list' ? 'ai_list' : type === 'broadcast_msg' ? 'ai_broadcast' : 'ai_variable');
+    owner.createVariable?.(id, name, type, false);
+    const created = owner.variables?.[id];
+    if (!created) throw new Error('Scratch 无法创建清单状态：' + name);
+    created.value = clone(value);
+  };
+  const stage = stageFor(bridge);
+  for (const item of manifest.shared_state.variables) create(stage, item.name, '', item.value ?? 0);
+  for (const item of manifest.shared_state.lists) create(stage, item.name, 'list', item.value ? [...item.value] : []);
+  for (const item of manifest.shared_state.broadcasts) {
+    const name = typeof item === 'string' ? item : item.name;
+    create(stage, name, 'broadcast_msg', name);
+  }
+  for (const item of manifest.local_state ?? []) {
+    const targetId = targetIdForRef(bridge, item.target, originalTargetId, result);
+    const owner = targetById(bridge, targetId);
+    create(owner, item.name, item.kind === 'list' ? 'list' : '', item.kind === 'list' ? (Array.isArray(item.value) ? [...item.value] : []) : (Array.isArray(item.value) ? 0 : item.value ?? 0));
+  }
+}
+
+function buildLogicalStateBindings(bridge: ScratchGuiBridge, manifest: ProjectManifest, originalTargetId: string, result: ProjectApplyResult | undefined): LogicalStateBindings {
+  const bindings: LogicalStateBindings = new Map();
+  const stage = stageFor(bridge);
+  const bind = (refId: string | undefined, stateKind: 'variable' | 'list' | 'broadcast', owner: ScratchTargetLike, name: string) => {
+    if (!refId) throw new Error('清单状态缺少 ref_id');
+    const item = ownVariable(owner, name, stateKind === 'list' ? 'list' : stateKind === 'broadcast' ? 'broadcast_msg' : '');
+    if (!item) throw new Error('清单状态尚未安装：' + refId);
+    bindings.set(refId, {stateKind, name: item.name, id: item.id});
+  };
+  for (const item of manifest.shared_state.variables) bind(item.ref_id, 'variable', stage, item.name);
+  for (const item of manifest.shared_state.lists) bind(item.ref_id, 'list', stage, item.name);
+  for (const item of manifest.shared_state.broadcasts) {
+    if (typeof item === 'string') throw new Error('v3 广播状态缺少 ref_id');
+    bind(item.ref_id, 'broadcast', stage, item.name);
+  }
+  for (const item of manifest.local_state ?? []) {
+    const targetId = targetIdForRef(bridge, item.target, originalTargetId, result);
+    bind(item.ref_id, item.kind, targetById(bridge, targetId), item.name);
+  }
+  return bindings;
+}
+
+
+function resolveExistingAssetName(
+  bridge: ScratchGuiBridge,
+  target: ScratchTargetLike,
+  stage: ScratchTargetLike,
+  assetType: 'sprite' | 'costume' | 'backdrop' | 'sound',
+  name: string,
+): string {
+  const requireUnique = (candidates: string[], label: string) => {
+    const matches = candidates.filter(candidate => candidate === name);
+    if (matches.length !== 1) throw new Error(`已有${label}必须唯一存在：${name}`);
+    return matches[0];
+  };
+  if (assetType === 'sprite') {
+    const names = (bridge.currentVm?.runtime.targets ?? [])
+      .filter(item => !item.isStage && item.isOriginal !== false)
+      .map(item => String(item.getName?.() ?? item.sprite?.name ?? ''));
+    return requireUnique(names, '角色');
+  }
+  if (assetType === 'backdrop') return requireUnique((stage.getCostumes?.() ?? []).map(item => String(item.name ?? '')), '背景');
+  if (assetType === 'costume') return requireUnique((target.getCostumes?.() ?? []).map(item => String(item.name ?? '')), '造型');
+  return requireUnique((target.getSounds?.() ?? []).map(item => String(item.name ?? '')), '声音');
+}
+
 function createResolver(
+  bridge: ScratchGuiBridge,
   target: ScratchTargetLike,
   stage: ScratchTargetLike,
   program: ProgramIR,
-  pending: PendingVariable[]
+  pending: PendingScratchVariable[],
+  stateBindings: LogicalStateBindings = new Map(),
 ): ProgramResolver {
   const variableMap = new Map<string, {name: string; id: string}>();
   const listMap = new Map<string, {name: string; id: string}>();
@@ -188,7 +335,12 @@ function createResolver(
   return {
     variable: name => variableMap.get(name) ?? resolveExisting(name, ''),
     list: name => listMap.get(name) ?? resolveExisting(name, 'list'),
-    broadcast: name => broadcastMap.get(name) ?? resolveExisting(name, 'broadcast_msg')
+    broadcast: name => broadcastMap.get(name) ?? resolveExisting(name, 'broadcast_msg'),
+    state: (kind, refId) => {
+      const binding = stateBindings.get(refId);
+      if (!binding || binding.stateKind !== kind) throw new Error('逻辑状态引用未绑定：' + kind + '/' + refId);
+      return {name: binding.name, id: binding.id};
+    }
   };
 }
 
@@ -216,108 +368,21 @@ function positionProgram(program: ProgramIR, mode: AiBlocksMode, blocks: Scratch
   return positioned;
 }
 
-function collectInputUnit(compiled: CompiledProgram, id: string, output: Set<string>) {
-  if (output.has(id)) return;
-  const block = compiled.blocks[id];
-  if (!block) return;
-  for (const [name, input] of Object.entries(block.inputs)) {
-    if (name === 'SUBSTACK' || name === 'SUBSTACK2') continue;
-    collectInputUnit(compiled, input.block, output);
-    if (input.shadow && input.shadow !== input.block) collectInputUnit(compiled, input.shadow, output);
-  }
-  output.add(id);
-}
-
-function blockForPrefix(block: VMBlock, created: Set<string>): ScratchBlockLike {
-  const next = block.next && created.has(block.next) ? block.next : null;
-  const inputs = Object.fromEntries(
-    Object.entries(block.inputs)
-      .filter(([, input]) => created.has(input.block) && (!input.shadow || created.has(input.shadow)))
-      .map(([name, input]) => [name, clone(input)])
-  );
-  return {...clone(block), next, inputs} as ScratchBlockLike;
-}
-
-function connectionFor(compiled: CompiledProgram, id: string) {
-  const block = compiled.blocks[id];
-  if (!block?.parent) return null;
-  const parent = compiled.blocks[block.parent];
-  if (!parent) return null;
-  if (parent.next === id) return {parent: parent.id};
-  const input = Object.entries(parent.inputs).find(([, value]) => value.block === id);
-  return input ? {parent: parent.id, input: input[0]} : null;
-}
-
-function installVariables(pending: PendingVariable[]) {
-  for (const variable of pending) {
-    variable.owner.createVariable?.(variable.id, variable.name, variable.type, false);
-    const created = variable.owner.variables?.[variable.id];
-    if (!created) throw new Error('Scratch 无法创建变量：' + variable.name);
-    created.value = clone(variable.value);
-  }
-}
-
-function removeScripts(target: ScratchTargetLike, ids: string[]) {
-  for (const id of ids) target.blocks?.deleteBlock(id);
-}
-
-function applyCompiledProgram(
-  bridge: ScratchGuiBridge,
-  target: ScratchTargetLike,
-  compiled: CompiledProgram,
-  removeTopIds: string[],
-  pending: PendingVariable[],
-  signal: AbortSignal | undefined,
-  onProgress: ((progress: AiGenerationProgress) => void) | undefined,
-  targetName: string
-): AiGenerationResult {
-  throwIfAborted(signal);
-  installVariables(pending);
-  removeScripts(target, removeTopIds);
-  const blocks = target.blocks!;
-  const created = new Set<string>();
-  const visibleOrder = compiled.blockOrder.filter(id => !compiled.blocks[id].shadow);
-  let visibleCreated = 0;
-  for (const visibleId of visibleOrder) {
-    throwIfAborted(signal);
-    const unit = new Set<string>();
-    collectInputUnit(compiled, visibleId, unit);
-    for (const id of unit) {
-      if (created.has(id)) continue;
-      created.add(id);
-      blocks.createBlock(blockForPrefix(compiled.blocks[id], created));
-      if (!compiled.blocks[id].shadow) visibleCreated += 1;
-    }
-    const connection = connectionFor(compiled, visibleId);
-    if (connection) blocks.moveBlock({id: visibleId, newParent: connection.parent, ...(connection.input ? {newInput: connection.input} : {})});
-    onProgress?.({current: visibleCreated, total: visibleOrder.length, label: getBlockSpec(compiled.blocks[visibleId].opcode)?.shape === 'hat' ? '正在添加触发积木' : '正在添加 ' + compiled.blocks[visibleId].opcode});
-  }
-  for (const script of compiled.scripts) {
-    const top = compiled.blocks[script.topLevelId];
-    target.createComment?.(script.topLevelId + '_comment', script.topLevelId, script.comment, (top.x ?? 0) + 180, top.y ?? 0, 220, 80, true);
-  }
-  bridge.refreshWorkspace();
-  return {
-    targetId: target.id,
-    targetName,
-    addedBlocks: visibleOrder.length,
-    addedScripts: compiled.scripts.length,
-    removedScripts: removeTopIds.length,
-    revisionAtComplete: bridge.projectRevision
-  };
-}
-
 function prepareProgramForTarget(
   bridge: ScratchGuiBridge,
   snapshot: AiTargetSnapshot,
   mode: AiBlocksMode,
-  program: ProgramIR
-): {compiled: CompiledProgram; pending: PendingVariable[]; removeTopIds: string[]} {
+  program: ProgramIR,
+  bindings: LogicalResourceBindings = new Map(),
+  stateBindings: LogicalStateBindings = new Map(),
+  enabledExtensions: ReadonlySet<BuiltinAiExtension> = new Set(),
+): {compiled: CompiledProgram; pending: PendingScratchVariable[]; removeTopIds: string[]} {
   assertSnapshotIsCurrent(bridge, snapshot);
   const target = targetById(bridge, snapshot.targetId);
   const stage = stageFor(bridge);
+  const blocks = createScratchProgramPort(bridge).read(target);
   const removeTopIds = mode === 'rewrite'
-    ? target.blocks!.getScripts().filter(id => isAiEditableScript(target.blocks!, id))
+    ? blocks.getScripts().filter(id => isAiEditableScript(blocks, id))
     : mode === 'modify'
       ? program.remove_script_ids.map(ref => {
         const id = snapshot.scriptRefs[ref];
@@ -326,11 +391,25 @@ function prepareProgramForTarget(
       })
       : [];
   if (mode !== 'modify' && program.remove_script_ids.length) throw new Error('当前生成模式不允许删除已有脚本');
-  const pending: PendingVariable[] = [];
-  const positioned = positionProgram(program, mode, target.blocks!, removeTopIds);
+  const pending: PendingScratchVariable[] = [];
+  const positioned = positionProgram(program, mode, blocks, removeTopIds);
   const compiled = compileProgramIR(positioned, {
     target: (target.isStage ? 'stage' : 'sprite') as TargetKind,
-    resolver: createResolver(target, stage, program, pending),
+    resolver: createResolver(bridge, target, stage, program, pending, stateBindings),
+    resourceResolver: {
+      resource: (ref, expectedType) => {
+        const opId = ref.ref?.op_id ?? ref.op_id;
+        const binding = opId ? bindings.get(opId) : undefined;
+        if (!binding || binding.resourceType !== expectedType || (ref.resource_type && binding.resourceType !== ref.resource_type)) {
+          throw new Error('逻辑资源引用未绑定：' + expectedType + '/' + (opId ?? 'unknown'));
+        }
+        return binding.name;
+      },
+      existing: ref => {
+        return resolveExistingAssetName(bridge, target, stage, ref.asset_type, ref.name);
+      }
+    },
+    enabledExtensions,
     idGenerator: (kind, ordinal, scriptId) => randomId('ai_' + scriptId + '_' + kind + '_' + ordinal)
   });
   validateCompiledGraph(compiled);
@@ -357,12 +436,13 @@ function asPlan(event: UnifiedGenerationEvent): AiBlocksPlan {
 
 function buildProgram(metadata: Record<string, unknown>, shared: Record<string, unknown>, scripts: ScriptIR[]): ProgramIR {
   const program: ProgramIR = {
-    schema_version: metadata.schema_version as 1,
+    schema_version: metadata.schema_version as 1 | 2,
     summary: typeof metadata.summary === 'string' ? metadata.summary : '',
     remove_script_ids: Array.isArray(metadata.remove_script_ids) ? metadata.remove_script_ids as string[] : [],
     variables: Array.isArray(shared.variables) ? shared.variables as ProgramIR['variables'] : [],
     lists: Array.isArray(shared.lists) ? shared.lists as ProgramIR['lists'] : [],
     broadcasts: Array.isArray(shared.broadcasts) ? shared.broadcasts as string[] : [],
+    procedures: Array.isArray(metadata.procedures) ? metadata.procedures as NonNullable<ProgramIR['procedures']> : [],
     scripts
   };
   return program;
@@ -399,13 +479,32 @@ function targetIdForRef(bridge: ScratchGuiBridge, ref: TargetRef, originalTarget
   return existing.id;
 }
 
+async function originalTargetLocator(bridge: ScratchGuiBridge, snapshot: AiTargetSnapshot): Promise<LogicalTargetLocator> {
+  if (snapshot.isStage) return {kind: 'stage'};
+  const sprites = (bridge.currentVm?.runtime.targets ?? []).filter(target => !target.isStage && target.isOriginal !== false);
+  const target = sprites.find(item => item.id === snapshot.targetId);
+  const name = String(target?.getName?.() ?? target?.sprite?.name ?? snapshot.targetName);
+  const ordinal = Math.max(0, sprites.findIndex(item => item.id === snapshot.targetId));
+  const fingerprint = await hashCheckpointPlan({
+    name,
+    costumes: (target?.getCostumes?.() ?? []).map(item => String(item.name ?? '')),
+    sounds: (target?.getSounds?.() ?? []).map(item => String(item.name ?? '')),
+    program: snapshot.context.current_program
+  });
+  return {kind: 'sprite', ordinal, name, fingerprint};
+}
+
 export class UnifiedGenerationRunner {
-  constructor(private readonly bridge: ScratchGuiBridge) {}
+  constructor(
+    private readonly bridge: ScratchGuiBridge,
+    private readonly enabledExtensions: ReadonlySet<BuiltinAiExtension> = frontendEnabledBuiltinExtensions(),
+  ) {}
 
   async prepare(
     request: UnifiedGenerationRequest,
     onEvent?: (event: UnifiedGenerationEvent) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    projectManifestEventSource: ProjectManifestEventSource = streamProjectManifest,
   ): Promise<UnifiedGenerationDraft & {request: UnifiedGenerationRequest; snapshot: AiTargetSnapshot; projectSnapshot?: AiProjectSnapshot}> {
     const snapshot = readAiTargetSnapshot(this.bridge, request.target.mode);
     const projectSnapshot = request.scope === 'project' ? readAiProjectSnapshot(this.bridge) : undefined;
@@ -416,6 +515,10 @@ export class UnifiedGenerationRunner {
       return value;
     };
     const requirements: {value: AiBlocksRequirements | null} = {value: null};
+    const taskSpec: {value: ScratchTaskSpec | null} = {value: null};
+    const blueprint: {value: ProjectBlueprint | null} = {value: null};
+    const taskSpecHash: {value: string | null} = {value: null};
+    const blueprintHash: {value: string | null} = {value: null};
     const plan: {value: AiBlocksPlan | null} = {value: null};
     const manifest: {value: ProjectManifest | undefined} = {value: undefined};
     const programs = new Map<number, UnifiedProgramDraft>();
@@ -435,8 +538,22 @@ export class UnifiedGenerationRunner {
         programs.clear();
       }
       if (event.type === 'phase_complete' && event.phase === 'requirements') requirements.value = asRequirements(event);
+      if (event.type === 'phase_complete' && event.phase === 'task_spec') {
+        if (!event.data.task_spec || typeof event.data.task_spec !== 'object' || Array.isArray(event.data.task_spec)) throw new Error('统一流未提供有效 TaskSpec');
+        taskSpec.value = event.data.task_spec as ScratchTaskSpec;
+        taskSpecHash.value = typeof event.data.task_spec_hash === 'string' ? event.data.task_spec_hash : null;
+      }
+      if (event.type === 'phase_complete' && event.phase === 'blueprint') {
+        if (!event.data.blueprint || typeof event.data.blueprint !== 'object' || Array.isArray(event.data.blueprint)) throw new Error('统一流未提供有效项目蓝图');
+        blueprint.value = event.data.blueprint as ProjectBlueprint;
+        blueprintHash.value = typeof event.data.blueprint_hash === 'string' ? event.data.blueprint_hash : null;
+      }
       if (event.type === 'phase_complete' && event.phase === 'plan') {
         plan.value = asPlan(event);
+        if (!taskSpec.value && event.data.task_spec && typeof event.data.task_spec === 'object' && !Array.isArray(event.data.task_spec)) taskSpec.value = event.data.task_spec as ScratchTaskSpec;
+        if (!blueprint.value && event.data.blueprint && typeof event.data.blueprint === 'object' && !Array.isArray(event.data.blueprint)) blueprint.value = event.data.blueprint as ProjectBlueprint;
+        if (!taskSpecHash.value && typeof event.data.task_spec_hash === 'string') taskSpecHash.value = event.data.task_spec_hash;
+        if (!blueprintHash.value && typeof event.data.blueprint_hash === 'string') blueprintHash.value = event.data.blueprint_hash;
         if (event.data.manifest) manifest.value = normalizeProjectManifestTargets(event.data.manifest as ProjectManifest);
       }
       if (event.type === 'metadata') {
@@ -483,7 +600,7 @@ export class UnifiedGenerationRunner {
         project_context: request.project_context!,
         output_contract: 'project_manifest'
       };
-      await streamProjectManifest(manifestRequest, handleEvent, signal);
+      await projectManifestEventSource(manifestRequest, handleEvent, signal);
     } else {
       await streamUnifiedGeneration(request, handleEvent, signal);
     }
@@ -492,8 +609,12 @@ export class UnifiedGenerationRunner {
     if (projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, projectSnapshot);
     if (!requirements.value || !plan.value) throw new Error('统一生成流缺少需求或计划');
     if (request.scope === 'project') {
-      if (!manifest.value) throw new Error('统一生成流缺少项目清单');
-      assertProjectManifest(manifest.value, this.existingSpriteNames());
+      if (!manifest.value || !taskSpec.value || !blueprint.value) throw new Error('统一生成流缺少任务合同、蓝图或项目清单');
+      if (!taskSpecHash.value || !blueprintHash.value || await contractSha256(taskSpec.value) !== taskSpecHash.value || await contractSha256(blueprint.value) !== blueprintHash.value) throw new Error('任务合同或蓝图哈希校验失败');
+      assertProjectManifest(manifest.value, this.existingSpriteNames(), request.permitted_extensions, this.enabledExtensions);
+      const lineageIssues = projectTaskSpecToBlueprint(taskSpec.value, blueprint.value);
+      lineageIssues.push(...projectBlueprintToManifest(blueprint.value, manifest.value));
+      if (lineageIssues.length) throw new ProgramIRValidationError(lineageIssues);
     }
     const ordered = [...programs.values()].sort((left, right) => left.targetIndex - right.targetIndex);
     if (request.scope === 'single_sprite' && ordered.length !== 1) throw new Error('统一生成流缺少当前目标程序');
@@ -501,26 +622,68 @@ export class UnifiedGenerationRunner {
     for (const item of ordered) {
       const planForTarget = targetPlan(request, manifest.value, item.targetIndex);
       const targetKind = planForTarget.targetRef.kind === 'stage' || (planForTarget.targetRef.kind === 'current_target' && snapshot.isStage) ? 'stage' : 'sprite';
-      const result = validateProgramIR(item.program, targetKind);
+      const enabledExtensions = new Set<BuiltinAiExtension>((manifest.value?.required_extensions ?? []).filter(isBuiltinAiExtension));
+      const result = validateProgramIR(item.program, targetKind, enabledExtensions);
       if (!result.valid) throw new ProgramIRValidationError(result.issues);
       if (request.scope === 'project') {
         const sharedResult = validateProjectProgramSharedState(item.program!, manifest.value!.shared_state, targetKind);
         if (!sharedResult.valid) throw new ProgramIRValidationError(sharedResult.issues);
+        const stateResult = validateProjectProgramStateRefs(item.program!, manifest.value!);
+        if (!stateResult.valid) throw new ProgramIRValidationError(stateResult.issues);
       }
     }
-    return {request, snapshot, projectSnapshot, requirements: requirements.value, plan: plan.value, manifest: manifest.value, programs: ordered};
+    // The verifier uses a dynamically imported fresh VM. Load it before the
+    // transaction so a Commit never starts a code-split network request.
+    throwIfAborted(signal);
+    await prewarmCandidateVerificationRuntime();
+    throwIfAborted(signal);
+    return {request, snapshot, projectSnapshot, requirements: requirements.value, taskSpec: taskSpec.value ?? undefined, blueprint: blueprint.value ?? undefined, plan: plan.value, manifest: manifest.value, programs: ordered};
   }
 
   async commit(
     draft: UnifiedGenerationDraft & {request: UnifiedGenerationRequest; snapshot: AiTargetSnapshot; projectSnapshot?: AiProjectSnapshot},
     options: UnifiedCommitOptions = {}
   ): Promise<UnifiedCommitResult> {
+    const commitStartedAt = monotonicNow();
     let backup: Uint8Array | undefined;
     let transactionLock: {assertActive: () => void; release: () => void} | undefined;
     let transactionVm = this.bridge.currentVm;
     const appliedPrograms: AiGenerationResult[] = [];
     const journal: ApplyEntry[] = (options.generatedAssets ?? []).map(asset => ({kind: 'asset', assetId: asset.id}));
+    // A mutation can throw before its detailed journal receipt is returned.
+    // Track the attempt separately so recovery never treats a partially
+    // applied operation as a clean rollback.
+    let mutationAttempted = false;
+    const checkpointStore = options.checkpointStore ?? createCheckpointStore();
+    const checkpointRunId = options.runId ?? randomId('run');
+    let checkpointStarted = false;
+    let verificationErrorCode: CandidateVerificationFailureCode | undefined;
+    const reportTelemetry = (telemetry: CommitTelemetry) => {
+      try {
+        options.onCommitTelemetry?.(telemetry);
+      } catch {
+        // Observability must never affect the project transaction outcome.
+      }
+    };
+    const recordReceipt = async (
+      kind: SerializableApplyReceipt['kind'],
+      logicalId: string,
+      targetLocator?: LogicalTargetLocator,
+    ) => {
+      if (!checkpointStarted) return;
+      const after = new Uint8Array(await this.bridge.saveProject());
+      await checkpointStore.appendReceipt(checkpointRunId, {
+        sequence: ((await checkpointStore.get(checkpointRunId))?.journal.length ?? 0) + 1,
+        kind,
+        logical_id: logicalId,
+        ...(targetLocator ? {target_locator: targetLocator} : {}),
+        after_fingerprint: await fingerprintBytes(after)
+      });
+    };
     try {
+      if (draft.request.scope === 'project' && draft.manifest && draft.programs.length !== draft.manifest.program_targets.length) {
+        throw new Error('项目程序必须在提交前全部生成并校验');
+      }
       transactionLock = this.bridge.beginProjectTransaction();
       transactionVm = this.bridge.currentVm;
       throwIfAborted(options.signal);
@@ -530,11 +693,48 @@ export class UnifiedGenerationRunner {
       backup = capturedBackup;
       assertSnapshotIsCurrent(this.bridge, draft.snapshot);
       if (draft.projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, draft.projectSnapshot);
+      const originalLocator = await originalTargetLocator(this.bridge, draft.snapshot);
+      const baseProjectFingerprint = await fingerprintBytes(capturedBackup);
+      if (options.checkpointEnabled === false) throw new Error('当前部署已暂停 AI 项目恢复保护，无法安全提交');
+      await checkpointStore.begin({
+        runId: checkpointRunId,
+        editorSessionId: createEditorSessionId(),
+        projectEpoch: draft.projectSnapshot?.revision ?? draft.snapshot.revision,
+        // The embedded editor currently exposes one local project storage slot;
+        // keep checkpoint discovery aligned with ScratchHost recovery.
+        projectStorageKey: LOCAL_PROJECT_STORAGE_KEY,
+        baseSnapshotHash: await hashCheckpointPlan({
+          target: draft.snapshot.targetName,
+          revision: draft.snapshot.revision,
+          projectRevision: draft.projectSnapshot?.revision
+        }),
+        baseProjectFingerprint,
+        resolvedPlanHash: await hashCheckpointPlan({manifest: draft.manifest, programs: draft.programs.map(item => item.program)}),
+        originalTargetLocator: originalLocator,
+        backup: capturedBackup
+      });
+      checkpointStarted = true;
+      const builtinExtensions = (draft.manifest?.required_extensions ?? [])
+        .filter(isBuiltinAiExtension);
+      if (builtinExtensions.length) {
+        // Built-in extension loading is a project mutation, so it happens only
+        // after the durable SB3 backup/checkpoint exists and before any graph write.
+        mutationAttempted = true;
+        this.bridge.runProjectTransactionMutation(() => this.bridge.ensureBuiltinExtensions(builtinExtensions));
+        transactionLock.assertActive();
+        await recordReceipt('state', 'builtin_extensions', originalLocator);
+      }
       const project = draft.manifest ? createProjectApplyResult(draft.snapshot, capturedBackup) : undefined;
-      const transaction = project ? {result: project, journal, assertActive: () => transactionLock!.assertActive()} : undefined;
+      const transaction = project ? {
+        result: project,
+        journal,
+        assertActive: () => transactionLock!.assertActive(),
+        onResourceApplied: async (operation: ProjectManifest['resource_ops'][number]) => recordReceipt('resource', operation.op_id)
+      } : undefined;
       if (draft.manifest && draft.manifest.resource_ops.length) {
         if (!options.preparedResources) throw new Error('项目资源尚未准备完成');
         if (!transaction) throw new Error('项目资源事务尚未初始化');
+        mutationAttempted = true;
         const resourceExecutor = options.resourceExecutor ?? createProjectResourceExecutor({bridge: this.bridge, currentTargetId: draft.snapshot.targetId});
         await applyProjectResources({
           bridge: this.bridge,
@@ -546,49 +746,64 @@ export class UnifiedGenerationRunner {
           onProgress: (current, total, label) => options.onProgress?.({current, total, label})
         }, transaction);
       }
-      const programCount = options.generateProgram && draft.manifest
-        ? draft.manifest.program_targets.length
-        : draft.programs.length;
+      if (draft.manifest) {
+        transactionLock!.assertActive();
+        // State mutations are restored from the pre-commit backup if anything later fails.
+        mutationAttempted = true;
+        journal.push({kind: 'resource_batch', opId: 'manifest_state'});
+        installManifestState(this.bridge, draft.manifest, draft.snapshot.targetId, project);
+        await recordReceipt('state', 'manifest_state', originalLocator);
+        transactionLock!.assertActive();
+      }
+      const programCount = draft.programs.length;
       const isProjectCommit = Boolean(draft.request.scope === 'project' && draft.manifest);
+      const resourceBindings = buildLogicalResourceBindings(project);
+      const stateBindings = draft.manifest ? buildLogicalStateBindings(this.bridge, draft.manifest, draft.snapshot.targetId, project) : new Map();
+      const programPort = createScratchProgramPort(this.bridge);
+      const compiledPrograms: Array<{
+        index: number;
+        targetId: string;
+        target: ScratchTargetLike;
+        snapshot: AiTargetSnapshot;
+        program: ProgramIR;
+        prepared: ReturnType<typeof prepareProgramForTarget>;
+      }> = [];
+      // No block is written until every target's program has passed validation and
+      // compilation against the post-resource VM state.
       for (let index = 0; index < programCount; index += 1) {
         transactionLock!.assertActive();
         throwIfAborted(options.signal);
-        let targetIndex = index;
-        if (!options.generateProgram) {
-          const item = draft.programs[index];
-          if (!item) throw new Error('项目程序草稿序号无效：' + index);
-          targetIndex = item.targetIndex;
-        }
+        const item = draft.programs[index];
+        if (!item) throw new Error('项目程序草稿序号无效：' + index);
+        const targetIndex = item.targetIndex;
         const targetPlanForProgram = targetPlan(draft.request, draft.manifest, targetIndex);
         const targetId = targetIdForRef(this.bridge, targetPlanForProgram.targetRef, draft.snapshot.targetId, project);
         const target = targetById(this.bridge, targetId);
         transactionLock!.assertActive();
-        this.bridge.currentVm?.setEditingTarget?.(targetId);
+        this.bridge.runProjectTransactionMutation(() => this.bridge.currentVm?.setEditingTarget?.(targetId));
         transactionLock!.assertActive();
         const targetSnapshot = readAiTargetSnapshot(this.bridge, targetPlanForProgram.mode, target);
-        let program: ProgramIR;
-        if (options.generateProgram) {
-          program = await options.generateProgram({targetIndex, targetRef: targetPlanForProgram.targetRef, mode: targetPlanForProgram.mode, snapshot: targetSnapshot});
-        } else {
-          const item = draft.programs[index];
-          if (!item?.program) throw new Error('项目程序草稿缺失：' + index);
-          program = item.program;
-        }
-        const programValidation = validateProgramIR(program, targetSnapshot.isStage ? 'stage' : 'sprite');
-        if (!programValidation.valid) throw new ProgramIRValidationError(programValidation.issues);
-        if (draft.request.scope === 'project' && draft.manifest) {
-          const sharedValidation = validateProjectProgramSharedState(program, draft.manifest.shared_state, targetSnapshot.isStage ? 'stage' : 'sprite');
-          if (!sharedValidation.valid) throw new ProgramIRValidationError(sharedValidation.issues);
-        }
-        const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, program);
+        if (!item.program) throw new Error('项目程序草稿缺失：' + index);
+        const program = item.program;
+        const enabledExtensions = new Set<BuiltinAiExtension>((draft.manifest?.required_extensions ?? []).filter(isBuiltinAiExtension));
+        const preflight = preflightProgram(program, targetSnapshot.isStage ? 'stage' : 'sprite', enabledExtensions, draft.request.scope === 'project' ? draft.manifest : undefined);
+        if (!preflight.valid) throw new ProgramIRValidationError(preflight.issues);
+        const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, program, resourceBindings, stateBindings, enabledExtensions);
+        compiledPrograms.push({index, targetId, target, snapshot: targetSnapshot, program, prepared});
+      }
+      for (const queued of compiledPrograms) {
+        const {index, targetId, target, snapshot: targetSnapshot, program, prepared} = queued;
+        transactionLock!.assertActive();
+        throwIfAborted(options.signal);
         journal.push({kind: 'program', targetId, scriptIds: program.scripts.map(script => script.id)});
-        const apply = () => applyCompiledProgram(this.bridge, target, prepared.compiled, prepared.removeTopIds, prepared.pending, options.signal, progress => {
+        const apply = () => programPort.apply({target, compiled: prepared.compiled, removeTopIds: prepared.removeTopIds, pending: prepared.pending, signal: options.signal, onProgress: progress => {
           if (isProjectCommit) {
             options.onProgress?.({current: index, total: programCount, label: targetSnapshot.targetName + ' · ' + progress.current + '/' + progress.total + ' · ' + progress.label});
           } else {
             options.onProgress?.({...progress, current: progress.current + index});
           }
-        }, targetSnapshot.targetName);
+        }, targetName: targetSnapshot.targetName});
+        mutationAttempted = true;
         const applied = typeof this.bridge.runProjectTransactionMutation === 'function'
           ? this.bridge.runProjectTransactionMutation(apply)
           : apply();
@@ -596,19 +811,46 @@ export class UnifiedGenerationRunner {
         appliedPrograms.push(applied);
         project?.appliedPrograms.push({target_id: applied.targetId, added_blocks: applied.addedBlocks, added_scripts: applied.addedScripts, removed_scripts: applied.removedScripts});
         if (options.onProgress) options.onProgress({current: index + 1, total: programCount, label: targetSnapshot.targetName + ' 的程序已写入'});
+        const logicalId = draft.manifest?.program_targets[index]?.job_id ?? `program_${index}`;
+        await recordReceipt('program', logicalId, await originalTargetLocator(this.bridge, targetSnapshot));
       }
       transactionLock!.assertActive();
-      this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId);
+      this.bridge.runProjectTransactionMutation(() => this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId));
       transactionLock!.assertActive();
       this.bridge.refreshWorkspace();
       transactionLock!.assertActive();
       if (project) project.revision_at_complete = this.bridge.projectRevision;
+      const candidate = new Uint8Array(await this.bridge.saveProject());
+      await checkpointStore.markVerifying(checkpointRunId, candidate, await fingerprintBytes(candidate));
+      const verificationStartedAt = monotonicNow();
+      const verification = await verifyCandidateSb3(candidate);
+      if (!verification.passed) {
+        verificationErrorCode = verification.errorCode;
+        throw new Error('候选 SB3 验证失败：' + (verification.error ?? '未知错误'));
+      }
+      try {
+        await markGeneratedAssetsAttached((options.generatedAssets ?? []).map(asset => asset.id), checkpointRunId);
+      } catch {
+        // Asset attachment is metadata only. Keep the generated result as
+        // unattached rather than rolling back an already verified Scratch VM.
+      }
+      await checkpointStore.markCompleted(checkpointRunId);
+      reportTelemetry({
+        outcome: 'COMPLETED',
+        commitDurationMs: Math.max(0, Math.round(verificationStartedAt - commitStartedAt)),
+        verifyDurationMs: Math.max(0, Math.round(monotonicNow() - verificationStartedAt)),
+        behaviorTestCount: 0,
+        behaviorPassedCount: 0,
+        behaviorMustCount: 0,
+        behaviorMustPassedCount: 0,
+      });
       const result = {
         backup: capturedBackup,
         originalTargetId: draft.snapshot.targetId,
         revisionAtComplete: this.bridge.projectRevision,
         programs: appliedPrograms,
-        ...(project ? {project} : {})
+        ...(project ? {project} : {}),
+        checkpointRunId
       };
       return result;
     } catch (error) {
@@ -619,7 +861,7 @@ export class UnifiedGenerationRunner {
         transactionInvalidated = true;
       }
       let compensationError: unknown;
-      let requiresBackupRestore = journal.some(entry => entry.kind === 'program' || entry.kind === 'resource_batch');
+      let requiresBackupRestore = mutationAttempted || journal.some(entry => entry.kind === 'program' || entry.kind === 'resource_batch');
       if (journal.length) {
         try {
           requiresBackupRestore = (await compensateJournal(this.bridge, journal)) || requiresBackupRestore;
@@ -637,10 +879,34 @@ export class UnifiedGenerationRunner {
           await this.bridge.loadProject(backup);
           this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId);
           this.bridge.refreshWorkspace();
+          if (checkpointStarted) await checkpointStore.markRolledBack(checkpointRunId);
         } catch (caught) {
           restoreError = caught;
         }
       }
+      if (checkpointStarted && !compensationError && !restoreError && !concurrentProjectChange) {
+        await checkpointStore.markRolledBack(checkpointRunId);
+      }
+      if (checkpointStarted && (restoreError || compensationError || concurrentProjectChange)) {
+        try {
+          await checkpointStore.markFailedNeedsRecovery(checkpointRunId);
+        } catch (checkpointError) {
+          restoreError = restoreError ?? checkpointError;
+        }
+      }
+      const failedNeedsRecovery = Boolean(compensationError || restoreError || concurrentProjectChange);
+      reportTelemetry({
+        outcome: failedNeedsRecovery ? 'FAILED_NEEDS_RECOVERY' : backup ? 'ROLLED_BACK' : 'REJECTED_BEFORE_WRITE',
+        commitDurationMs: Math.max(0, Math.round(monotonicNow() - commitStartedAt)),
+        verifyDurationMs: 0,
+        behaviorTestCount: 0,
+        behaviorPassedCount: 0,
+        behaviorMustCount: 0,
+        behaviorMustPassedCount: 0,
+        ...(failedNeedsRecovery
+          ? {errorCode: compensationError || restoreError ? 'COMMIT_RECOVERY_FAILED' as const : 'COMMIT_CONFLICT' as const}
+          : {errorCode: verificationErrorCode ?? 'COMMIT_FAILED' as const}),
+      });
       if (compensationError || restoreError) {
         const details = [
           transactionInvalidated ? 'AI 项目事务已失效' : '',

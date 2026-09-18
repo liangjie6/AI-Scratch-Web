@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from hashlib import sha256
 import json
 import logging
 import time
@@ -16,6 +17,10 @@ from ..schemas.text_expansion import TextExpansionRequest
 
 router = APIRouter(prefix='/api/text', tags=['text-expansion'])
 logger = logging.getLogger(__name__)
+
+
+def _request_log_ref(request_id: str) -> str:
+    return sha256(request_id.encode('utf-8')).hexdigest()[:16]
 
 
 @lru_cache(maxsize=1)
@@ -35,8 +40,8 @@ async def expand_text(
     request_id = str(uuid.uuid4())
     started_at = time.perf_counter()
     logger.info(
-        'text_expansion_started request_id=%s kind=%s text=%s',
-        request_id, request.kind, request.text,
+        'text_expansion_started request_ref=%s kind=%s text_chars=%d',
+        _request_log_ref(request_id), request.kind, len(request.text),
     )
     try:
         provider.ensure_configured()
@@ -55,20 +60,20 @@ async def expand_text(
             async for text in provider.stream(messages):
                 received = True
                 chunk_count += 1
-                logger.debug('text_expansion_delta: %s', text)
+                logger.debug('text_expansion_delta request_ref=%s char_count=%d', _request_log_ref(request_id), len(text))
                 yield _sse('content_delta', {'text': text})
             if not received:
                 raise AgnesTextProviderError('Agnes returned no content')
             logger.info(
-                'text_expansion_finished request_id=%s chunk_count=%s duration_ms=%s',
-                request_id, chunk_count, round((time.perf_counter() - started_at) * 1000),
+                'text_expansion_finished request_ref=%s chunk_count=%s duration_ms=%s',
+                _request_log_ref(request_id), chunk_count, round((time.perf_counter() - started_at) * 1000),
             )
             yield _sse('message_complete', {})
         except AgnesTextProviderError as exc:
             logger.error(
-                'text_expansion_failed request_id=%s chunk_count=%s duration_ms=%s error_type=%s error=%s',
-                request_id, chunk_count, round((time.perf_counter() - started_at) * 1000),
-                type(exc).__name__, str(exc), exc_info=True,
+                'text_expansion_failed request_ref=%s chunk_count=%s duration_ms=%s error_type=%s',
+                _request_log_ref(request_id), chunk_count, round((time.perf_counter() - started_at) * 1000),
+                type(exc).__name__,
             )
             yield _sse(
                 'message_error',

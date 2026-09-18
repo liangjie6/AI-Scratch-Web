@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from 'vue';
 import {ScratchGuiBridge} from './scratch-gui-bridge';
+import {probeScratchEditorPort} from './scratch-editor-port';
+import {recoverInterruptedAiCommits, type CheckpointRecoveryResult} from '../ai-blocks/checkpoint-recovery';
+import {LOCAL_PROJECT_STORAGE_KEY} from '../ai-blocks/run-checkpoint-store';
 
 const props = withDefaults(defineProps<{
   locked?: boolean;
@@ -11,6 +14,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   ready: [bridge: ScratchGuiBridge];
   error: [error: Error];
+  recovery: [result: CheckpointRecoveryResult];
 }>();
 
 const container = ref<HTMLElement | null>(null);
@@ -18,6 +22,58 @@ const bridge = new ScratchGuiBridge();
 let root: {render(props: Record<string, unknown>): void; unmount(): void} | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let resizeFrame = 0;
+const recoveryPending = ref(true);
+let startupComplete = false;
+
+interface ScratchEditorArtifactMetadata {
+  schema_version: 1;
+  packages: {
+    scratch_gui: string;
+    scratch_vm: string;
+    scratch_storage: string;
+  };
+  standalone: {file: string; sha256: string};
+  library_manifest_sha256?: Record<string, string>;
+  library_asset_count: number;
+}
+
+function isArtifactMetadata(value: unknown): value is ScratchEditorArtifactMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const metadata = value as Record<string, unknown>;
+  if (metadata.schema_version !== 1 || !metadata.packages || !metadata.standalone) return false;
+  const packages = metadata.packages as Record<string, unknown>;
+  const standalone = metadata.standalone as Record<string, unknown>;
+  const versions = [packages.scratch_gui, packages.scratch_vm, packages.scratch_storage];
+  return versions.every(version => typeof version === 'string' && /^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version))
+    && new Set(versions).size === 1
+    && standalone.file === 'scratch-gui-standalone.js'
+    && typeof standalone.sha256 === 'string'
+    && /^[a-f0-9]{64}$/.test(standalone.sha256)
+    && (!metadata.library_manifest_sha256 || Object.entries(metadata.library_manifest_sha256).every(([name, hash]) => /^(?:sprites|costumes|backdrops|sounds)\.json$/.test(name) && typeof hash === 'string' && /^[a-f0-9]{64}$/.test(hash)))
+    && Number.isInteger(metadata.library_asset_count)
+    && Number(metadata.library_asset_count) > 0;
+}
+
+async function assertScratchEditorArtifactMetadata() {
+  const response = await fetch('/assets/scratch/editor-capabilities.json', {cache: 'no-store'});
+  if (!response.ok) throw new Error('Scratch 编辑器版本描述不可用');
+  const metadata: unknown = await response.json();
+  if (!isArtifactMetadata(metadata)) throw new Error('Scratch 编辑器包族版本不一致或能力描述无效');
+  if (metadata.library_manifest_sha256) {
+    for (const [name, expected] of Object.entries(metadata.library_manifest_sha256)) {
+      const manifest = await fetch('/assets/scratch/libraries/' + name, {cache: 'no-store'});
+      if (!manifest.ok) throw new Error('Scratch 素材清单不可用');
+      const digest = await crypto.subtle.digest('SHA-256', await manifest.arrayBuffer());
+      const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+      if (actual !== expected) throw new Error('Scratch 素材清单校验失败');
+    }
+  }
+  const bundle = await fetch('/assets/scratch/' + metadata.standalone.file, {cache: 'no-store'});
+  if (!bundle.ok) throw new Error('Scratch 编辑器 standalone 资源不可用');
+  const digest = await crypto.subtle.digest('SHA-256', await bundle.arrayBuffer());
+  const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+  if (actual !== metadata.standalone.sha256) throw new Error('Scratch 编辑器 standalone 资源校验失败');
+}
 
 function translateDefaultProjectName(
   message: {id: string; defaultMessage: string},
@@ -49,6 +105,7 @@ function cacheDefaultAssets(gui: ScratchGuiGlobal, storage: ScratchStorageLike) 
 }
 
 async function mountGui() {
+  await assertScratchEditorArtifactMetadata();
   const gui = window.GUI;
   if (!gui || !container.value) {
     throw new Error('本地 Scratch GUI 资源未加载');
@@ -58,7 +115,7 @@ async function mountGui() {
   cacheDefaultAssets(gui, storage);
   storage.addWebStore?.(
     [storage.AssetType.ImageVector, storage.AssetType.ImageBitmap, storage.AssetType.Sound],
-    asset => `/assets/scratch/library-assets/${asset.assetId}.${asset.dataFormat}`
+    asset => bridge.getLibraryAssetUrl(asset.assetId, asset.dataFormat)
   );
   bridge.setStorage(storage);
 
@@ -89,9 +146,28 @@ async function mountGui() {
     },
     onProjectLoaded: () => {
       bridge.markProjectLoaded();
-      emit('ready', bridge);
+      if (startupComplete) return;
+      startupComplete = true;
+      void finishStartup();
     }
   });
+}
+
+async function finishStartup() {
+  try {
+      const capabilities = probeScratchEditorPort(bridge);
+      if (!capabilities.projectRoundTrip || !capabilities.spriteImport || !capabilities.programGraphWrite || !capabilities.workspaceRefresh) {
+        emit('error', new Error('当前 Scratch 编辑器缺少 AI 项目提交所需能力'));
+        return;
+      }
+      const recovery = await recoverInterruptedAiCommits(bridge, LOCAL_PROJECT_STORAGE_KEY);
+      emit('recovery', recovery);
+      emit('ready', bridge);
+  } catch (error) {
+    emit('error', error instanceof Error ? error : new Error(String(error)));
+  } finally {
+    recoveryPending.value = false;
+  }
 }
 
 onMounted(() => {
@@ -120,7 +196,7 @@ defineExpose({bridge});
 </script>
 
 <template>
-  <section class="scratch-host" aria-label="Scratch 编辑器" :aria-busy="props.locked">
-    <div ref="container" class="scratch-host__container" :inert="props.locked || undefined" />
+  <section class="scratch-host" aria-label="Scratch 编辑器" :aria-busy="props.locked || recoveryPending">
+    <div ref="container" class="scratch-host__container" :inert="props.locked || recoveryPending || undefined" />
   </section>
 </template>

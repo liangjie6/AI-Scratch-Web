@@ -3,11 +3,22 @@ import type {ImageGenerationResponse, ImageTarget} from '../ai/image-generation-
 import type {ScratchGuiBridge} from './scratch-gui-bridge';
 
 export interface CroppedImage { blob: Blob; width: number; height: number; assetId?: string }
-export interface InlineAssetWire { assetType: {contentType: 'image/png' | 'image/svg+xml'; name: 'ImageBitmap' | 'ImageVector'; runtimeFormat: 'png' | 'svg'; immutable: true}; dataFormat: 'png' | 'svg'; data: number[] }
+export interface InlineAssetWire {
+  assetType: {
+    contentType: 'image/png' | 'image/svg+xml' | 'audio/x-wav' | 'audio/mpeg';
+    name: 'ImageBitmap' | 'ImageVector' | 'Sound';
+    runtimeFormat: 'png' | 'svg' | 'wav' | 'mp3';
+    immutable: true;
+  };
+  dataFormat: 'png' | 'svg' | 'wav' | 'mp3';
+  data: number[];
+}
 export interface CostumeExport { name: string; blob: Blob; dataFormat: 'png' | 'svg'; assetWidth: number; assetHeight: number; rotationCenterX: number; rotationCenterY: number; bitmapResolution: 1 | 2 }
-export interface SpriteExport { name: string; costumes: CostumeExport[]; initialSize: number; x?: number; y?: number }
+export interface SoundExport { name: string; blob: Blob; dataFormat: 'wav' | 'mp3'; rate?: number; sampleCount?: number }
+export interface SpriteExport { name: string; costumes: CostumeExport[]; sounds?: SoundExport[]; initialSize: number; x?: number; y?: number }
 export interface ImportedSpriteResult { targetId: string; costumeAssetIds: string[] }
 export interface SpriteImportExpectation {name: string; assetId: string; bitmapResolution: 1 | 2; rotationCenterX: number; rotationCenterY: number}
+export interface SpriteSoundExpectation {name: string; assetId: string; dataFormat: 'wav' | 'mp3'}
 
 export function getGeneratedImageRect(imageWidth: number, imageHeight: number) { return {x: 0, y: 0, width: imageWidth, height: imageHeight}; }
 function base64ToBlob(base64: string, mimeType: string) { const binary = atob(base64); const bytes = new Uint8Array(binary.length); for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index); return new Blob([bytes], {type: mimeType}); }
@@ -31,8 +42,27 @@ export async function buildSpriteImport(sprite: SpriteExport) {
     costumes.push({asset, assetId, md5ext: assetId + '.'+dataFormat, dataFormat, name, bitmapResolution: costume.bitmapResolution, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY});
     expectations.push({name, assetId, bitmapResolution: costume.bitmapResolution, rotationCenterX: costume.rotationCenterX, rotationCenterY: costume.rotationCenterY});
   }
-  const spriteJson = {isStage: false, name: sprite.name || '画布角色', variables: {}, lists: {}, broadcasts: {}, blocks: {}, currentCostume: 0, costumes, sounds: [], volume: 100, visible: true, x: sprite.x ?? 0, y: sprite.y ?? 0, size: Math.min(100, Math.max(1, sprite.initialSize)), direction: 90, draggable: false, rotationStyle: 'all around'};
-  return {spriteJson, expectations};
+  const soundExpectations: SpriteSoundExpectation[] = [];
+  const sounds = [];
+  const usedSoundNames = new Set<string>();
+  for (const sound of sprite.sounds ?? []) {
+    const baseName = sound.name.trim() || '声音'; let name = baseName;
+    for (let suffix = 2; usedSoundNames.has(name); suffix += 1) name = baseName + ' ' + suffix;
+    usedSoundNames.add(name);
+    const bytes = new Uint8Array(await sound.blob.arrayBuffer());
+    if (!bytes.length) throw new Error(sound.name + ' 不是有效音频');
+    const assetId = md5(bytes);
+    const dataFormat = sound.dataFormat;
+    const asset: InlineAssetWire = {
+      assetType: {contentType: dataFormat === 'wav' ? 'audio/x-wav' : 'audio/mpeg', name: 'Sound', runtimeFormat: dataFormat, immutable: true},
+      dataFormat,
+      data: Array.from(bytes)
+    };
+    sounds.push({asset, assetId, md5ext: assetId + '.' + dataFormat, dataFormat, format: dataFormat, name, rate: sound.rate ?? 44100, sampleCount: sound.sampleCount ?? 0});
+    soundExpectations.push({name, assetId, dataFormat});
+  }
+  const spriteJson = {isStage: false, name: sprite.name || '画布角色', variables: {}, lists: {}, broadcasts: {}, blocks: {}, currentCostume: 0, costumes, sounds, volume: 100, visible: true, x: sprite.x ?? 0, y: sprite.y ?? 0, size: Math.min(100, Math.max(1, sprite.initialSize)), direction: 90, draggable: false, rotationStyle: 'all around'};
+  return {spriteJson, expectations, soundExpectations};
 }
 
 export function fitSpriteInitialSize(costumes: CostumeExport[], maximum = 100) {
@@ -45,7 +75,10 @@ export function fitSpriteInitialSize(costumes: CostumeExport[], maximum = 100) {
   return Math.max(1, Math.min(maximum, scale));
 }
 
-export async function importCostumeSet(bridge: ScratchGuiBridge, sprite: SpriteExport): Promise<ImportedSpriteResult> { const built = await buildSpriteImport(sprite); return bridge.commitSpriteImport(built.spriteJson, built.expectations); }
+export async function importCostumeSet(bridge: ScratchGuiBridge, sprite: SpriteExport): Promise<ImportedSpriteResult> {
+  const built = await buildSpriteImport(sprite);
+  return bridge.commitSpriteImport(built.spriteJson, built.expectations, built.soundExpectations);
+}
 
 export async function importBackdropCostume(bridge: ScratchGuiBridge, backdrop: CostumeExport) {
   const vm = bridge.currentVm;

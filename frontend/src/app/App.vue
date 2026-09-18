@@ -18,6 +18,7 @@ import CanvasWorkspace, {type CanvasPreparedAsset} from '../canvas/CanvasWorkspa
 import type {CanvasInput} from '../canvas/model/canvas-types';
 import type {ImageGenerationResponse} from '../ai/image-generation-types';
 import AiBlocksPanel from '../ai-blocks/AiBlocksPanel.vue';
+import type {CheckpointRecoveryResult} from '../ai-blocks/checkpoint-recovery';
 
 const bridge = shallowRef<ScratchGuiBridge | null>(null);
 const editorError = ref('');
@@ -65,6 +66,12 @@ onBeforeUnmount(() => updateHeaderHover.cancel());
 
 function onReady(value: ScratchGuiBridge) {
   bridge.value = value;
+}
+
+function onRecovery(result: CheckpointRecoveryResult) {
+  if (result.restoredRunIds.length) {
+    editorError.value = '已恢复一次中断的 AI 项目提交。';
+  }
 }
 
 async function togglePanel(panel: Exclude<ActivePanel, null>) {
@@ -252,7 +259,7 @@ onMounted(() => void refreshAssetCount());
 
       <section class="workspace__editor">
         <div v-if="editorError" class="editor-error" role="alert">{{ editorError }}</div>
-        <ScratchHost :locked="scratchLocked" @ready="onReady" @error="editorError = $event.message" />
+        <ScratchHost :locked="scratchLocked" @ready="onReady" @recovery="onRecovery" @error="editorError = $event.message" />
       </section>
       <aside class="workspace__ai" :class="{'is-collapsed': !activePanel, 'is-blocks-panel': activePanel === 'blocks'}" @keydown.stop @keyup.stop>
         <button v-if="activePanel" class="icon-button panel-toggle" type="button" :disabled="aiBlocksBusy" title="关闭侧栏" aria-label="关闭侧栏" :aria-expanded="true" @click="closePanel">

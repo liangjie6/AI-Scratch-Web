@@ -43,10 +43,13 @@ async def generate_image(
         return response
     except ValueError as exc:
         logger.warning(
-            'image_generate_invalid_request request_id=%s duration_ms=%s error=%s',
-            request_id, round((time.perf_counter() - started_at) * 1000), str(exc)[:300],
+            'image_generate_invalid_request request_id=%s duration_ms=%s error_type=%s',
+            request_id, round((time.perf_counter() - started_at) * 1000), type(exc).__name__,
         )
-        raise HTTPException(status_code=422, detail={'code': 'INVALID_REQUEST', 'message': str(exc)}) from exc
+        raise HTTPException(
+            status_code=422,
+            detail={'code': 'INVALID_REQUEST', 'message': '请求参数不正确'},
+        ) from exc
     except ConfigurationError as exc:
         logger.error(
             'image_generate_configuration_error request_id=%s duration_ms=%s error_type=%s',
@@ -57,11 +60,12 @@ async def generate_image(
             detail={'code': 'CONFIGURATION_ERROR', 'message': '生图服务尚未配置'},
         ) from exc
     except ProviderError as exc:
-        message = str(exc)
-        code = 'TIMEOUT' if 'timed out' in message else 'PROVIDER_ERROR'
         logger.error(
-            'image_generate_provider_error request_id=%s duration_ms=%s code=%s error_type=%s error=%s',
-            request_id, round((time.perf_counter() - started_at) * 1000), code,
-            type(exc).__name__, message[:500], exc_info=True,
+            'image_generate_provider_error request_id=%s duration_ms=%s code=%s error_type=%s',
+            request_id, round((time.perf_counter() - started_at) * 1000), 'PROVIDER_ERROR',
+            type(exc).__name__,
         )
-        raise HTTPException(status_code=502, detail={'code': code, 'message': '生图服务暂时不可用'}) from exc
+        raise HTTPException(
+            status_code=502,
+            detail={'code': 'PROVIDER_ERROR', 'message': '生图服务暂时不可用'},
+        ) from exc

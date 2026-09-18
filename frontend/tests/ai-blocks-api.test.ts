@@ -33,6 +33,7 @@ function generatedFrames() {
     frame('phase_start', {message: '规划'}, 'plan'),
     frame('phase_complete', {steps: ['添加绿旗事件']}, 'plan'),
     frame('phase_start', {target_index: 0}, 'program'),
+    frame('usage', {input_tokens: 120, output_tokens: 40, total_tokens: 160}, 'program'),
     frame('metadata', {target_index: 0, schema_version: 1, summary: '移动角色', remove_script_ids: []}, 'program'),
     frame('shared_state', {target_index: 0, variables: [], lists: [], broadcasts: []}, 'program'),
     frame('script_ready', {target_index: 0, index: 0, total: 1, script: program}, 'program'),
@@ -51,7 +52,7 @@ describe('unified AI blocks API', () => {
     await streamUnifiedGeneration(base, event => events.push(event.type));
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({scope: 'single_sprite', asset_policy: 'builtin_first'});
-    expect(events).toEqual(['phase_start', 'phase_complete', 'phase_start', 'phase_complete', 'phase_start', 'metadata', 'shared_state', 'script_ready', 'phase_complete', 'complete']);
+    expect(events).toEqual(['phase_start', 'phase_complete', 'phase_start', 'phase_complete', 'phase_start', 'usage', 'metadata', 'shared_state', 'script_ready', 'phase_complete', 'complete']);
   });
 
   it('passes request id and data separately to event consumers', async () => {
@@ -95,5 +96,39 @@ describe('unified AI blocks API', () => {
     expect(body).toEqual(chatRequest);
     expect(body.scope).toBeUndefined();
     expect(body.project_context).toBeUndefined();
+  });
+
+  it('self-heals when cyclic behavior dependencies occur in projectProgramGenerationLayers', async () => {
+    const {projectProgramGenerationLayers} = await import('../src/ai-blocks/project-contract');
+    const blueprint = {
+      schema_version: 2,
+      task_spec_hash: 'dummy',
+      entity_bindings: [],
+      asset_needs: [],
+      state_plan: [],
+      behavior_graph: [
+        {behavior_id: 'b_cat', owner_entity_id: 'cat', depends_on: ['b_milk'], produces_broadcasts: [], consumes_broadcasts: []},
+        {behavior_id: 'b_milk', owner_entity_id: 'milk', depends_on: ['b_cat'], produces_broadcasts: [], consumes_broadcasts: []},
+      ],
+      program_jobs: [],
+      acceptance_tests: [],
+    };
+    const manifest = {
+      schema_version: 3,
+      scope: 'project',
+      summary: 'test',
+      assumptions: [],
+      required_extensions: [],
+      resource_ops: [],
+      shared_state: {variables: [], lists: [], broadcasts: []},
+      program_targets: [
+        {job_id: 'job_cat', owner_entity_id: 'cat', behavior_ids: ['b_cat'], target: {kind: 'stage'}, mode: 'append', intent: 'test'},
+        {job_id: 'job_milk', owner_entity_id: 'milk', behavior_ids: ['b_milk'], target: {kind: 'stage'}, mode: 'append', intent: 'test'},
+      ],
+    };
+    // 验证不抛出“项目程序行为依赖存在循环”，而是自愈返回合法层级
+    const layers = projectProgramGenerationLayers(blueprint as any, manifest as any);
+    const flattened = layers.flat();
+    expect(flattened.sort()).toEqual([0, 1]);
   });
 });

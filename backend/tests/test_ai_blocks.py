@@ -9,7 +9,8 @@ from pydantic import TypeAdapter, ValidationError
 
 from app.main import app
 from app.orchestration.cache_manager import PromptCache
-from app.orchestration.orchestrator import GenerationOrchestrator
+from app.orchestration.error_messages import repair_hint
+from app.orchestration.orchestrator import GenerationOrchestrator, _formatted_model_output
 from app.orchestration.streaming_parser import StreamProtocolError, UnifiedFrameParser
 from app.prompt_builder import PromptBuilder
 from app.providers.agnes_text_provider import AgnesStreamDelta
@@ -22,9 +23,14 @@ from app.schemas.ai_blocks import (
     ResourceOp,
     UnifiedGenerationRequest,
     ValidationRequest,
+    canonical_contract_json,
     normalize_resource_op,
     validate_project_program_shared_state,
 )
+
+
+def test_canonical_contract_json_matches_browser_integral_number_spelling():
+    assert canonical_contract_json({'confidence': 1.0, 'nested': [2.0, 2.5]}) == '{"confidence":1,"nested":[2,2.5]}'
 
 
 class MockProvider:
@@ -45,6 +51,18 @@ class MockProvider:
         output = self.outputs[0] if len(self.outputs) == 1 else self.outputs.pop(0)
         for chunk in (output[index:index + 7] for index in range(0, len(output), 7)):
             yield AgnesStreamDelta(kind='content', text=chunk)
+
+
+class UsageProvider(MockProvider):
+    async def stream_with_reasoning(self, *args, **kwargs):
+        yield AgnesStreamDelta(kind='usage', usage={
+            'input_tokens': 120,
+            'output_tokens': 40,
+            'total_tokens': 160,
+            'cached_input_tokens': 72,
+        })
+        async for delta in super().stream_with_reasoning(*args, **kwargs):
+            yield delta
 
 
 class RoutedSegmentProvider(MockProvider):
@@ -313,6 +331,22 @@ async def test_orchestrator_uses_one_stream_and_emits_ordered_events(caplog):
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_forwards_provider_usage_event():
+    provider = UsageProvider(stream_output())
+    request = UnifiedGenerationRequest.model_validate(request_payload())
+
+    events = [event async for event in GenerationOrchestrator(PromptBuilder(knowledge_base='fixed')).generate_unified(request, provider)]
+
+    usage = next(event for event in events if event.type == 'usage')
+    assert usage.data == {
+        'input_tokens': 120,
+        'output_tokens': 40,
+        'total_tokens': 160,
+        'cached_input_tokens': 72,
+    }
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_rejects_plain_json_without_legacy_fallback():
     provider = MockProvider(json.dumps({'schema_version': 1}))
     request = UnifiedGenerationRequest.model_validate(request_payload())
@@ -375,6 +409,102 @@ def test_json_object_segment_prompt_has_no_tagged_transport_instruction():
     assert '只输出一个 JSON object' in segment_messages[-1]['content']
     assert 'JSON object 之外的文本' in segment_messages[-1]['content']
     assert '<program>' not in segment_messages[-1]['content']
+
+
+def test_task_spec_segment_prompt_spells_out_assumption_contract():
+    builder = PromptBuilder(knowledge_base='fixed knowledge')
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    messages, _ = builder.build_unified_prompt(
+        None,
+        request.target.model_dump(),
+        request,
+        transport='json_object',
+        segment='task_spec',
+    )
+    contract = messages[0]['content'][messages[0]['content'].rfind('FINAL OUTPUT CONTRACT'):]
+
+    assert 'title, goal, assumptions, entities, state, behaviors, success_criteria, unsupported' in contract
+    assert 'confidence:number 0..1' in contract
+    assert 'requires_confirmation:boolean' in contract
+    assert 'never high/medium/low' in contract
+    assert 'TaskEntity.role: "stage" | "sprite"' in contract
+    assert 'TriggerSpec.kind: "green_flag" | "key_pressed"' in contract
+    assert 'ActionSpec.kind: "move_steps" | "set_axis"' in contract
+    assert 'ProgramIR.schema_version: 1 | 2' in contract
+    assert 'CANONICAL_OUTPUT_JSON_SCHEMA' in contract
+    assert 'set_axis(axis,value)' in contract
+    assert 'change_axis(axis,delta)' in contract
+    assert 'loop(mode,actions, plus count for repeat or until for repeat_until)' in contract
+    assert 'Never replace an OperandSpec with a bare number/string/boolean' in contract
+    schema_text = contract.split('CANONICAL_OUTPUT_JSON_SCHEMA', 1)[1]
+    assert '"required":["behavior_id","owner_entity_id","trigger","actions"]' in schema_text
+    assert '"required":["criterion_id","description","related_behavior_ids","priority","verification"]' in schema_text
+
+
+@pytest.mark.parametrize('segment', ['requirements', 'task_spec', 'blueprint', 'plan', 'manifest', 'resource_op', 'program'])
+def test_each_segment_prompt_contains_its_canonical_schema(segment):
+    builder = PromptBuilder(knowledge_base='fixed knowledge')
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    messages, _ = builder.build_unified_prompt(
+        None,
+        request.target.model_dump(),
+        request,
+        transport='json_object',
+        segment=segment,
+    )
+
+    contract = messages[0]['content'][messages[0]['content'].rfind('FINAL OUTPUT CONTRACT'):]
+    assert 'CANONICAL_OUTPUT_JSON_SCHEMA' in contract
+    assert '"required"' in contract
+
+
+def test_model_output_log_formats_json_with_real_line_breaks():
+    rendered = _formatted_model_output('{\n  "schema_version": 2,\n  "title": "小猫接红包计分游戏"\n}')
+
+    assert rendered.startswith('{\n  "schema_version": 2,')
+    assert '\\n' not in rendered
+
+
+def test_resource_op_prompt_schema_follows_destructive_feature_flag():
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    disabled, _ = PromptBuilder(knowledge_base='fixed').build_unified_prompt(
+        None, request.target.model_dump(), request, transport='json_object', segment='resource_op',
+    )
+    enabled, _ = PromptBuilder(knowledge_base='fixed', allow_destructive_resource_ops=True).build_unified_prompt(
+        None, request.target.model_dump(), request, transport='json_object', segment='resource_op',
+    )
+    disabled_schema = disabled[0]['content'].split('CANONICAL_OUTPUT_JSON_SCHEMA', 1)[1].split('RESOURCE_OPERATION_CONTRACT', 1)[0]
+    enabled_schema = enabled[0]['content'].split('CANONICAL_OUTPUT_JSON_SCHEMA', 1)[1].split('RESOURCE_OPERATION_CONTRACT', 1)[0]
+
+    assert 'DeleteSpriteOp' not in disabled_schema
+    assert 'DeleteSoundOp' not in disabled_schema
+    assert 'DeleteSpriteOp' in enabled_schema
+    assert 'DeleteSoundOp' in enabled_schema
+
+
+def test_structured_empty_output_repair_requires_non_empty_json_body():
+    request = UnifiedGenerationRequest.model_validate(project_request_payload())
+    messages, _ = PromptBuilder(knowledge_base='fixed').build_segment_prompt(
+        None,
+        request.target.model_dump(),
+        request,
+        'blueprint',
+        {'transport': 'json_object', 'failure': {'path': '/output', 'code': 'OUTPUT_VALIDATION_ERROR'}},
+    )
+
+    assert '正文为空或不是 JSON' in messages[-1]['content']
+    assert '不能只输出 reasoning' in messages[-1]['content']
+
+
+def test_task_spec_assumption_validation_has_specific_repair_hint():
+    hint = repair_hint(
+        'task_spec',
+        '/assumptions/0/confidence',
+        '/assumptions/0/confidence: Input should be a valid number',
+    )
+
+    assert '0 到 1 的数字' in hint
+    assert 'requires_confirmation' in hint
 
 
 def test_prompt_cache_key_changes_when_context_content_changes():

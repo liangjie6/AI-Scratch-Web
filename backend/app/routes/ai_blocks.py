@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from functools import lru_cache
 import asyncio
+from hashlib import sha256
 import json
 import logging
 from typing import Any
@@ -35,6 +36,11 @@ router = APIRouter(prefix='/api/ai-blocks', tags=['ai-blocks'])
 logger = logging.getLogger(__name__)
 
 
+def _request_log_ref(request_id: str) -> str:
+    """Keep caller-controlled request IDs out of production logs."""
+    return sha256(request_id.encode('utf-8')).hexdigest()[:16]
+
+
 @lru_cache(maxsize=1)
 def get_ai_blocks_provider() -> AgnesTextProvider:
     return AgnesTextProvider(get_settings())
@@ -49,7 +55,10 @@ def get_ai_blocks_semaphore() -> asyncio.Semaphore:
 def get_ai_blocks_orchestrator() -> GenerationOrchestrator:
     settings = get_settings()
     return GenerationOrchestrator(
-        PromptBuilder(),
+        PromptBuilder(
+            enabled_extensions=settings.enabled_ai_extensions(),
+            allow_destructive_resource_ops=settings.ai_destructive_resource_ops_enabled,
+        ),
         max_repair_rounds=settings.ai_blocks_max_repair_rounds,
         max_concurrency=settings.ai_blocks_max_concurrency,
     )
@@ -101,17 +110,16 @@ async def chat(
                             yield _sse('reasoning_delta', {'request_id': body.request_id, 'text': delta.text})
                         elif delta.kind == 'content' and delta.text:
                             content_chunk_count += 1
-                            logger.debug('chat_delta: %s', delta.text)
                             yield _sse('assistant_delta', {'request_id': body.request_id, 'text': delta.text})
                 terminal = True
-                logger.info('ai_chat 完成 request_id=%s 内容块=%d', body.request_id, content_chunk_count)
+                logger.info('ai_chat 完成 request_ref=%s 内容块=%d', _request_log_ref(body.request_id), content_chunk_count)
                 yield _sse('message_complete', {'request_id': body.request_id})
             except asyncio.TimeoutError:
                 if not terminal:
                     terminal = True
                     yield _sse('message_error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_TIMEOUT', 'message': 'AI 对话超时，请稍后重试'})
             except Exception as exc:
-                logger.error('ai_chat_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__)
+                logger.error('ai_chat_failed request_ref=%s error_type=%s', _request_log_ref(body.request_id), type(exc).__name__)
                 if not terminal:
                     terminal = True
                     yield _sse('message_error', {'request_id': body.request_id, 'code': 'AI_CHAT_ERROR', 'message': 'AI 对话暂时不可用，请稍后重试'})
@@ -143,12 +151,12 @@ async def generate_unified(
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_TIMEOUT', 'message': 'AI 生成超时，请稍后重试'})
             except AgnesTextProviderError:
-                logger.error('ai_unified_provider_failed request_id=%s', body.request_id)
+                logger.error('ai_unified_provider_failed request_ref=%s', _request_log_ref(body.request_id))
                 if not terminal:
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_ERROR', 'message': 'AI 生成暂时不可用，请稍后重试'})
             except Exception as exc:
-                logger.error('ai_unified_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__)
+                logger.error('ai_unified_failed request_ref=%s error_type=%s', _request_log_ref(body.request_id), type(exc).__name__)
                 if not terminal:
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_GENERATION_ERROR', 'message': 'AI 输出未完成，请重新生成'})
@@ -188,12 +196,12 @@ async def generate_project_contract(
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_TIMEOUT', 'message': 'AI 生成超时，请稍后重试'})
             except AgnesTextProviderError:
-                logger.error('ai_project_contract_provider_failed request_id=%s', body.request_id)
+                logger.error('ai_project_contract_provider_failed request_ref=%s', _request_log_ref(body.request_id))
                 if not terminal:
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_PROVIDER_ERROR', 'message': 'AI 生成暂时不可用，请稍后重试'})
             except Exception as exc:
-                logger.error('ai_project_contract_failed request_id=%s error_type=%s', body.request_id, type(exc).__name__)
+                logger.error('ai_project_contract_failed request_ref=%s error_type=%s', _request_log_ref(body.request_id), type(exc).__name__)
                 if not terminal:
                     terminal = True
                     yield _sse('error', {'request_id': body.request_id, 'code': 'AI_GENERATION_ERROR', 'message': 'AI 输出未完成，请重新生成'})

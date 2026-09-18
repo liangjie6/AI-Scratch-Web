@@ -16,7 +16,7 @@ class StreamFrame:
     attrs: dict[str, str] = field(default_factory=dict)
 
 
-_ROOT_TAGS = ('requirements', 'plan', 'manifest', 'resource_op')
+_ROOT_TAGS = ('requirements', 'task_spec', 'blueprint', 'plan', 'manifest', 'resource_op')
 _PROGRAM_CHILD_TAGS = ('metadata', 'shared_state')
 
 
@@ -150,14 +150,94 @@ class UnifiedFrameParser:
         return attrs
 
 
-def parse_json(content: str) -> Any:
-    import json
+import json
+import logging
 
+logger = logging.getLogger(__name__)
+
+
+def robust_json_parse(content: str, max_passes: int = 5) -> dict[str, Any]:
+    """Parse JSON text into a dict with self-healing for common LLM token-level errors.
+
+    Handles:
+    1. Normal valid JSON (fast path via json.loads).
+    2. Missing closing braces before 'substacks', 'blocks', or 'scripts' due to deep AST nesting.
+    3. Unclosed trailing braces/brackets due to output truncation.
+    """
     value = content.strip()
     try:
         parsed = json.loads(value)
-    except json.JSONDecodeError as exc:
-        raise StreamProtocolError('frame does not contain valid JSON') from exc
-    if not isinstance(parsed, dict):
+        if isinstance(parsed, dict):
+            return parsed
         raise StreamProtocolError('frame JSON must be an object')
-    return parsed
+    except json.JSONDecodeError as initial_exc:
+        curr_text = value
+        curr_exc = initial_exc
+
+        # Strategy 1: Missing closing braces before 'substacks', 'blocks', 'scripts', 'inputs', 'fields'
+        pattern = re.compile(r'(\}{2,})(\s*,\s*"(?:substacks|blocks|scripts|inputs|fields)")')
+        for pass_idx in range(max_passes):
+            err_pos = getattr(curr_exc, 'pos', len(curr_text))
+            matches = [m for m in pattern.finditer(curr_text) if m.start() < err_pos]
+            if not matches:
+                break
+            best_cand = None
+            best_exc = None
+            for m in reversed(matches):
+                for add_count in (1, 2):
+                    cand = curr_text[:m.start(2)] + ('}' * add_count) + curr_text[m.start(2):]
+                    try:
+                        parsed = json.loads(cand)
+                        if isinstance(parsed, dict):
+                            logger.info('robust_json_parse repaired missing closing braces (pass=%d, added=%d)', pass_idx + 1, add_count)
+                            return parsed
+                    except json.JSONDecodeError as next_exc:
+                        if next_exc.pos > err_pos:
+                            best_cand = cand
+                            best_exc = next_exc
+                            break
+                if best_cand is not None:
+                    break
+
+            if best_cand is not None and best_exc is not None:
+                curr_text = best_cand
+                curr_exc = best_exc
+            else:
+                break
+
+        # Strategy 2: Complete trailing unclosed brackets/braces
+        stack: list[str] = []
+        in_str = False
+        esc = False
+        for ch in curr_text:
+            if esc:
+                esc = False
+                continue
+            if ch == '\\' and in_str:
+                esc = True
+                continue
+            if ch == '"':
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if ch in '{[':
+                stack.append(ch)
+            elif ch in '}]':
+                if stack and ((ch == '}' and stack[-1] == '{') or (ch == ']' and stack[-1] == '[')):
+                    stack.pop()
+        if stack:
+            tail = ''.join('}' if item == '{' else ']' for item in reversed(stack))
+            try:
+                parsed = json.loads(curr_text + tail)
+                if isinstance(parsed, dict):
+                    logger.info('robust_json_parse repaired trailing unclosed brackets/braces')
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        raise StreamProtocolError(f'frame does not contain valid JSON: {initial_exc}') from initial_exc
+
+
+def parse_json(content: str) -> Any:
+    return robust_json_parse(content)

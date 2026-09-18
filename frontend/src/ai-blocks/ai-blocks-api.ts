@@ -1,5 +1,6 @@
 import type {ProgramIR, ScriptIR} from './program-ir';
 import type {ProjectManifest, AiBlocksScope, AssetPolicy} from './project-plan';
+import type {ProjectBlueprint, ScratchTaskSpec} from './project-contract';
 import {createSseParser} from '../ai/text-expansion-api';
 
 export type AiBlocksMode = 'modify' | 'append' | 'rewrite';
@@ -8,7 +9,7 @@ export type AiBlocksThinkingStrength = 'low' | 'medium' | 'high' | 'xhigh' | 'ma
 
 export const AI_BLOCKS_MODEL_OPTIONS = [
   {value: 'normal', label: '普通', model: 'Agnes · agnes-2.5-flash'},
-  {value: 'advanced', label: '高级', model: 'DeepSeek · deepseek-v4-flash'},
+  {value: 'advanced', label: '高级', model: 'DeepSeek · deepseek-v4.1-flash-expires-on-0910'},
   {value: 'super', label: '超级', model: 'GPT · gpt-5.6-sol'},
 ] as const satisfies ReadonlyArray<{value: AiBlocksModelTier; label: string; model: string}>;
 
@@ -19,9 +20,10 @@ export const AI_BLOCKS_THINKING_OPTIONS = [
   {value: 'xhigh', label: '超高'},
   {value: 'max', label: '最大'},
 ] as const satisfies ReadonlyArray<{value: AiBlocksThinkingStrength; label: string}>;
-export type UnifiedGenerationPhase = 'requirements' | 'plan' | 'program';
+export type UnifiedGenerationPhase = 'requirements' | 'task_spec' | 'blueprint' | 'plan' | 'program';
 export type UnifiedGenerationEventType =
   | 'cache_hit'
+  | 'usage'
   | 'phase_start'
   | 'phase_complete'
   | 'content_delta'
@@ -58,6 +60,8 @@ export interface AiBlocksTargetContext {
   has_scripts: boolean;
   mode: AiBlocksMode;
   costumes: string[];
+  /** Stage backdrop names; optional for compatibility with older payloads. */
+  backdrops?: string[];
   sounds: string[];
   sprite_names: string[];
   current_program: string;
@@ -91,9 +95,10 @@ export interface AiBlocksPlan {
 }
 
 export interface ProgramMetadata {
-  schema_version: 1;
+  schema_version: 1 | 2;
   summary: string;
   remove_script_ids: string[];
+  procedures?: NonNullable<ProgramIR['procedures']>;
 }
 
 export interface ProgramState {
@@ -122,6 +127,7 @@ export interface UnifiedGenerationRequest {
   asset_policy: AssetPolicy;
   project_context?: AiBlocksProjectContext;
   proceed_with_defaults: boolean;
+  permitted_extensions?: Array<'text2speech'>;
 }
 
 export interface ProjectManifestGenerationRequest extends UnifiedGenerationRequest {
@@ -135,6 +141,8 @@ export interface ProjectProgramGenerationRequest extends UnifiedGenerationReques
   project_context: AiBlocksProjectContext;
   output_contract: 'project_program';
   requirements: AiBlocksRequirements;
+  task_spec: ScratchTaskSpec;
+  blueprint: ProjectBlueprint;
   plan: AiBlocksPlan;
   manifest: ProjectManifest;
   program_target: ProjectManifest['program_targets'][number];
@@ -158,6 +166,8 @@ export interface UnifiedProgramDraft {
 
 export interface UnifiedGenerationDraft {
   requirements: AiBlocksRequirements;
+  taskSpec?: ScratchTaskSpec;
+  blueprint?: ProjectBlueprint;
   plan: AiBlocksPlan;
   manifest?: ProjectManifest;
   programs: UnifiedProgramDraft[];
@@ -212,7 +222,7 @@ async function streamGeneration(
 
   let completed = false;
   const parser = createSseParser(({event, data}) => {
-    if (!['cache_hit', 'phase_start', 'phase_complete', 'content_delta', 'reasoning_delta', 'metadata', 'shared_state', 'script_ready', 'repair', 'validation_error', 'complete', 'error'].includes(event)) {
+    if (!['cache_hit', 'usage', 'phase_start', 'phase_complete', 'content_delta', 'reasoning_delta', 'metadata', 'shared_state', 'script_ready', 'repair', 'validation_error', 'complete', 'error'].includes(event)) {
       throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '收到未知的统一生成事件：' + event);
     }
     const payload = asRecord(data, '统一生成事件数据无效');
@@ -220,7 +230,7 @@ async function streamGeneration(
       throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件 request_id 不匹配');
     }
     if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成流在完成后仍有输出');
-    if (payload.phase !== undefined && !['requirements', 'plan', 'program'].includes(String(payload.phase))) {
+    if (payload.phase !== undefined && !['requirements', 'task_spec', 'blueprint', 'plan', 'program'].includes(String(payload.phase))) {
       throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件 phase 无效');
     }
     if (['phase_start', 'phase_complete', 'metadata', 'shared_state', 'script_ready', 'validation_error'].includes(event) && typeof payload.phase !== 'string') {

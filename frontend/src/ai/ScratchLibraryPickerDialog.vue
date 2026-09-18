@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
-import {Check, LoaderCircle, Search, X} from 'lucide-vue-next';
-import {searchScratchLibrary, scratchAssetUrl, type ScratchAssetType, type ScratchLibraryItem, type ScratchSpriteItem} from './scratch-library';
+import {Check, LoaderCircle, Music2, Search, X} from 'lucide-vue-next';
+import {searchScratchLibrary, scratchAssetUrl, type ScratchAssetType, type ScratchLibraryItem, type ScratchSoundItem, type ScratchSpriteItem} from './scratch-library';
 
 const props = defineProps<{open: boolean; type: ScratchAssetType; initialTerms?: string[]}>();
-const emit = defineEmits<{close: []; select: [item: ScratchSpriteItem | ScratchLibraryItem]}>();
+type ScratchPickerItem = ScratchSpriteItem | ScratchLibraryItem | ScratchSoundItem;
+const emit = defineEmits<{close: []; select: [item: ScratchPickerItem]}>();
 const terms = ref('');
-const items = ref<Array<ScratchSpriteItem | ScratchLibraryItem>>([]);
+const items = ref<ScratchPickerItem[]>([]);
 const loading = ref(false);
 const error = ref('');
 const selected = ref<string | null>(null);
-const title = computed(() => props.type === 'sprite' ? '选择角色素材' : props.type === 'costume' ? '选择造型素材' : '选择舞台背景');
+const title = computed(() => props.type === 'sprite' ? '选择角色素材' : props.type === 'costume' ? '选择造型素材' : props.type === 'sound' ? '选择声音素材' : '选择舞台背景');
 
 watch(() => [props.open, props.type, props.initialTerms] as const, async ([open, type, initial]) => {
   if (!open) return;
@@ -27,11 +28,15 @@ async function search() {
   catch (cause) { error.value = cause instanceof Error ? cause.message : '素材清单暂时无法读取'; items.value = []; }
   finally { loading.value = false; }
 }
-function preview(item: ScratchSpriteItem | ScratchLibraryItem) {
+function preview(item: ScratchPickerItem) {
+  if ('assetType' in item && item.assetType === 'sound') return '';
   const costume = 'costumes' in item ? item.costumes[0] : item;
   return costume ? scratchAssetUrl(costume.md5ext) : '';
 }
-function choose(item: ScratchSpriteItem | ScratchLibraryItem) {selected.value = item.name; emit('select', item);}
+function soundPreview(item: ScratchPickerItem) {
+  return 'assetType' in item && item.assetType === 'sound' ? scratchAssetUrl(item.md5ext) : '';
+}
+function choose(item: ScratchPickerItem) {selected.value = item.name; emit('select', item);}
 </script>
 
 <template>
@@ -44,9 +49,13 @@ function choose(item: ScratchSpriteItem | ScratchLibraryItem) {selected.value = 
         <div v-else-if="error" class="scratch-picker__state scratch-picker__state--error" role="alert">{{ error }}</div>
         <div v-else-if="!items.length" class="scratch-picker__state">没有匹配的本地素材</div>
         <div v-else class="scratch-picker__grid">
-          <button v-for="item in items" :key="item.name" class="scratch-picker__item" :class="{ 'is-selected': selected === item.name }" type="button" @click="choose(item)">
-            <img :src="preview(item)" :alt="item.name" /><span>{{ item.name }}</span><Check v-if="selected === item.name" :size="16" aria-hidden="true" />
-          </button>
+          <article v-for="item in items" :key="item.name" class="scratch-picker__item" :class="{ 'is-selected': selected === item.name }">
+            <button class="scratch-picker__select" type="button" @click="choose(item)">
+              <Music2 v-if="'assetType' in item && item.assetType === 'sound'" class="scratch-picker__sound-icon" :size="28" aria-hidden="true" />
+              <img v-else :src="preview(item)" :alt="item.name" /><span>{{ item.name }}</span><Check v-if="selected === item.name" class="scratch-picker__selected-icon" :size="16" aria-hidden="true" />
+            </button>
+            <audio v-if="soundPreview(item)" class="scratch-picker__audio" controls preload="metadata" :src="soundPreview(item)" :aria-label="'试听 ' + item.name" />
+          </article>
         </div>
       </section>
     </div>

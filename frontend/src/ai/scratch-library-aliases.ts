@@ -9,6 +9,13 @@ export const SCRATCH_LIBRARY_ALIASES: Record<string, string[]> = {
   海底: ['underwater', 'ocean'],
   城堡: ['castle'],
   森林: ['forest'],
+  猫叫: ['meow', 'cat'],
+  胜利: ['cheer', 'win', 'applause'],
+  失败: ['lose', 'sad', 'boing'],
+  鼓掌: ['applause', 'cheer', 'clap'],
+  爆炸: ['explosion', 'boom'],
+  跳跃: ['jump', 'boing'],
+  背景音乐: ['music', 'beat', 'dance'],
 };
 
 export function expandScratchSearchTerms(terms: string[]) {

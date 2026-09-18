@@ -1,5 +1,5 @@
 import {importCostumeSet} from '../scratch/asset-adapter';
-import type {CostumeExport, SpriteExport} from '../scratch/asset-adapter';
+import type {CostumeExport, SoundExport, SpriteExport} from '../scratch/asset-adapter';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import type {ResourceOp, TargetRef} from './project-plan';
 import type {ApplyEntry, PreparedResource, ProjectApplyResult, ProjectResourceExecutor} from './project-resource-runner';
@@ -19,6 +19,11 @@ function spriteValue(prepared: PreparedResource): SpriteExport {
     throw new Error('角色资源准备结果无效');
   }
   return prepared.value as SpriteExport;
+}
+
+function soundValue(prepared: PreparedResource): SoundExport {
+  if (!prepared.value || typeof prepared.value !== 'object' || !('dataFormat' in prepared.value)) throw new Error('声音资源准备结果无效');
+  return prepared.value as SoundExport;
 }
 
 function targetName(target: ScratchTargetLike): string {
@@ -71,7 +76,9 @@ export function createProjectResourceExecutor(options: ResourceExecutorOptions):
       if (op.op === 'add_sprite' || op.op === 'add_builtin_sprite') {
         const sprite = spriteValue(prepared);
         const imported = await importCostumeSet(options.bridge, sprite);
-        context.result.addedTargets.push({op_id: op.op_id, target_id: imported.targetId, name: sprite.name});
+        const installedTarget = options.bridge.currentVm?.runtime.getTargetById?.(imported.targetId)
+          ?? options.bridge.currentVm?.runtime.targets.find(target => target.id === imported.targetId);
+        context.result.addedTargets.push({op_id: op.op_id, target_id: imported.targetId, name: installedTarget ? targetName(installedTarget) : sprite.name});
         return {kind: 'sprite', targetId: imported.targetId, opId: op.op_id} satisfies ApplyEntry;
       }
       if (op.op === 'add_costume') {
@@ -86,6 +93,15 @@ export function createProjectResourceExecutor(options: ResourceExecutorOptions):
         const installed = await options.bridge.addBackdropToStage(costumeValue(prepared), op.select_after);
         context.result.addedBackdrops.push({op_id: op.op_id, asset_id: installed.assetId, name: installed.name});
         return {kind: 'backdrop', targetId: stage.id, costumeIndex: installed.costumeIndex, assetId: installed.assetId, opId: op.op_id} satisfies ApplyEntry;
+      }
+      if (op.op === 'add_sound') {
+        const targetId = op.target.kind === 'stage'
+          ? (options.bridge.currentVm?.runtime.getTargetForStage?.() ?? options.bridge.currentVm?.runtime.targets.find(target => target.isStage))?.id
+          : targetIdFor(options.bridge, op.target, options.currentTargetId, context.result);
+        if (!targetId) throw new Error('Scratch 舞台尚未就绪');
+        const installed = await options.bridge.addSoundToTarget(targetId, soundValue(prepared));
+        context.result.addedSounds.push({op_id: op.op_id, target_id: targetId, asset_id: installed.assetId, name: installed.name});
+        return {kind: 'sound', targetId, soundIndex: installed.soundIndex, assetId: installed.assetId, opId: op.op_id} satisfies ApplyEntry;
       }
       if (op.op === 'select_backdrop') {
         const stage = options.bridge.currentVm?.runtime.getTargetForStage?.() ?? options.bridge.currentVm?.runtime.targets.find(target => target.isStage);

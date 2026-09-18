@@ -1,14 +1,14 @@
 # AI 写积木与 Scratch Editor 深度集成完整优化方案
 
-**文档状态**：待评审实施基线
+**文档状态**：实施中
 
 **审计日期**：2026-09-04
 
-**适用项目**：`D:/4Code/AI-Scratch-Web`
+**适用项目**：`D:/ywj/AI-Scratch-web`
 
-**当前依赖**：`@scratch/scratch-gui`、`@scratch/scratch-vm`、`@scratch/scratch-storage` 均为 `15.0.1`
+**当前依赖**：`@scratch/scratch-gui`、`@scratch/scratch-vm`、`@scratch/scratch-storage` 均为 `15.1.1`；运行时同时校验 `public/assets/scratch/editor-capabilities.json` 的版本族和 standalone SHA-256。
 
-**官方参考基线**：当前安装包 `15.0.1` 对应 npm `gitHead=5c49774f5b39a738e0d5506757de56fd7a9feea4`；同时参考 [`scratchfoundation/scratch-editor`](https://github.com/scratchfoundation/scratch-editor) `develop@cdd2a10735278753c7569c2e4bd166a6dc7ae2e9` 与 `v15.1.1`（2026-09-02）
+**官方参考基线**：历史回滚基线 `15.0.1` 对应 npm `gitHead=5c49774f5b39a738e0d5506757de56fd7a9feea4`；当前安装包为 `15.1.1`，并参考 [`scratchfoundation/scratch-editor`](https://github.com/scratchfoundation/scratch-editor) `develop@cdd2a10735278753c7569c2e4bd166a6dc7ae2e9` 与 `v15.1.1`（2026-09-02）。
 **目标**：用户只需输入一道 Scratch 题目，系统即可在可审计、可撤销、可回滚的前提下，自动理解题意、匹配并导入角色/造型/背景/声音、创建变量与广播、生成并写入多角色积木程序，最终得到可导出、可重新加载的 SB3 项目。
 
 ---
@@ -155,7 +155,7 @@ frontend/index.html
 @scratch/scratch-gui/sounds
 ```
 
-仓库源码中的 `index-standalone.tsx` 会导出 `EditorState`、`createStandaloneRoot`、`ScratchStorage` 和配置类型；当前项目使用的 15.0.1 与 npm 15.1.1 均不能直接从该 subpath import。结论是：不能把“GitHub tag 中存在源码入口”等价成“npm package export 可用”。升级评审必须同时检查仓库 commit、registry metadata、实际 tarball 和 Vite 构建结果。
+仓库源码中的 `index-standalone.tsx` 会导出 `EditorState`、`createStandaloneRoot`、`ScratchStorage` 和配置类型；历史 15.0.1 基线与当前 npm 15.1.1 均不能直接从该 subpath import。结论是：不能把“GitHub tag 中存在源码入口”等价成“npm package export 可用”。升级评审必须同时检查仓库 commit、registry metadata、实际 tarball 和 Vite 构建结果。
 
 ### 3.2 官方事实 API
 
@@ -353,7 +353,7 @@ completed -> undo：revision 未变化时恢复操作前 SB3
 | 追加新角色、新声音、新脚本 | 可自动 Commit，保留整次撤销 |
 | 重名 | 使用逻辑引用；Commit 后显示 VM 实际名称 |
 
-### 5.5 题目理解合同：ScratchTaskSpec v1
+### 5.5 题目理解合同：ScratchTaskSpec v2
 
 现有 `RequirementsResponse + Plan.steps` 继续作为兼容展示层，但不能再承担执行依据。新增的 TaskSpec 必须把自然语言题目转换成可检查的玩法合同：
 
@@ -413,10 +413,11 @@ interface SuccessCriterionSpec {
   description: string;
   related_behavior_ids: string[];
   priority: 'must' | 'should';
+  verification: 'executable' | 'structural' | 'manual' | 'unsupported';
 }
 
 interface ScratchTaskSpec {
-  schema_version: 1;
+  schema_version: 2;
   title: string;
   goal: string;
   assumptions: Array<{
@@ -466,7 +467,9 @@ interface ScratchTaskSpec {
 }
 ```
 
-这些联合是 TaskSpec v1 的受控语义词表，不是自由 `verb/args` 容器，也不是对 Scratch opcode 的一比一复制。新增语义必须提升 schema minor/capability 并补 TaskSpec -> ProgramIR 映射测试；未知动作进入 `unsupported`，不能塞入字符串绕过白名单。
+这些联合是 TaskSpec v2 的受控语义词表，不是自由 `verb/args` 容器，也不是对 Scratch opcode 的一比一复制。新增语义必须提升 schema minor/capability 并补 TaskSpec -> ProgramIR 映射测试；未知动作进入 `unsupported`，不能塞入字符串绕过白名单。
+
+每个 success criterion 必须显式声明 `verification`：`executable` 才能进入受限 behavior harness，且必须至少被一个 `BlueprintAcceptanceTestSpec` 覆盖；`structural` 只由合同、引用、编译图和 SB3 结构检查覆盖；`manual` 保留给人工 rubric；`unsupported` 必须与产品声明的不支持能力对应，不能假装通过。Blueprint 不得为后三类生成自动行为测试。这样 behavior 通过率的分母天然只包含可执行条件，而端到端结论仍保留其余 must 条件的结果。
 
 题目理解规则：
 
@@ -478,7 +481,7 @@ interface ScratchTaskSpec {
 - 题目要求当前白名单无法表达时写入 `unsupported`，不得用近似 opcode 假装完成。
 - `ready=true` 不能代表用户确认。是否继续由 `requires_confirmation` 和前端 policy 决定。
 
-### 5.6 行为蓝图：ProjectBlueprint v1
+### 5.6 行为蓝图：ProjectBlueprint v2
 
 Blueprint 把 TaskSpec 映射成资源需求、目标职责和可验证行为，但仍不包含素材 ID 或积木图：
 
@@ -511,7 +514,7 @@ interface BlueprintAcceptanceTestSpec {
 }
 
 interface ProjectBlueprint {
-  schema_version: 1;
+  schema_version: 2;
   task_spec_hash: string;
   asset_needs: Array<{
     need_id: string;
@@ -703,7 +706,7 @@ interface DeleteSoundOp {
 }
 ```
 
-`delete_sound` 属于危险操作，默认 capability 关闭；只有用户明确要求且完成影响确认时启用。
+`delete_sound` 属于危险操作，默认 capability 关闭；只有用户明确要求且完成影响确认时启用。当前实现尚未发布逐项确认和可补偿删除链，因此 `AI_DESTRUCTIVE_RESOURCE_OPS_ENABLED` 必须保持 `false`：后端 Prompt、schema 和浏览器预检都会拒绝 `delete_sprite` / `delete_sound`，不能仅通过切换 capability 暴露删除操作。
 
 **不设计 `select_sound`**：Scratch 项目没有类似 `currentCostume` 的“当前声音”持久状态。选择一个声音的业务含义应由 `sound_play`/`sound_playuntildone` 的菜单引用表达，而不是伪造一个资源状态操作。
 
@@ -1198,7 +1201,7 @@ interface ScratchEditorPortSoundApi {
 
 这里存在一个容易造成“假成功”的官方语义：`load-sound.js` 捕获资源缺失或解码错误后，会加载 Storage 的默认声音，把原始元数据放进 `broken`，随后 Promise 仍可 resolve；`virtual-machine.addSound()` 接着仍会把该对象加入 target。因此 `await vm.addSound()` 完成只代表生命周期结束，不代表请求的音频被正确安装。视觉资源的 `load-costume.js` 也有相似 fallback，造型/背景同样必须检查 `broken`、实际 asset ID、`skinId`、旋转中心和数量。
 
-隔离验证 VM 如果没有绑定 AudioEngine，官方实现不会产生 `soundId`。这种环境只能验证 SB3 结构，不能声称完成了解码验证；生产 live GUI 必须把 AudioEngine capability 作为声音功能启用条件。
+隔离验证 VM 如果没有绑定 AudioEngine，官方实现不会产生 `soundId`。这种环境只能验证 SB3 结构，不能声称完成了解码验证；生产 live GUI 必须把 AudioEngine capability 作为声音功能启用条件。当前浏览器探针要求 `runtime.audioEngine.decodeSoundPlayer`、`vm.addSound` 与 Scratch Storage 的 Sound/WAV 或 MP3 能力同时存在；任一缺失时隐藏项目模式并回退到仅当前角色的积木生成。后端 `/api/capabilities` 还必须同时声明 `project_assets=true` 与 `sound_assets=true`，防止部署与浏览器能力漂移。
 
 `deleteSound` 只作用于 editing target，因此删除/补偿必须保存原 editing target、切换、校验 index 和 asset ID、执行、再恢复原 target。该细节只能存在于 bridge。
 
@@ -1673,6 +1676,16 @@ commit_duration_ms, rollback_kind, error_code
 
 Dashboard 同时展示各阶段 P50/P95、取消率、schema 首过率、repair 次数、auto/review/missing 比例、revision 冲突率和 rollback kind。告警必须链接到 run/error code 的脱敏聚合，不可链接原始 prompt。
 
+浏览器侧 Commit/Verify 指标必须在项目事务释放后才以 best-effort 方式回传同一 durable run。回传内容仅限 `commit_duration_ms`、`verify_duration_ms`、固定 `outcome`、固定 `error_code` 与幂等键；不得包含题目、SB3、资源名、程序、异常原文或项目标识。存储按 `run_id + attempt` 保留多次本地重试，指标接口同时返回 `attempt_count` 与去重 `run_count`，并为 Commit、Verify 及合计时长分别计算 P50/P95。`commit_verify.revision_conflict` 固定以 `COMMIT_CONFLICT / attempt_count` 返回次数与比率，`rollback_kind_counts` 是 outcome 的同义、面向仪表盘的固定命名聚合。
+
+候选验证还会回传四个行为 oracle 汇总整数：执行条件总数、通过数、must 条件总数、must 通过数。它们来自 fresh-VM 内受限 DSL 的实际执行，不包含 criterion/test ID、断言、角色名或输出文本。服务端拒绝不可能的分子分母组合，并按全窗口计数计算 behavior 通过率和 must 通过率；当至少 100 个 must 条件且 must 通过率低于 90% 时返回 `BEHAVIOR_MUST_PASS_BELOW_TARGET` 与 `STOP_ROLLOUT`。
+
+候选 SB3 验证失败必须映射为固定错误码，不能回传解析或 VM 异常文本：`SB3_ARCHIVE_INVALID`、`SB3_RESOURCE_MISSING`、`SB3_BEHAVIOR_FAILED`、`SB3_VM_ROUND_TRIP_FAILED`。其中资源缺失率的分母是 Commit/Verify 尝试数；在至少 1,000 次尝试且比率超过 0.1% 时，指标接口返回 `SB3_RESOURCE_MISSING_RATE_EXCEEDED` 和 `STOP_ROLLOUT`。真正关闭具体资源 capability 仍需依据按版本/资源类型的发布控制台证据执行，不能由单个会话的指标接口推断。
+
+资源确认同样只回传按 `sprite/costume/backdrop/sound` 聚合的计数：高置信度自动采用、自动项人工改选、人工选择、进入 review 与实际视觉生成替代。`POST /api/ai-runs/{run_id}/resource-review-metrics` 以幂等收据保存每次确认，`GET /api/ai-runs/metrics` 返回总次数、去重 run 数和按资源类型汇总；不保存素材名、候选 ID、搜索词、项目标识或用户选择的具体素材。自动项改选率以 `auto_reselected_count / (auto_selected_count + auto_reselected_count)` 计算，样本量不足时只展示而不触发放量决定。
+
+当前 durable 指标接口在固定阈值上生成脱敏告警：任意 `FAILED_NEEDS_RECOVERY` 返回 `ATOMIC_RECOVERY_FAILURE` 并要求 `DISABLE_AI_COMMIT`；样本至少 50 次的 Commit+Verify P95 超过 5 秒返回 `COMMIT_VERIFY_P95_EXCEEDED`；样本至少 1,000 次且 SB3 缺资源率超过 0.1% 返回 `SB3_RESOURCE_MISSING_RATE_EXCEEDED`；stuck run 比率超过 0.5% 返回 `STUCK_RUN_RATE_EXCEEDED`；样本至少 100 个 eligible run 的 validation 首过率低于 90% 返回 `VALIDATION_FIRST_PASS_BELOW_TARGET`；样本至少 100 个 executable must 条件的 behavior 通过率低于 90% 返回 `BEHAVIOR_MUST_PASS_BELOW_TARGET`。除原子恢复失败外均要求 `STOP_ROLLOUT`。告警只含固定 code、严重度、动作、样本数量和数值，不返回 run ID 或任何原始内容。
+
 ### 14.4 性能、缓存与离线退化
 
 - 四类官方 manifest 和二进制继续本地化，以 `scratch package version + catalog hash` 作为缓存版本；安装阶段必须校验 404、字节数和内容 hash。
@@ -1813,7 +1826,7 @@ interface AcceptanceTestSpec {
 
 首发前建立不少于 50 道固定题，建议扩展到 100 道。覆盖：单角色动画、键盘控制、追逐/碰撞、随机、计分/生命、多场景、广播、多角色故事、克隆、问答、列表、造型动画、背景切换、短音效、背景音乐，以及明确不支持的扩展/硬件题。每题保存 TaskSpec golden 的关键约束、允许的素材候选集合、结构 oracle、可执行 behavior oracle 和人工评分 rubric。每个 criterion 必须预先标记 `executable/structural/manual/unsupported`；行为通过率的分母只包含 `executable`，但端到端完成率要求所有 must criterion 都为 passed 或被产品明确接受的 unsupported，不能把不可执行项静默排除来抬高指标。
 
-离线评测至少输出：题意字段召回率、素材 top-1/候选召回率、ProgramIR 首过率、repair 次数、无人工端到端完成率、行为 oracle 通过率、token/费用和阶段延迟。阈值、prompt、模型或 Scratch 包任一变化都跑同一题库，禁止只用几个演示题判断升级成功。
+离线评测至少输出：题意字段召回率、素材 top-1/候选召回率、ProgramIR 首过率、repair 次数、无人工端到端完成率、行为 oracle 通过率、token/费用和阶段延迟。首批语料使用 `docs/benchmarks/ai-blocks-calibration-v1.json`，脱敏结果可由 `backend/tools/evaluate_ai_blocks_benchmark.py` 聚合。题库文件名中的 `v1` 表示首批固定题集，内部 schema 已升级为 v2：每题 `expect.success_criteria` 都以稳定 ID 和 `priority` 标记四类 `verification`；结果也必须以四个固定分桶回传数量，并与题库的每类总数严格相等。`executable`、`structural` 记录 passed，`manual` 记录 reviewed/approved，`unsupported` 只能显式 accepted。汇总器在 `end_to_end_completed=true` 时强制全部 must 条件已通过、人工批准或明确接受，防止用行为分母掩盖结构、人工和不支持项。阈值、prompt、模型或 Scratch 包任一变化都跑同一题库，禁止只用几个演示题判断升级成功。
 
 ---
 
@@ -1892,7 +1905,7 @@ interface AcceptanceTestSpec {
 - 安装 Playwright Chromium，更新项目 E2E 的真实端点拦截。
 - 保存 15.0.1 的角色/声音/SB3 golden fixtures。
 - 冻结 TaskSpec、Blueprint、ProjectManifest v3、ProgramIR v2、lineage、错误码、数量上限和 feature flags。
-- 先建立不少于 20 题的校准子集；在 top-1 阈值尚未校准前，素材匹配保持 review-only。
+- 已建立 50 题、`schema_version: 2` 的校准集（`docs/benchmarks/ai-blocks-calibration-v1.json`，文件名中的 v1 为题集标识）；在 top-1 阈值尚未完成校准前，素材匹配保持 review-only。
 - 先删除生产完整请求日志。
 
 退出条件：前后端测试、build 和关键 E2E 全绿；合同 fixture 经评审。
@@ -1958,7 +1971,7 @@ interface AcceptanceTestSpec {
 
 ## 18. Feature Flags、兼容与回滚
 
-以下是 Phase 4 目标状态示例；`scratch_editor_version` 必须在运行时从实际安装包生成，当前生产基线仍是 15.0.1，不能把示例值当成升级已完成：
+以下是当前实现的目标状态示例；`scratch_editor_version` 必须继续在运行时从实际安装包生成，已安装的 15.1.1 不能替代后续上游升级的兼容验证：
 
 ```json
 {
@@ -1989,7 +2002,28 @@ VITE_AI_SHORT_COMMIT_ENABLED
 VITE_AI_AUDIO_GENERATION_ENABLED
 VITE_AI_DURABLE_RUNS_ENABLED
 VITE_AI_CRASH_CHECKPOINT_ENABLED
+VITE_AI_ASSET_AUTO_MATCH_ENABLED
+VITE_AI_ASSET_AUTO_MATCH_MIN_SCORE
+VITE_AI_ASSET_AUTO_MATCH_MIN_MARGIN
+VITE_AI_BLOCKS_COMMIT_ENABLED
 ```
+
+后端部署 flags：
+
+```text
+AI_BLOCKS_COMMIT_ENABLED
+AI_PROJECT_ASSETS_ENABLED
+AI_SOUND_ASSETS_ENABLED
+AI_LOGICAL_RESOURCE_REFS_ENABLED
+AI_SHORT_COMMIT_ENABLED
+AI_AUDIO_GENERATION_ENABLED
+AI_ASSET_AUTO_MATCH_ENABLED
+AI_ASSET_AUTO_MATCH_MIN_SCORE
+AI_ASSET_AUTO_MATCH_MIN_MARGIN
+AI_CRASH_CHECKPOINT_ENABLED
+```
+
+资源、逻辑引用、短 Commit、自动匹配和 checkpoint 均采用前后端双重门控；任一侧关闭时浏览器端必须 fail-closed，不能继续执行对应能力。音频生成默认关闭，只有前后端同时显式开启才允许进入资源准备；自动匹配关闭时仍保留人工素材选择。
 
 前后端先通过 capabilities 协商选择协议，不依赖前端构建时间猜测。部署兼容矩阵必须进入 CI：
 
@@ -2004,10 +2038,11 @@ VITE_AI_CRASH_CHECKPOINT_ENABLED
 
 回滚顺序：
 
-1. 关闭媒体生成和危险删除能力。
-2. 关闭 sound resource ops，但保留官方角色声音导入结果的 SB3 兼容。
-3. 通过协商关闭 durable v3 新 run，再等待/取消在途 v3 run；只有兼容 facade 仍在且不存在 `COMMITTING/VERIFYING` checkpoint 时，才回退到 ProgramIR v1/Manifest v2 客户端路径。
-4. 如上游兼容出现问题，将 Scratch 包族整体回退到 15.0.1，不混装版本。
+1. 关闭 `AI_BLOCKS_COMMIT_ENABLED` / `VITE_AI_BLOCKS_COMMIT_ENABLED`，立即阻止新的浏览器项目写入，保留对话和草稿生成。
+2. 关闭媒体生成和危险删除能力。
+3. 关闭 sound resource ops，但保留官方角色声音导入结果的 SB3 兼容。
+4. 通过协商关闭 durable v3 新 run，再等待/取消在途 v3 run；只有兼容 facade 仍在且不存在 `COMMITTING/VERIFYING` checkpoint 时，才回退到 ProgramIR v1/Manifest v2 客户端路径。
+5. 如上游兼容出现问题，将 Scratch 包族整体回退到 15.0.1，不混装版本。
 
 已经写入 SB3 的声音是标准 Scratch 资源，功能 flag 回退不得损坏已生成项目。媒体库 schema 只向前迁移；run/checkpoint 使用独立版本化数据库，代码回退只读或忽略更高版本，绝不删除 backup、新记录或 `FAILED_NEEDS_RECOVERY`。恢复演练必须覆盖旧前端/新后端、新前端/旧后端、在途 run、待恢复 checkpoint 和 Scratch 整包回退五种情况。
 

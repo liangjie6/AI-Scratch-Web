@@ -111,3 +111,22 @@ def test_gpt_json_schema_only_uses_chatgpt_safe_segments():
     assert not provider.supports_json_schema('manifest')
     assert not provider.supports_json_schema('resource_op')
     assert not provider.supports_json_schema('program')
+
+
+@pytest.mark.asyncio
+async def test_responses_parser_stops_at_response_completed_without_waiting_for_eof():
+    async def lines():
+        yield 'data: ' + json.dumps({
+            'type': 'response.output_text.delta',
+            'delta': '{"ready":true}',
+        })
+        yield 'data: ' + json.dumps({
+            'type': 'response.completed',
+            'response': {'usage': {'input_tokens': 3, 'output_tokens': 2}},
+        })
+        raise AssertionError('parser waited for a keep-alive stream to close')
+
+    deltas = [delta async for delta in AgnesTextProvider._parse_responses_lines(lines())]
+
+    assert [delta.text for delta in deltas if delta.kind == 'content'] == ['{"ready":true}']
+    assert any(delta.kind == 'usage' for delta in deltas)
