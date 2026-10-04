@@ -16,6 +16,7 @@
 | [ProgramIR v1 代码规范](参考资料/ProgramIR-v1代码规范.md) | 当前运行时的 ProgramIR v1 合同与编译约束。 |
 | [ProgramIR v1 生成提示词](参考资料/ProgramIR-v1生成提示词.md) | `backend/app/prompt_builder.py` 当前加载的知识库内容。 |
 | [Scratch VM 研究资料](参考资料/scratch-vm/README.md) | `scratch-vm` 源码研究与 AI 写积木界面设计资料。 |
+| [Scratch 官方内置资源清单](参考资料/scratch内置资源清单.md) | 85 个背景、343 个角色、354 个音效的英文标准名检索索引，用于消除资源名猜测。 |
 
 ## 产品设计
 

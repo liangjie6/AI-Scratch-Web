@@ -12,4 +12,8 @@ __pycache__/
 playwright-report/
 test-results/
 backend/.runtime/
+backend/data/
+*.tsbuildinfo
+*.egg-info/
+*.bak
 
