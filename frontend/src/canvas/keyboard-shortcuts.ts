@@ -18,7 +18,6 @@ const toolByCode: Partial<Record<string, CanvasTool>> = {
   KeyC: 'crop',
   KeyK: 'chroma',
   KeyB: 'brush',
-  KeyN: 'pencil',
   KeyE: 'eraser',
   KeyI: 'eyedropper',
   KeyH: 'hand'

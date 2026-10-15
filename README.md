@@ -198,6 +198,8 @@ npm run dev
 
 图片服务支持 `agnes-image-2.5-flash`（默认，使用 AGNES_API_KEY）与 `gpt-image-2.5-sunburst`（使用 SUI_XIANG_API_KEY），不受 model_tier 选择影响。文本扩写固定使用 Agnes。
 
+生成目标为“新角色”时，多个主体会按便于拆分的素材图排列，保持完整轮廓与间距。Agnes 使用纯绿幕 `#00ff00`；Sunburst 按 [OpenAI 图片接口文档](https://developers.openai.com/api/reference/resources/images/methods/generate) 请求 `background: "transparent"` 与 `output_format: "png"`，保留透明通道。舞台背景仍生成完整场景。
+
 ### 思考强度
 
 请求中的 thinking.strength 只能是 low、medium、high、xhigh 或 max，默认值为 medium。关闭 thinking.enabled 后，服务不发送思考参数，但界面仍保留已选强度。

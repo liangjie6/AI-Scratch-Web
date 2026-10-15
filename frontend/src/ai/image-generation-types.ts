@@ -32,7 +32,7 @@ export interface SheetLayout {
 }
 
 export interface ImageProcessingHints {
-  background_mode?: 'solid';
+  background_mode?: 'solid' | 'transparent';
   suggested_key_color?: string;
   sheet_layout?: {columns: number; rows: number};
 }

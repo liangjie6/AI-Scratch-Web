@@ -17,7 +17,7 @@ export function hitTestLayer(document: CanvasDocument, bitmaps: BitmapStore, poi
     const localX = (t.d * (point.x - t.e) - t.c * (point.y - t.f)) / determinant;
     const localY = (-t.b * (point.x - t.e) + t.a * (point.y - t.f)) / determinant;
     if (localX < layer.bounds.x || localY < layer.bounds.y || localX >= layer.bounds.x + layer.bounds.width || localY >= layer.bounds.y + layer.bounds.height) continue;
-    const image = raw ? bitmaps.getImageData(layer.bitmapId) : layerImageData(layer, bitmaps);
+    const image = raw ? bitmaps.get(layer.bitmapId) : layerImageData(layer, bitmaps);
     const x = Math.floor((localX - layer.bounds.x) * image.width / layer.bounds.width);
     const y = Math.floor((localY - layer.bounds.y) * image.height / layer.bounds.height);
     if (image.data[(y * image.width + x) * 4 + 3] > 0) return layer;
@@ -53,7 +53,7 @@ export function copySelectionToLayer(document: CanvasDocument, bitmaps: BitmapSt
   const source = activeLayer(document); const selection = document.selection?.rect; if (!source || !selection) throw new Error('请先选择图层并框选区域');
   if (selection.width <= 0 || selection.height <= 0) throw new Error('选区尺寸必须大于 0');
   if (cut && source.locked) throw new Error('锁定图层不能剪切');
-  const sourceImage = layerImageData(source, bitmaps); const sourceRaw = bitmaps.getImageData(source.bitmapId); const t = source.transform; const determinant = t.a * t.d - t.b * t.c; if (Math.abs(determinant) < 1e-8) throw new Error('图层变换不可逆，请先重置变换');
+  const sourceImage = layerImageData(source, bitmaps); const t = source.transform; const determinant = t.a * t.d - t.b * t.c; if (Math.abs(determinant) < 1e-8) throw new Error('图层变换不可逆，请先重置变换');
   const bitmapScaleX = Math.min(4, Math.max(1, Math.hypot(t.d / determinant * sourceImage.width / source.bounds.width, -t.b / determinant * sourceImage.height / source.bounds.height)));
   const bitmapScaleY = Math.min(4, Math.max(1, Math.hypot(-t.c / determinant * sourceImage.width / source.bounds.width, t.a / determinant * sourceImage.height / source.bounds.height)));
   const width = Math.max(1, Math.round(selection.width * bitmapScaleX)); const height = Math.max(1, Math.round(selection.height * bitmapScaleY)); const output = new ImageData(width, height);
@@ -68,6 +68,10 @@ export function copySelectionToLayer(document: CanvasDocument, bitmaps: BitmapSt
     const from = (sy * sourceImage.width + sx) * 4; const to = (y * width + x) * 4; output.data.set(sourceImage.data.subarray(from, from + 4), to);
   }
   if (cut) {
+    // Bake the visible result before removing pixels. A connected key may lose
+    // its seed when cut, so reevaluating it against the raw bitmap could reveal
+    // background pixels that were already transparent.
+    const sourceRaw = new ImageData(new Uint8ClampedArray(sourceImage.data), sourceImage.width, sourceImage.height);
     const right = selection.x + selection.width; const bottom = selection.y + selection.height;
     for (let sy = 0; sy < sourceRaw.height; sy += 1) for (let sx = 0; sx < sourceRaw.width; sx += 1) {
       const localX = source.bounds.x + (sx + 0.5) * source.bounds.width / sourceRaw.width; const localY = source.bounds.y + (sy + 0.5) * source.bounds.height / sourceRaw.height;
@@ -75,10 +79,12 @@ export function copySelectionToLayer(document: CanvasDocument, bitmaps: BitmapSt
       if (worldX >= selection.x && worldX < right && worldY >= selection.y && worldY < bottom) sourceRaw.data[(sy * sourceRaw.width + sx) * 4 + 3] = 0;
     }
     bitmaps.update(source.bitmapId, sourceRaw);
+    source.chromaKey = null;
+    source.updatedAt = Date.now();
   }
   const bitmapId = bitmaps.put(output); const now = Date.now(); const index = document.costumeEntries.length + 1; const frameRect = {...selection};
   const layer: RasterLayer = {id: createId(), name: '造型' + index, bitmapId, bounds: frameRect, transform: {...IDENTITY_MATRIX}, visible: true, locked: false, opacity: 1, blendMode: 'normal', chromaKey: null, createdAt: now, updatedAt: now};
-  document.layers.push(layer); document.activeLayerIds = [layer.id];
+  document.layers.splice(document.layers.findIndex(item => item.id === source.id) + 1, 0, layer);
   const entry: CostumeEntry = {id: createId(), layerId: layer.id, name: layer.name, order: document.costumeEntries.length, frameRect: {...frameRect}, pivot: {x: frameRect.x + frameRect.width / 2, y: frameRect.y + frameRect.height / 2}, alignment: 'center', exportScale: 2, enabled: true}; document.costumeEntries.push(entry); return {layer, entry};
 }
 export function cropActiveLayer(document: CanvasDocument, bitmaps: BitmapStore, requestedRect: Rect) {

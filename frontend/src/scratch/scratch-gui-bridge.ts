@@ -1,5 +1,6 @@
 import type {CostumeExport, ImportedSpriteResult, SoundExport, SpriteImportExpectation, SpriteSoundExpectation} from './asset-adapter';
 import type {ScratchEditorPort} from './scratch-editor-port';
+import {normalizeCostumeForEditor} from './costume-normalizer';
 
 type Listener = () => void;
 
@@ -366,7 +367,7 @@ export class ScratchGuiBridge implements ScratchEditorPort {
     if (!target || target.isStage) throw new Error('只能向已有角色添加造型');
     const oldIndex = target.currentCostume ?? 0;
     const lifecycleToken = this.lifecycleToken;
-    const asset = await this.createVisualAsset(costume);
+    const asset = await this.createVisualAsset(await normalizeCostumeForEditor(costume));
     this.assertVmStillBound(vm, lifecycleToken);
     await this.runMaybeProjectTransactionMutationAsync(() => vm.addCostume(asset.md5ext, asset.costume, targetId));
     this.assertVmStillBound(vm, lifecycleToken);

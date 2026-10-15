@@ -140,3 +140,36 @@ func TestSuiXiangProvider_Generate(t *testing.T) {
 		t.Errorf("expected fake-sui-xiang-data, got %s", string(img.Data))
 	}
 }
+
+func TestSuiXiangProviderBackgroundOptions(t *testing.T) {
+	for _, background := range []string{"", "transparent"} {
+		t.Run("background="+background, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Error(err)
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+				if background == "transparent" {
+					if payload["background"] != "transparent" || payload["output_format"] != "png" {
+						t.Errorf("transparent sprites must request alpha-capable PNG output: %v", payload)
+					}
+				} else if payload["background"] != nil || payload["output_format"] != nil {
+					t.Errorf("ordinary image requests should retain provider defaults: %v", payload)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]string{{"b64_json": "cG5n"}}})
+			}))
+			defer server.Close()
+			p := NewSuiXiangProvider(&config.Settings{
+				SuiXiangAPIKey: "test-key", ProviderBaseURL: server.URL,
+				ImageRequestTimeoutSeconds: 10, ImageMaxDownloadBytes: 1024,
+			})
+			if _, err := p.Generate(context.Background(), ImageParams{
+				Model: "gpt-image-2.5-sunburst", Prompt: "a sprite", Background: background,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

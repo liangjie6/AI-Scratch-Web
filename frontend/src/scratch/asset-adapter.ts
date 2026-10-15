@@ -1,6 +1,7 @@
 import {md5} from 'js-md5';
 import type {ImageGenerationResponse, ImageTarget} from '../ai/image-generation-types';
 import type {ScratchGuiBridge} from './scratch-gui-bridge';
+import {normalizeSpriteForEditor} from './costume-normalizer';
 
 export interface CroppedImage { blob: Blob; width: number; height: number; assetId?: string }
 export interface InlineAssetWire {
@@ -30,6 +31,7 @@ async function normalizeBackdrop(result: ImageGenerationResponse): Promise<Cropp
 
 export async function buildSpriteImport(sprite: SpriteExport) {
   if (!sprite.costumes.length) throw new Error('至少需要一个造型');
+  sprite = await normalizeSpriteForEditor(sprite);
   const expectations: SpriteImportExpectation[] = []; const costumes = []; const usedNames = new Set<string>();
   for (const costume of sprite.costumes) {
     const baseName = costume.name.trim() || '造型'; let name = baseName;

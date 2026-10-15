@@ -37,7 +37,7 @@
 .canvas-viewport canvas { position: absolute; inset: 0; display: block; }
 .canvas-viewport[data-tool='hand'] canvas { cursor: grab; }
 .canvas-viewport[data-tool='select'] canvas { cursor: crosshair; }
-.canvas-viewport[data-tool='brush'] canvas, .canvas-viewport[data-tool='pencil'] canvas, .canvas-viewport[data-tool='eraser'] canvas, .canvas-viewport[data-tool='chroma'] canvas, .canvas-viewport[data-tool='eyedropper'] canvas { cursor: crosshair; }
+.canvas-viewport[data-tool='brush'] canvas, .canvas-viewport[data-tool='eraser'] canvas, .canvas-viewport[data-tool='chroma'] canvas, .canvas-viewport[data-tool='eyedropper'] canvas { cursor: crosshair; }
 .canvas-empty { position: absolute; top: 50%; left: 50%; display: flex; width: min(360px, calc(100% - 32px)); min-height: 205px; flex-direction: column; align-items: center; justify-content: center; gap: 9px; transform: translate(-50%,-50%); border: 1px dashed #7d838d; border-radius: 12px; background: #3d4249; color: #e5e7ea; text-align: center; }
 .canvas-empty > span { max-width: 280px; color: #bfc4cb; font-size: 11px; }
 .canvas-empty button { display: inline-flex; min-height: 33px; align-items: center; gap: 6px; margin-top: 5px; border: 1px solid #1d7564; border-radius: 8px; padding: 0 12px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; }

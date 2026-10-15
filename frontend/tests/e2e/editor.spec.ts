@@ -387,6 +387,7 @@ test('separates move, transform, and enter-confirmed crop tools', async ({page})
   if(await unlock.count())await unlock.click();
   const layerWidth=page.locator('.tool-options .transform-grid label').filter({hasText:'宽'}).locator('input');
   await expect(layerWidth).toHaveValue('4');
+  await page.getByRole('button',{name:'锁定比例',exact:true}).click();
   await page.mouse.move(center.x+64,center.y);
   await page.mouse.down();
   await page.mouse.move(center.x+96,center.y);
@@ -473,6 +474,7 @@ test('edits a generated sprite in the canvas and keeps Scratch mounted', async (
   }
   expect(await page.locator('.canvas-status > span').first().textContent()).toBe('复制选区为新图层');
   await expect(page.getByRole('tab', {name: /造型/})).toContainText('5');
+  await page.getByRole('tab', {name: /造型/}).click();
   await expect(page.getByLabel('造型名称')).toHaveCount(5);
   await page.getByRole('tab', {name: /图层/}).click();
   await expect(page.getByRole('tab', {name: /图层/})).toContainText('5');
@@ -504,6 +506,7 @@ test('edits a generated sprite in the canvas and keeps Scratch mounted', async (
   await page.setViewportSize({width: 1280, height: 720});
   await importCanvasAsSprite(page);
   await expect(workspace).toHaveCount(0);
+  await page.getByRole('button', {name: '收起生成素材'}).click();
   await expect(page.getByRole('button', {name: '角色1'})).toBeVisible();
   await expect(page.getByRole('button', {name: 'AI 角色素材'})).toBeVisible();
 

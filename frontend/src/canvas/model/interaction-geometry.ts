@@ -10,6 +10,10 @@ const HANDLE_FACTORS: Record<ControlHandle, Point> = {
 const OPPOSITE: Record<ControlHandle, ControlHandle> = {nw: 'se', n: 's', ne: 'sw', e: 'w', se: 'nw', s: 'n', sw: 'ne', w: 'e'};
 export const CONTROL_HANDLES = Object.keys(HANDLE_FACTORS) as ControlHandle[];
 
+export function oppositeControlHandle(handle: ControlHandle): ControlHandle {
+  return OPPOSITE[handle];
+}
+
 export function transformPoint(matrix: Matrix2D, point: Point): Point {
   return {x: matrix.a * point.x + matrix.c * point.y + matrix.e, y: matrix.b * point.x + matrix.d * point.y + matrix.f};
 }
@@ -51,7 +55,12 @@ export function hitControl(points: ControlPoints, point: Point, tolerance: numbe
   return closest?.handle ?? null;
 }
 
-export function resizeRectFromHandle(start: Rect, handle: ControlHandle, point: Point, minimum = 1): Rect {
+export function resizeRectFromHandle(start: Rect, handle: ControlHandle, point: Point, minimum = 1, lockAspect = false): Rect {
+  if (lockAspect) {
+    const transform = resizeLayerFromHandle({a: 1, b: 0, c: 0, d: 1, e: 0, f: 0}, start, handle, point, true, minimum);
+    const topLeft = transformPoint(transform, start);
+    return {x: topLeft.x, y: topLeft.y, width: start.width * transform.a, height: start.height * transform.d};
+  }
   let left = start.x, right = start.x + start.width, top = start.y, bottom = start.y + start.height;
   if (handle.includes('w')) left = Math.min(point.x, right - minimum);
   if (handle.includes('e')) right = Math.max(point.x, left + minimum);
@@ -60,29 +69,30 @@ export function resizeRectFromHandle(start: Rect, handle: ControlHandle, point: 
   return {x: left, y: top, width: right - left, height: bottom - top};
 }
 
-export function resizeLayerFromHandle(start: Matrix2D, bounds: Rect, handle: ControlHandle, point: Point, lockAspect = false): Matrix2D {
+export function resizeLayerFromHandle(start: Matrix2D, bounds: Rect, handle: ControlHandle, point: Point, lockAspect = false, minimum = 0.5): Matrix2D {
   const scaleX = Math.hypot(start.a, start.b);
   const scaleY = Math.hypot(start.c, start.d);
-  if (scaleX < 1e-8 || scaleY < 1e-8 || bounds.width <= 0 || bounds.height <= 0) return {...start};
-  const axisX = {x: start.a / scaleX, y: start.b / scaleX};
-  const axisY = {x: start.c / scaleY, y: start.d / scaleY};
+  const determinant = start.a * start.d - start.b * start.c;
+  if (scaleX < 1e-8 || scaleY < 1e-8 || Math.abs(determinant) < 1e-12 || bounds.width <= 0 || bounds.height <= 0) return {...start};
   const anchorLocal = rectPoint(bounds, OPPOSITE[handle]);
   const anchorWorld = transformPoint(start, anchorLocal);
   const currentWidth = bounds.width * scaleX, currentHeight = bounds.height * scaleY;
-  let nextWidth = currentWidth, nextHeight = currentHeight;
-  if (handle.includes('e')) nextWidth = Math.max(0.5, (point.x - anchorWorld.x) * axisX.x + (point.y - anchorWorld.y) * axisX.y);
-  if (handle.includes('w')) nextWidth = Math.max(0.5, (anchorWorld.x - point.x) * axisX.x + (anchorWorld.y - point.y) * axisX.y);
-  if (handle.includes('s')) nextHeight = Math.max(0.5, (point.x - anchorWorld.x) * axisY.x + (point.y - anchorWorld.y) * axisY.y);
-  if (handle.includes('n')) nextHeight = Math.max(0.5, (anchorWorld.x - point.x) * axisY.x + (anchorWorld.y - point.y) * axisY.y);
-  if (lockAspect && handle.length === 2) {
-    const widthRatio = nextWidth / currentWidth, heightRatio = nextHeight / currentHeight;
-    const ratio = Math.abs(widthRatio - 1) >= Math.abs(heightRatio - 1) ? widthRatio : heightRatio;
-    nextWidth = Math.max(0.5, currentWidth * ratio);
-    nextHeight = Math.max(0.5, currentHeight * ratio);
+  // Solve in the original affine basis so rotation, reflection and skew keep
+  // their orientation while the opposite control stays fixed in world space.
+  const dx = point.x - anchorWorld.x, dy = point.y - anchorWorld.y;
+  const localX = (start.d * dx - start.c * dy) / determinant;
+  const localY = (start.a * dy - start.b * dx) / determinant;
+  const changesX = handle.includes('w') || handle.includes('e');
+  const changesY = handle.includes('n') || handle.includes('s');
+  let ratioX = changesX ? Math.max(minimum / currentWidth, (handle.includes('w') ? -localX : localX) / bounds.width) : 1;
+  let ratioY = changesY ? Math.max(minimum / currentHeight, (handle.includes('n') ? -localY : localY) / bounds.height) : 1;
+  if (lockAspect) {
+    const ratio = changesX && changesY
+      ? (Math.abs(ratioX - 1) >= Math.abs(ratioY - 1) ? ratioX : ratioY)
+      : changesX ? ratioX : ratioY;
+    ratioX = ratioY = Math.max(minimum / currentWidth, minimum / currentHeight, ratio);
   }
-  const next = {...start};
-  if (handle.includes('w') || handle.includes('e')) { next.a = axisX.x * nextWidth / bounds.width; next.b = axisX.y * nextWidth / bounds.width; }
-  if (handle.includes('n') || handle.includes('s')) { next.c = axisY.x * nextHeight / bounds.height; next.d = axisY.y * nextHeight / bounds.height; }
+  const next = {a: start.a * ratioX, b: start.b * ratioX, c: start.c * ratioY, d: start.d * ratioY, e: start.e, f: start.f};
   next.e = anchorWorld.x - next.a * anchorLocal.x - next.c * anchorLocal.y;
   next.f = anchorWorld.y - next.b * anchorLocal.x - next.d * anchorLocal.y;
   return next;

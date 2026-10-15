@@ -64,16 +64,23 @@ type SheetLayout struct {
 	Rows    int `json:"rows"`
 }
 
+// ProcessingHints describes how the generated sprite background can be edited.
+type ProcessingHints struct {
+	BackgroundMode    string `json:"background_mode"`
+	SuggestedKeyColor string `json:"suggested_key_color,omitempty"`
+}
+
 // Response is the image generation response payload.
 type Response struct {
-	RequestID       string          `json:"request_id"`
-	MimeType        string          `json:"mime_type"`
-	SheetWidth      int             `json:"sheet_width"`
-	SheetHeight     int             `json:"sheet_height"`
-	SheetLayout     SheetLayout     `json:"sheet_layout"`
-	ImageBase64     string          `json:"image_base64"`
-	Target          string          `json:"target"`
-	RequestedCanvas RequestedCanvas `json:"requested_canvas"`
+	RequestID       string           `json:"request_id"`
+	MimeType        string           `json:"mime_type"`
+	SheetWidth      int              `json:"sheet_width"`
+	SheetHeight     int              `json:"sheet_height"`
+	SheetLayout     SheetLayout      `json:"sheet_layout"`
+	ImageBase64     string           `json:"image_base64"`
+	Target          string           `json:"target"`
+	RequestedCanvas RequestedCanvas  `json:"requested_canvas"`
+	ProcessingHints *ProcessingHints `json:"processing_hints,omitempty"`
 }
 
 // Service generates and normalizes images behind a bounded concurrency gate.
@@ -139,7 +146,19 @@ func (s *Service) Generate(ctx context.Context, request Request) (*Response, err
 	if err != nil {
 		return nil, err
 	}
-	text, err := prompt.BuildImagePrompt(request.Style, request.CustomStyle, request.Prompt, request.Width, request.Height, request.Target)
+	background := ""
+	providerBackground := ""
+	var hints *ProcessingHints
+	if request.Target == "sprite" {
+		background = "solid"
+		hints = &ProcessingHints{BackgroundMode: "solid", SuggestedKeyColor: "#00ff00"}
+		if model == "gpt-image-2.5-sunburst" || model == "gpt-image-2" {
+			background = "transparent"
+			providerBackground = "transparent"
+			hints = &ProcessingHints{BackgroundMode: "transparent"}
+		}
+	}
+	text, err := prompt.BuildImagePrompt(request.Style, request.CustomStyle, request.Prompt, request.Width, request.Height, request.Target, background)
 	if err != nil {
 		return nil, err
 	}
@@ -153,10 +172,11 @@ func (s *Service) Generate(ctx context.Context, request Request) (*Response, err
 	func() {
 		defer func() { <-s.semaphore }()
 		generated, err = prov.Generate(ctx, provider.ImageParams{
-			Model:  model,
-			Prompt: text,
-			Width:  request.Width,
-			Height: request.Height,
+			Model:      model,
+			Prompt:     text,
+			Width:      request.Width,
+			Height:     request.Height,
+			Background: providerBackground,
 		})
 	}()
 	if err != nil {
@@ -169,7 +189,7 @@ func (s *Service) Generate(ctx context.Context, request Request) (*Response, err
 		return nil, &provider.ProviderError{Message: "provider request failed"}
 	}
 
-	pngBytes, width, height, err := s.normalizeImage(generated.Data, generated.MimeType)
+	pngBytes, width, height, err := s.normalizeImage(generated.Data, generated.MimeType, background)
 	if err != nil {
 		return nil, err
 	}
@@ -186,10 +206,11 @@ func (s *Service) Generate(ctx context.Context, request Request) (*Response, err
 		ImageBase64:     base64.StdEncoding.EncodeToString(pngBytes),
 		Target:          request.Target,
 		RequestedCanvas: RequestedCanvas{Width: request.Width, Height: request.Height},
+		ProcessingHints: hints,
 	}, nil
 }
 
-func (s *Service) normalizeImage(data []byte, mimeType string) ([]byte, int, int, error) {
+func (s *Service) normalizeImage(data []byte, mimeType, background string) ([]byte, int, int, error) {
 	if len(data) == 0 || len(data) > s.settings.ImageMaxDownloadBytes {
 		return nil, 0, 0, &provider.ProviderError{Message: "image is missing or too large"}
 	}
@@ -208,6 +229,9 @@ func (s *Service) normalizeImage(data []byte, mimeType string) ([]byte, int, int
 	}
 	converted := image.NewNRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(converted, converted.Bounds(), decoded, bounds.Min, draw.Src)
+	if background == "solid" {
+		normalizeGreenScreenBackground(converted)
+	}
 	var output bytes.Buffer
 	encoder := png.Encoder{CompressionLevel: png.BestCompression}
 	if err := encoder.Encode(&output, converted); err != nil {

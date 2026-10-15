@@ -43,6 +43,11 @@ const isImageBusy = computed(() => state.value === 'generating' || state.value =
 const isExpanding = computed(() => expansionTarget.value !== null);
 const isBusy = computed(() => isImageBusy.value || isExpanding.value);
 const canGenerate = computed(() => prompt.value.trim().length >= 2 && (style.value !== 'custom' || customStyle.value.trim().length >= 2) && !isBusy.value);
+const spriteHint = computed(() =>
+  model.value === 'gpt-image-2.5-sunburst'
+    ? '角色图将生成透明背景的独立主体，方便直接提取角色。'
+    : '角色图将生成纯绿底（#00ff00）的独立主体，便于抠图提取角色。'
+);
 
 async function submit() {
   if (!canGenerate.value) return;
@@ -219,7 +224,7 @@ onBeforeUnmount(() => {
           <span>新角色</span>
         </label>
       </fieldset>
-      <p v-if="target === 'sprite'" class="field-note">角色图会尽量使用干净背景；当前模型不保证透明通道。</p>
+      <p v-if="target === 'sprite'" class="field-note">{{ spriteHint }}</p>
 
       <div class="ai-form__actions">
         <button v-if="state === 'generating'" class="button button--quiet" type="button" @click="cancel">

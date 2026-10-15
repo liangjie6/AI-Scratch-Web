@@ -32,10 +32,11 @@ type ProviderImage struct {
 
 // ImageParams holds options for generating an image.
 type ImageParams struct {
-	Model  string
-	Prompt string
-	Width  int
-	Height int
+	Model      string
+	Prompt     string
+	Width      int
+	Height     int
+	Background string
 }
 
 // ImageProvider generates one image for given parameters.
@@ -127,10 +128,18 @@ func (p *SuiXiangProvider) Generate(ctx context.Context, params ImageParams) (*P
 	if model == "" {
 		model = "gpt-image-2.5-sunburst"
 	}
-	payload, err := json.Marshal(map[string]any{
+	options := map[string]any{
 		"model":  model,
 		"prompt": params.Prompt,
-	})
+	}
+	if params.Background != "" {
+		options["background"] = params.Background
+	}
+	if params.Background == "transparent" {
+		// Transparent image output requires a format with an alpha channel.
+		options["output_format"] = "png"
+	}
+	payload, err := json.Marshal(options)
 	if err != nil {
 		return nil, newProviderError("provider request failed")
 	}

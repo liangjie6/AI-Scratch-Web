@@ -17,7 +17,7 @@
   "ai.retry": "重试",
   "ai.cancel": "取消请求",
   "ai.empty": "生成结果会显示在这里",
-  "ai.transparentHint": "角色图会尽量使用干净背景；当前模型不保证透明通道。",
+  "ai.transparentHint": "角色图生成独立主体：gpt-image-2.5-sunburst 使用透明背景，Agnes 使用纯绿底（#00ff00），方便分离角色。",
   "ai.requestError": "生成失败，请检查提示词或稍后重试。",
   "status.ready": "编辑器已就绪",
   "status.loading": "正在加载本地 Scratch",

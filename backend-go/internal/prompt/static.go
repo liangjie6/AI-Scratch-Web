@@ -36,8 +36,8 @@ var StyleLabels = map[string]string{
 	"watercolor": "soft watercolor illustration with clear focal objects",
 }
 
-// BuildImagePrompt mirrors build_image_prompt.
-func BuildImagePrompt(style, customStyle, userPrompt string, width, height int, target string) (string, error) {
+// BuildImagePrompt separates scene composition from extractable sprite assets.
+func BuildImagePrompt(style, customStyle, userPrompt string, width, height int, target, background string) (string, error) {
 	if style == "custom" && customStyle == "" {
 		return "", fmt.Errorf("custom_style is required when style is custom")
 	}
@@ -49,15 +49,34 @@ func BuildImagePrompt(style, customStyle, userPrompt string, width, height int, 
 	if !ok {
 		return "", fmt.Errorf("unknown style")
 	}
-	targetHint := "For a sprite, keep the subject centered and use a clean simple background; do not fake transparency."
 	if target == "backdrop" {
-		targetHint = "For a backdrop, fill the scene edge to edge with a clear foreground and background."
+		return fmt.Sprintf(
+			"Create one complete image for a Scratch project. "+
+				"User scene: %s. Style: %s. "+
+				"Canvas intent is %d by %d. "+
+				"For a backdrop, fill the scene edge to edge with a clear foreground and background. "+
+				"Use one coherent composition with no borders, grid lines, labels, text, watermark, or collage.",
+			userPrompt, styleDescription, width, height,
+		), nil
 	}
+
+	var bgHint string
+	if background == "transparent" {
+		bgHint = "Use true alpha transparency with no green, white, or checkerboard background. Leave all space around and between subjects fully transparent, with no scenery, floor, cast shadows, or halos."
+	} else {
+		bgHint = "Use a uniform saturated #00ff00 green background across the entire canvas including holes. Every background pixel must be exactly RGB(0, 255, 0), like a flat digital color fill: no texture, noise, grain, pattern, lighting, gradients, shadows, floor, or scenery. Apply the requested art style only to the subjects, never to the background, and avoid green subject colors."
+	}
+
+	spriteHint := "For a sprite, isolate every requested character, pose, or object with whole visible silhouettes, generous gaps and outer padding for manual extraction, non-overlapping and non-touching subjects, and consistent scale. " +
+		"Show each subject completely from head to feet, including all accessories, without cropping. Omit any scene or background described in the user prompt; only render the requested subjects. " +
+		"When multiple subjects are requested, arrange them in regular rows and columns while retaining the exact count requested; render one subject if singular. " +
+		"Do not force a fixed sheet grid or count. " + bgHint
+
 	return fmt.Sprintf(
 		"Create one complete image for a Scratch project. "+
 			"User scene: %s. Style: %s. "+
 			"Canvas intent is %d by %d. %s "+
-			"Use one coherent composition with no borders, grid lines, labels, text, watermark, or collage.",
-		userPrompt, styleDescription, width, height, targetHint,
+			"No borders, grid lines, labels, text, or watermark.",
+		userPrompt, styleDescription, width, height, spriteHint,
 	), nil
 }
