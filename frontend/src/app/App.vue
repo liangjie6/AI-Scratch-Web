@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import {nextTick, onBeforeUnmount, onMounted, ref, shallowRef} from 'vue';
-import {Blocks as BlocksIcon, Bot, ImagePlus, Images, PanelRightClose, Palette} from 'lucide-vue-next';
+import {Blocks as BlocksIcon, Bot, FileDown, ImagePlus, Images, PanelRightClose, Palette} from 'lucide-vue-next';
 import ScratchHost from '../scratch/ScratchHost.vue';
 import {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {importSelectedImage} from '../scratch/asset-adapter';
 import type {ImageTarget} from '../ai/image-generation-types';
 import ImageGenerationPanel from '../ai/ImageGenerationPanel.vue';
 import AssetLibraryDialog from '../ai/AssetLibraryDialog.vue';
+import HtmlExportDialog from '../scratch-export/HtmlExportDialog.vue';
 import {
   clearGeneratedAssets,
   countGeneratedAssets,
@@ -39,12 +40,14 @@ let canvasTrigger: HTMLElement | null = null;
 
 type ActivePanel = 'image' | 'blocks' | null;
 
-type HeaderTool = 'assets' | 'image' | 'blocks' | 'canvas';
+type HeaderTool = 'assets' | 'image' | 'blocks' | 'canvas' | 'export';
 
 const activePanel = ref<ActivePanel>(null);
 const hoveredHeaderTool = ref<HeaderTool | null>(null);
 const scratchLocked = ref(false);
 const aiBlocksBusy = ref(false);
+const htmlExportOpen = ref(false);
+const htmlExportTrigger = ref<HTMLButtonElement | null>(null);
 
 function debounce<T>(callback: (value: T) => void, delay: number) {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -193,6 +196,17 @@ async function closeAssetLibrary() {
   assetLibraryTrigger.value?.focus();
 }
 
+function openHtmlExportDialog() {
+  if (scratchLocked.value || aiBlocksBusy.value) return;
+  htmlExportOpen.value = true;
+}
+
+async function closeHtmlExportDialog() {
+  htmlExportOpen.value = false;
+  await nextTick();
+  htmlExportTrigger.value?.focus();
+}
+
 async function onAssetSaved() {
   await refreshAssetCount();
   if (assetLibraryOpen.value) await loadAssetLibrary();
@@ -226,7 +240,7 @@ onMounted(() => void refreshAssetCount());
 
 <template>
   <div class="app-shell">
-    <main class="workspace" :class="{'is-canvas-hidden': canvasOpen}" :inert="canvasOpen || assetLibraryOpen" :aria-hidden="canvasOpen || assetLibraryOpen ? 'true' : undefined">
+    <main class="workspace" :class="{'is-canvas-hidden': canvasOpen}" :inert="canvasOpen || assetLibraryOpen || htmlExportOpen" :aria-hidden="canvasOpen || assetLibraryOpen || htmlExportOpen ? 'true' : undefined">
       <div class="header-tools">
         <button
           ref="assetLibraryTrigger" :class="{'is-hovered': hoveredHeaderTool === 'assets'}" @pointerenter="updateHeaderHover('assets')" @pointerleave="updateHeaderHover(null)"
@@ -254,6 +268,23 @@ onMounted(() => void refreshAssetCount());
         <button class="panel-toggle--header" :class="{'is-hovered': hoveredHeaderTool === 'canvas'}" type="button" @pointerenter="updateHeaderHover('canvas')" @pointerleave="updateHeaderHover(null)" :disabled="scratchLocked" title="打开画布" aria-label="打开画布" @click="openBlank">
           <Palette :size="18" aria-hidden="true" />
           <span class="header-tool__content" aria-hidden="true"><span class="header-tool__label">无边画布</span></span>
+        </button>
+        <button
+          ref="htmlExportTrigger"
+          class="panel-toggle--header"
+          :class="{'is-hovered': hoveredHeaderTool === 'export'}"
+          type="button"
+          :disabled="scratchLocked || aiBlocksBusy"
+          title="导出单文件 HTML"
+          aria-label="导出单文件 HTML 播放器"
+          @pointerenter="updateHeaderHover('export')"
+          @pointerleave="updateHeaderHover(null)"
+          @click="openHtmlExportDialog"
+        >
+          <FileDown :size="18" aria-hidden="true" />
+          <span class="header-tool__content" aria-hidden="true">
+            <span class="header-tool__label">导出 HTML</span>
+          </span>
         </button>
       </div>
 
@@ -296,6 +327,13 @@ onMounted(() => void refreshAssetCount());
       @remove="removeAsset"
       @clear="clearAssetLibrary"
       @retry="loadAssetLibrary"
+    />
+    <HtmlExportDialog
+      :open="htmlExportOpen"
+      :bridge="bridge"
+      :scratch-locked="scratchLocked"
+      :ai-blocks-busy="aiBlocksBusy"
+      @close="closeHtmlExportDialog"
     />
   </div>
 </template>

@@ -1,0 +1,14 @@
+{
+  "name": "scratch-htmlifier-standalone-assets",
+  "version": "1.0.0",
+  "description": "Static player template and VM assets for exporting Scratch 3 projects to single-file HTML",
+  "files": {
+    "vm.min.js": {
+      "size": 5322872,
+      "sha256": "29f52618abaa41a060862bd3981f846ab4b249ece56762cd2423e8048b1a732e"
+    },
+    "template.html": {
+      "cleanedExternalCdn": true
+    }
+  }
+}

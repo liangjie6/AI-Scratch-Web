@@ -1,0 +1,23 @@
+{
+  "productionPreview": true,
+  "lazyAssets": true,
+  "mobileFits": true,
+  "fileTitle": "ai-scratch-final-fixture",
+  "oneDownload": true,
+  "lateFailure": null,
+  "descriptionPreserved": true,
+  "injected": false,
+  "errors": [],
+  "runtimeErrors": [],
+  "consoleErrors": [],
+  "externalRequests": [],
+  "filename": "final-export.html",
+  "size": 5434835,
+  "focusReturned": true,
+  "embeddedNotices": true,
+  "noticeChecks": {
+    "https://github.com/SheepTester/htmlifier": true,
+    "License comments embedded in the bundle must not be removed.": true,
+    "29f52618abaa41a060862bd3981f846ab4b249ece56762cd2423e8048b1a732e": true
+  }
+}

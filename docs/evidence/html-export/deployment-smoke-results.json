@@ -1,0 +1,62 @@
+{
+  "origin": "https://kfcv50.icu:9966/",
+  "connection": "Production HTTPS nginx endpoint; local DNS override to 127.0.0.1; certificate verification enabled",
+  "checks": {
+    "page": {
+      "httpStatus": 200,
+      "editorReady": true,
+      "secureContext": true,
+      "htmlifierLazy": true
+    },
+    "currentProject": {
+      "filename": "正式站点导出验证.html",
+      "bytes": 5434525,
+      "licenseEmbedded": true
+    },
+    "localSb3": {
+      "filename": "正式站点本地SB3验证.html",
+      "bytes": 5434531
+    },
+    "runtimeAssets": [
+      {
+        "name": "vm.min.js",
+        "bytes": 5322872,
+        "sha256": "29f52618abaa41a060862bd3981f846ab4b249ece56762cd2423e8048b1a732e"
+      },
+      {
+        "name": "template.html",
+        "bytes": 56383,
+        "sha256": "69f90d3f3cfd4c8504b81f2ed3bab7be7cd9a63d9bf117d0a3587635f33a4024"
+      },
+      {
+        "name": "LICENSE.txt",
+        "bytes": 2207,
+        "sha256": "e78e1424a8590d9f117e5e05896cd3d79f326fc9a3ed418bc2d32b33cfba1a30"
+      },
+      {
+        "name": "THIRD_PARTY_NOTICES.md",
+        "bytes": 1443,
+        "sha256": "b5605ce13003e992bcac4124c3f97d72a2fe0537fb27bc71bd439baba1fd4d97"
+      },
+      {
+        "name": "manifest.json",
+        "bytes": 396,
+        "sha256": "8d9509af354ec9436cc491371d28419ce02ac22438a4cdbb0c9da8487dd37a65"
+      }
+    ],
+    "player": {
+      "canvasVisible": true,
+      "greenFlagWorks": true,
+      "externalRequests": [],
+      "errors": []
+    },
+    "errors": [],
+    "health": {
+      "status": "ok",
+      "httpStatus": 200
+    }
+  },
+  "ok": true,
+  "completedAt": "2026-10-11T15:41:58.659Z",
+  "failedResponses": []
+}

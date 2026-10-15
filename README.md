@@ -118,13 +118,14 @@ Vite 开发服务器默认监听 5173，并把 /api 转发到 127.0.0.1:8000。�
 在仓库根目录执行：
 
 ~~~bat
-python -m venv backend\\.venv
-backend\\.venv\\Scripts\\python.exe -m pip install -e ".\\backend"
+cd backend-go
+go build -o bin\ai-scratch-web-backend.exe .\cmd\server
+cd ..
 npm --prefix frontend install
-if not exist backend\\.env copy backend\\.env.example backend\\.env
+if not exist backend-go\.env copy backend-go\.env.example backend-go\.env
 ~~~
 
-编辑 backend/.env，填入服务端密钥和需要覆盖的配置。backend/.env 由后端在 backend 工作目录中读取；不要把它复制到 frontend，也不要把密钥写入 Vite 环境变量或前端源代码。
+编辑 backend-go/.env，填入服务端密钥和需要覆盖的配置。backend-go/.env 由后端在 backend-go 工作目录中读取；不要把它复制到 frontend，也不要把密钥写入 Vite 环境变量或前端源代码。
 
 ### 一键启动
 
@@ -132,7 +133,7 @@ if not exist backend\\.env copy backend\\.env.example backend\\.env
 start-all.bat
 ~~~
 
-脚本会检查 backend/.venv 和 frontend/node_modules，按需启动：
+脚本会检查后端可执行文件和 frontend/node_modules，按需启动：
 
 - 后端：http://127.0.0.1:8000
 - 前端：http://127.0.0.1:5173
@@ -195,7 +196,7 @@ npm run dev
 | advanced | 高级 | DeepSeek | deepseek-v4.1-flash-expires-on-0910 | DEEPSEEK_API_KEY |
 | super | 超级 | GPT | gpt-5.6-sol | GPT_API_KEY |
 
-图片服务使用固定的 Sui Xiang 模型 gpt-image-2，不受 model_tier 选择影响。文本扩写固定使用 Agnes。
+图片服务支持 `agnes-image-2.5-flash`（默认，使用 AGNES_API_KEY）与 `gpt-image-2.5-sunburst`（使用 SUI_XIANG_API_KEY），不受 model_tier 选择影响。文本扩写固定使用 Agnes。
 
 ### 思考强度
 
@@ -213,7 +214,7 @@ DeepSeek 当前只接受 low、medium、high，因此 xhigh 和 max 在服务端
 
 ### 运行参数
 
-配置模板为 backend/.env.example。未设置时使用下表默认值：
+配置模板为 backend-go/.env.example。未设置时使用下表默认值：
 
 | 环境变量 | 默认值 | 说明 |
 | --- | ---: | --- |
@@ -548,7 +549,7 @@ python scripts\\generate-resource-contract.py --check
 
 以下内容需要用户在本机配置真实服务后亲自验证。建议每一项都观察浏览器界面、Network SSE、Scratch 舞台和导出文件，而不只看接口返回。
 
-1. 启动与健康检查：执行 start-all.bat，确认前端可打开；访问 /health，确认四个配置状态符合 backend/.env。
+1. 启动与健康检查：执行 start-all.bat，确认前端可打开；访问 /health，确认四个配置状态符合 backend-go/.env。
 2. 生图正常路径：分别使用四组尺寸、普通风格和自定义风格生成；确认返回 PNG、预览尺寸正确，并能导入舞台背景和角色。
 3. 生图异常路径：输入非法尺寸、缺少 custom_style、超长提示词和空提示词，确认请求被拒绝且页面能显示可理解的错误。
 4. 文本扩写：分别验证 scene 和 style，确认 content_delta 连续到达、完成后文本完整，失败时不会一直停留在加载状态。
@@ -576,3 +577,29 @@ python scripts\\generate-resource-contract.py --check
 - [无边画布功能设计](docs/产品设计/无边画布功能文档设计.md)
 - [产品开发计划](docs/产品设计/计划大纲.md)
 - [Scratch VM 研究资料](docs/参考资料/scratch-vm/README.md)
+
+## Go 后端与 nginx 部署
+
+后端由 Go 1:1 完整实现（`backend-go/`）。
+当前站点由系统 nginx 和 systemd 托管，入口为 `https://kfcv50.icu:9966/`。详见：
+
+- [backend-go/README.md](backend-go/README.md)：Go 重写的包结构、构建方式、与 Python 版本的差异。
+- [deploy/README.md](deploy/README.md)：nginx 配置、IPv6 双栈、防火墙与 systemd 安装。
+
+```bash
+# 更新当前站点的前端构建产物
+npm --prefix frontend run build
+sudo bash deploy/system/publish-frontend.sh
+bash deploy/scripts/status.sh
+
+# 浏览器端到端探测
+node deploy/scripts/probe-page.mjs https://kfcv50.icu:9966/
+```
+
+nginx 同时监听 `0.0.0.0:9966` 与 `[::]:9966`，`/api/`、`/health` 反代到
+`127.0.0.1:8000`，并把 Scratch 独立包请求的 `/chunks/*` 重写到
+`/assets/scratch/chunks/*`。放行防火墙端口需要 root：
+
+```bash
+sudo bash deploy/system/open-firewall.sh
+```

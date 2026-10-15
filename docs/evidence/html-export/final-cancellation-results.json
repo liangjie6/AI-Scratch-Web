@@ -1,0 +1,6 @@
+{
+  "cancelEnabled": true,
+  "closedBeforeReopening": true,
+  "noStaleDownloads": true,
+  "reopenedClean": true
+}

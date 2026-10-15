@@ -1,2 +1,10 @@
 import {defineConfig} from 'vitest/config';
-export default defineConfig({test:{include:['tests/**/*.test.ts'],exclude:['tests/e2e/**']}});
+import vue from '@vitejs/plugin-vue';
+
+export default defineConfig({
+  plugins: [vue()],
+  test: {
+    include: ['tests/**/*.test.ts'],
+    exclude: ['tests/e2e/**']
+  }
+});

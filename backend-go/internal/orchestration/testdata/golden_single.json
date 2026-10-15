@@ -1,0 +1,408 @@
+{
+ "fixtures": {
+  "requirements": "<requirements>{\"ready\": true, \"title\": \"Move sprite\", \"goal\": \"Move after green flag\", \"behavior_steps\": [\"Move ten steps\"], \"triggers\": [\"Green flag\"], \"controls\": [], \"success_criteria\": [\"Sprite moves\"], \"missing_questions\": []}</requirements>",
+  "plan": "<plan>{\"steps\": [\"Listen for the green flag\", \"Move ten steps\"]}</plan>",
+  "program": "<program target_index=\"0\"><metadata>{\"schema_version\": 1, \"summary\": \"Move when green flag is clicked\", \"remove_script_ids\": []}</metadata><shared_state>{\"variables\": [], \"lists\": [], \"broadcasts\": []}</shared_state><script index=\"0\" total=\"1\">{\"id\": \"script_new_1\", \"purpose\": \"Move\", \"x\": 20, \"y\": 20, \"blocks\": [{\"opcode\": \"event_whenflagclicked\", \"fields\": {}, \"inputs\": {}, \"substacks\": {}}, {\"opcode\": \"motion_movesteps\", \"fields\": {}, \"inputs\": {\"STEPS\": {\"kind\": \"number\", \"value\": 10}}, \"substacks\": {}}]}</script></program>"
+ },
+ "tagged": [
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": null,
+   "data": {
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:scratch-project:v0:2edefd75263eef80",
+     "target": "target:current-target:v0:1959fd255d4e6097"
+    },
+    "hits": {
+     "knowledge_base": false,
+     "project": false,
+     "target": false
+    },
+    "estimated_hit_rate": 0.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {
+    "ready": true,
+    "title": "Move sprite",
+    "goal": "Move after green flag",
+    "behavior_steps": [
+     "Move ten steps"
+    ],
+    "triggers": [
+     "Green flag"
+    ],
+    "controls": [],
+    "success_criteria": [
+     "Sprite moves"
+    ],
+    "missing_questions": []
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "steps": [
+     "Listen for the green flag",
+     "Move ten steps"
+    ]
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0
+   }
+  },
+  {
+   "type": "metadata",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "schema_version": 1,
+    "summary": "Move when green flag is clicked",
+    "remove_script_ids": [],
+    "procedures": []
+   }
+  },
+  {
+   "type": "shared_state",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "variables": [],
+    "lists": [],
+    "broadcasts": []
+   }
+  },
+  {
+   "type": "script_ready",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "index": 0,
+    "total": 1,
+    "script": {
+     "id": "script_new_1",
+     "purpose": "Move",
+     "x": 20,
+     "y": 20,
+     "blocks": [
+      {
+       "opcode": "event_whenflagclicked",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {},
+       "substacks": {}
+      },
+      {
+       "opcode": "motion_movesteps",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {
+        "STEPS": {
+         "kind": "number",
+         "value": 10.0
+        }
+       },
+       "substacks": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "script_count": 1,
+    "summary": "Move when green flag is clicked"
+   }
+  },
+  {
+   "type": "complete",
+   "request_id": "request-1",
+   "phase": null,
+   "data": {
+    "scope": "single_sprite",
+    "program_count": 1
+   }
+  }
+ ],
+ "segmented": [
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {
+    "segment": "requirements",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:scratch-project:v0:2edefd75263eef80",
+     "target": "target:current-target:v0:1959fd255d4e6097"
+    },
+    "hits": {
+     "knowledge_base": false,
+     "project": false,
+     "target": false
+    },
+    "estimated_hit_rate": 0.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {
+    "ready": true,
+    "title": "Move sprite",
+    "goal": "Move after green flag",
+    "behavior_steps": [
+     "Move ten steps"
+    ],
+    "triggers": [
+     "Green flag"
+    ],
+    "controls": [],
+    "success_criteria": [
+     "Sprite moves"
+    ],
+    "missing_questions": []
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "segment": "plan",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:scratch-project:v0:2edefd75263eef80",
+     "target": "target:current-target:v0:1959fd255d4e6097"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "steps": [
+     "Listen for the green flag",
+     "Move ten steps"
+    ]
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "segment": "program",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:scratch-project:v0:2edefd75263eef80",
+     "target": "target:current-target:v0:1959fd255d4e6097"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "metadata",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "schema_version": 1,
+    "summary": "Move when green flag is clicked",
+    "remove_script_ids": [],
+    "procedures": []
+   }
+  },
+  {
+   "type": "shared_state",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "variables": [],
+    "lists": [],
+    "broadcasts": []
+   }
+  },
+  {
+   "type": "script_ready",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "index": 0,
+    "total": 1,
+    "script": {
+     "id": "script_new_1",
+     "purpose": "Move",
+     "x": 20,
+     "y": 20,
+     "blocks": [
+      {
+       "opcode": "event_whenflagclicked",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {},
+       "substacks": {}
+      },
+      {
+       "opcode": "motion_movesteps",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {
+        "STEPS": {
+         "kind": "number",
+         "value": 10.0
+        }
+       },
+       "substacks": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "script_count": 1,
+    "summary": "Move when green flag is clicked"
+   }
+  },
+  {
+   "type": "complete",
+   "request_id": "request-1",
+   "phase": null,
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "scope": "single_sprite",
+    "program_count": 1,
+    "program": {
+     "schema_version": 1,
+     "summary": "Move when green flag is clicked",
+     "remove_script_ids": [],
+     "variables": [],
+     "lists": [],
+     "broadcasts": [],
+     "procedures": [],
+     "scripts": [
+      {
+       "id": "script_new_1",
+       "purpose": "Move",
+       "x": 20,
+       "y": 20,
+       "blocks": [
+        {
+         "opcode": "event_whenflagclicked",
+         "procedure_id": null,
+         "argument_id": null,
+         "fields": {},
+         "inputs": {},
+         "substacks": {}
+        },
+        {
+         "opcode": "motion_movesteps",
+         "procedure_id": null,
+         "argument_id": null,
+         "fields": {},
+         "inputs": {
+          "STEPS": {
+           "kind": "number",
+           "value": 10.0
+          }
+         },
+         "substacks": {}
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

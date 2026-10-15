@@ -1,0 +1,567 @@
+{
+ "fixtures": {
+  "requirements": "<requirements>{\"ready\": true, \"title\": \"Project\", \"goal\": \"Update the sprite\", \"behavior_steps\": [\"React\"], \"triggers\": [\"Green flag\"], \"controls\": [], \"success_criteria\": [\"Sprite moves\"], \"missing_questions\": []}</requirements>",
+  "task_spec": "<task_spec>{\"schema_version\": 2, \"title\": \"Move sprite\", \"goal\": \"Move after green flag\", \"assumptions\": [], \"entities\": [{\"entity_id\": \"sprite_1\", \"role\": \"sprite\", \"description\": \"Main sprite\", \"existing_target_ref\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}}], \"state\": [], \"behaviors\": [{\"behavior_id\": \"behavior_1\", \"owner_entity_id\": \"sprite_1\", \"trigger\": {\"kind\": \"green_flag\"}, \"conditions\": [], \"actions\": [{\"kind\": \"move_steps\", \"steps\": {\"kind\": \"literal\", \"value\": 10}}], \"reads\": [], \"writes\": []}], \"success_criteria\": [{\"criterion_id\": \"criterion_1\", \"description\": \"Sprite moves\", \"related_behavior_ids\": [\"behavior_1\"], \"priority\": \"must\", \"verification\": \"manual\"}], \"unsupported\": []}</task_spec>",
+  "blueprint": "<blueprint>{\"schema_version\": 2, \"task_spec_hash\": \"5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06\", \"asset_needs\": [], \"entity_bindings\": [{\"entity_id\": \"sprite_1\", \"resolution\": {\"kind\": \"existing_target\", \"target_ref\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}}}], \"state_plan\": [], \"behavior_graph\": [{\"behavior_id\": \"behavior_1\", \"owner_entity_id\": \"sprite_1\", \"depends_on\": [], \"produces_broadcasts\": [], \"consumes_broadcasts\": []}], \"program_jobs\": [{\"job_id\": \"job_1\", \"owner_entity_id\": \"sprite_1\", \"mode\": \"append\", \"behavior_ids\": [\"behavior_1\"]}], \"acceptance_tests\": []}</blueprint>",
+  "plan": "<plan>{\"steps\": [\"Update sprite\"]}</plan>",
+  "manifest": "<manifest>{\"schema_version\": 3, \"scope\": \"project\", \"summary\": \"Update sprite\", \"resource_ops\": [], \"program_targets\": [{\"job_id\": \"job_1\", \"behavior_ids\": [\"behavior_1\"], \"owner_entity_id\": \"sprite_1\", \"target\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}, \"mode\": \"append\", \"intent\": \"Move the sprite\"}], \"shared_state\": {\"variables\": [], \"lists\": [], \"broadcasts\": []}}</manifest>",
+  "program": "<program target_index=\"0\"><metadata>{\"schema_version\": 1, \"summary\": \"Move when green flag is clicked\", \"remove_script_ids\": []}</metadata><shared_state>{\"variables\": [], \"lists\": [], \"broadcasts\": []}</shared_state><script index=\"0\" total=\"1\">{\"id\": \"script_new_1\", \"purpose\": \"Move\", \"x\": 20, \"y\": 20, \"blocks\": [{\"opcode\": \"event_whenflagclicked\", \"fields\": {}, \"inputs\": {}, \"substacks\": {}}, {\"opcode\": \"motion_movesteps\", \"fields\": {}, \"inputs\": {\"STEPS\": {\"kind\": \"number\", \"value\": 10}}, \"substacks\": {}}]}</script></program>"
+ },
+ "events": [
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {
+    "segment": "requirements",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": false,
+     "project": false,
+     "target": false
+    },
+    "estimated_hit_rate": 0.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "requirements",
+   "data": {
+    "ready": true,
+    "title": "Project",
+    "goal": "Update the sprite",
+    "behavior_steps": [
+     "React"
+    ],
+    "triggers": [
+     "Green flag"
+    ],
+    "controls": [],
+    "success_criteria": [
+     "Sprite moves"
+    ],
+    "missing_questions": []
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "task_spec",
+   "data": {
+    "segment": "task_spec",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "task_spec",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "task_spec",
+   "data": {
+    "task_spec": {
+     "schema_version": 2,
+     "title": "Move sprite",
+     "goal": "Move after green flag",
+     "assumptions": [],
+     "entities": [
+      {
+       "entity_id": "sprite_1",
+       "role": "sprite",
+       "description": "Main sprite",
+       "existing_target_ref": {
+        "kind": "existing_sprite",
+        "name": "Sprite1"
+       }
+      }
+     ],
+     "state": [],
+     "behaviors": [
+      {
+       "behavior_id": "behavior_1",
+       "owner_entity_id": "sprite_1",
+       "trigger": {
+        "kind": "green_flag",
+        "key": null,
+        "state_id": null,
+        "asset_purpose": null,
+        "seconds": null
+       },
+       "conditions": [],
+       "actions": [
+        {
+         "kind": "move_steps",
+         "steps": {
+          "kind": "literal",
+          "value": 10.0,
+          "state_id": null,
+          "entity_id": null,
+          "attribute": null,
+          "min": null,
+          "max": null
+         },
+         "axis": null,
+         "value": null,
+         "delta": null,
+         "entity_id": null,
+         "degrees": null,
+         "state_id": null,
+         "asset_kind": null,
+         "purpose": null,
+         "wait": null,
+         "visible": null,
+         "text": null,
+         "seconds": null,
+         "question": null,
+         "mode": null,
+         "count": null,
+         "until": null,
+         "actions": null,
+         "scope": null
+        }
+       ],
+       "reads": [],
+       "writes": []
+      }
+     ],
+     "success_criteria": [
+      {
+       "criterion_id": "criterion_1",
+       "description": "Sprite moves",
+       "related_behavior_ids": [
+        "behavior_1"
+       ],
+       "priority": "must",
+       "verification": "manual"
+      }
+     ],
+     "unsupported": []
+    },
+    "task_spec_hash": "5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06"
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "blueprint",
+   "data": {
+    "segment": "blueprint",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "blueprint",
+   "data": {}
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "blueprint",
+   "data": {
+    "blueprint": {
+     "schema_version": 2,
+     "task_spec_hash": "5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06",
+     "asset_needs": [],
+     "entity_bindings": [
+      {
+       "entity_id": "sprite_1",
+       "resolution": {
+        "kind": "existing_target",
+        "target_ref": {
+         "kind": "existing_sprite",
+         "name": "Sprite1"
+        },
+        "need_id": null
+       }
+      }
+     ],
+     "state_plan": [],
+     "behavior_graph": [
+      {
+       "behavior_id": "behavior_1",
+       "owner_entity_id": "sprite_1",
+       "depends_on": [],
+       "produces_broadcasts": [],
+       "consumes_broadcasts": []
+      }
+     ],
+     "program_jobs": [
+      {
+       "job_id": "job_1",
+       "owner_entity_id": "sprite_1",
+       "mode": "append",
+       "behavior_ids": [
+        "behavior_1"
+       ]
+      }
+     ],
+     "acceptance_tests": []
+    },
+    "task_spec_hash": "5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06",
+    "blueprint_hash": "2f63ec39b426a8f8f37ec1a3673cd1023ead2b6388f9e4754e61f75521214893"
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "segment": "plan",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {}
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "segment": "manifest",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "plan",
+   "data": {
+    "steps": [
+     "Update sprite"
+    ],
+    "task_spec": {
+     "schema_version": 2,
+     "title": "Move sprite",
+     "goal": "Move after green flag",
+     "assumptions": [],
+     "entities": [
+      {
+       "entity_id": "sprite_1",
+       "role": "sprite",
+       "description": "Main sprite",
+       "existing_target_ref": {
+        "kind": "existing_sprite",
+        "name": "Sprite1"
+       }
+      }
+     ],
+     "state": [],
+     "behaviors": [
+      {
+       "behavior_id": "behavior_1",
+       "owner_entity_id": "sprite_1",
+       "trigger": {
+        "kind": "green_flag",
+        "key": null,
+        "state_id": null,
+        "asset_purpose": null,
+        "seconds": null
+       },
+       "conditions": [],
+       "actions": [
+        {
+         "kind": "move_steps",
+         "steps": {
+          "kind": "literal",
+          "value": 10.0,
+          "state_id": null,
+          "entity_id": null,
+          "attribute": null,
+          "min": null,
+          "max": null
+         },
+         "axis": null,
+         "value": null,
+         "delta": null,
+         "entity_id": null,
+         "degrees": null,
+         "state_id": null,
+         "asset_kind": null,
+         "purpose": null,
+         "wait": null,
+         "visible": null,
+         "text": null,
+         "seconds": null,
+         "question": null,
+         "mode": null,
+         "count": null,
+         "until": null,
+         "actions": null,
+         "scope": null
+        }
+       ],
+       "reads": [],
+       "writes": []
+      }
+     ],
+     "success_criteria": [
+      {
+       "criterion_id": "criterion_1",
+       "description": "Sprite moves",
+       "related_behavior_ids": [
+        "behavior_1"
+       ],
+       "priority": "must",
+       "verification": "manual"
+      }
+     ],
+     "unsupported": []
+    },
+    "task_spec_hash": "5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06",
+    "blueprint": {
+     "schema_version": 2,
+     "task_spec_hash": "5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06",
+     "asset_needs": [],
+     "entity_bindings": [
+      {
+       "entity_id": "sprite_1",
+       "resolution": {
+        "kind": "existing_target",
+        "target_ref": {
+         "kind": "existing_sprite",
+         "name": "Sprite1"
+        },
+        "need_id": null
+       }
+      }
+     ],
+     "state_plan": [],
+     "behavior_graph": [
+      {
+       "behavior_id": "behavior_1",
+       "owner_entity_id": "sprite_1",
+       "depends_on": [],
+       "produces_broadcasts": [],
+       "consumes_broadcasts": []
+      }
+     ],
+     "program_jobs": [
+      {
+       "job_id": "job_1",
+       "owner_entity_id": "sprite_1",
+       "mode": "append",
+       "behavior_ids": [
+        "behavior_1"
+       ]
+      }
+     ],
+     "acceptance_tests": []
+    },
+    "blueprint_hash": "2f63ec39b426a8f8f37ec1a3673cd1023ead2b6388f9e4754e61f75521214893",
+    "manifest": {
+     "schema_version": 3,
+     "scope": "project",
+     "summary": "Update sprite",
+     "assumptions": [],
+     "required_extensions": [],
+     "resource_ops": [],
+     "local_state": [],
+     "program_targets": [
+      {
+       "job_id": "job_1",
+       "behavior_ids": [
+        "behavior_1"
+       ],
+       "owner_entity_id": "sprite_1",
+       "target": {
+        "kind": "existing_sprite",
+        "name": "Sprite1",
+        "op_id": null
+       },
+       "mode": "append",
+       "intent": "Move the sprite"
+      }
+     ],
+     "shared_state": {
+      "variables": [],
+      "lists": [],
+      "broadcasts": []
+     }
+    },
+    "normalizations": []
+   }
+  },
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "segment": "program",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:b64db3bd72193be4",
+     "target": "target:sprite-1:v3:70beeb866f9fff5c"
+    },
+    "hits": {
+     "knowledge_base": true,
+     "project": true,
+     "target": true
+    },
+    "estimated_hit_rate": 1.0
+   }
+  },
+  {
+   "type": "metadata",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "schema_version": 1,
+    "summary": "Move when green flag is clicked",
+    "remove_script_ids": [],
+    "procedures": []
+   }
+  },
+  {
+   "type": "shared_state",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "variables": [],
+    "lists": [],
+    "broadcasts": []
+   }
+  },
+  {
+   "type": "script_ready",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "index": 0,
+    "total": 1,
+    "script": {
+     "id": "script_new_1",
+     "purpose": "Move",
+     "x": 20,
+     "y": 20,
+     "blocks": [
+      {
+       "opcode": "event_whenflagclicked",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {},
+       "substacks": {}
+      },
+      {
+       "opcode": "motion_movesteps",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {
+        "STEPS": {
+         "kind": "number",
+         "value": 10.0
+        }
+       },
+       "substacks": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "script_count": 1,
+    "summary": "Move when green flag is clicked"
+   }
+  },
+  {
+   "type": "complete",
+   "request_id": "request-1",
+   "phase": null,
+   "data": {
+    "scope": "project",
+    "program_count": 1
+   }
+  }
+ ]
+}

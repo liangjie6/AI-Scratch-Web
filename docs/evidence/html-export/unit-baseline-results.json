@@ -1,0 +1,33 @@
+{
+  "originalFailedTests": 24,
+  "finalFailedTests": 24,
+  "newFailures": [],
+  "resolvedOriginalFailures": [],
+  "originalConfiguration": "Original Node environment; export test files excluded",
+  "failureNames": [
+    "tests/generation-runner.test.ts > unified generation transaction > cleans generated assets when the outer commit rolls back",
+    "tests/generation-runner.test.ts > unified generation transaction > commits all project target programs under the same outer backup",
+    "tests/generation-runner.test.ts > unified generation transaction > commits one prepared program beside existing code",
+    "tests/generation-runner.test.ts > unified generation transaction > does not restore a stale backup after a program revision conflict",
+    "tests/generation-runner.test.ts > unified generation transaction > keeps generated assets when restoring the project backup fails",
+    "tests/generation-runner.test.ts > unified generation transaction > leaves a partial resource operation without stale backup restore on conflict",
+    "tests/generation-runner.test.ts > unified generation transaction > reports a lost transaction lock separately from backup restore failure",
+    "tests/generation-runner.test.ts > unified generation transaction > reports both a lost transaction lock and a failed backup restore",
+    "tests/generation-runner.test.ts > unified generation transaction > restores the single outer backup when program commit fails",
+    "tests/generation-runner.test.ts > unified generation transaction > still restores the durable backup when the transaction lock is invalidated",
+    "tests/generation-runner.test.ts > unified generation transaction > undoes a completed unified commit only at its recorded revision",
+    "tests/opcode-catalog-contract.test.ts > AI blocks opcode contract > keeps the backend whitelist identical to the frontend compiler catalog",
+    "tests/program-compiler.test.ts > validateProgramIR > rejects unknown, extension, and procedure opcodes",
+    "tests/project-plan.test.ts > ProjectManifest contract > accepts a backdrop operation in project scope",
+    "tests/project-plan.test.ts > ProjectManifest contract > accepts a project costume operation",
+    "tests/project-resource-preparer.test.ts > ProjectManifest preparation > attempts every generated-asset deletion when cleanup partially fails",
+    "tests/project-resource-preparer.test.ts > ProjectManifest preparation > removes generated assets when preparation fails after a successful operation",
+    "tests/project-resource-preparer.test.ts > ProjectManifest preparation > resolves Scratch library search terms without a manual selection",
+    "tests/project-resource-preparer.test.ts > ProjectManifest preparation > waits for slower workers before cleaning generated assets after a sibling failure",
+    "tests/project-resource-runner.test.ts > project resource outer transaction > applies resources without creating a nested backup",
+    "tests/project-resource-runner.test.ts > project resource outer transaction > propagates resource errors to the outer transaction owner",
+    "tests/resource-contract-parity.test.ts > generated resource contract > exposes only the two supported source kinds",
+    "tests/resource-contract-parity.test.ts > generated resource contract > exposes the v2 operation matrix without legacy sprite source fields",
+    "tests/target-context.test.ts > AI target snapshot > exposes native script refs but protects custom and extension scripts"
+  ]
+}

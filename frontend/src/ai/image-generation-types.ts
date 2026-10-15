@@ -1,5 +1,13 @@
 export type ImageTarget = 'backdrop' | 'sprite';
 export type ImageStyle = 'cartoon' | 'scratch' | 'paper-cut' | 'pixel' | 'watercolor' | 'custom';
+export type ImageModel = 'agnes-image-2.5-flash' | 'gpt-image-2.5-sunburst';
+
+export const DEFAULT_IMAGE_MODEL: ImageModel = 'agnes-image-2.5-flash';
+
+export const IMAGE_MODELS: Array<{value: ImageModel; label: string}> = [
+  {value: 'agnes-image-2.5-flash', label: 'agnes-image-2.5-flash'},
+  {value: 'gpt-image-2.5-sunburst', label: 'gpt-image-2.5-sunburst'}
+];
 
 export interface CanvasSize {
   width: number;
@@ -15,6 +23,7 @@ export interface ImageGenerationRequest {
   height: number;
   target: ImageTarget;
   sheet_layout: '1x1';
+  model?: ImageModel;
 }
 
 export interface SheetLayout {

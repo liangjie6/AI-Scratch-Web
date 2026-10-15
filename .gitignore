@@ -17,3 +17,12 @@ backend/data/
 *.egg-info/
 *.bak
 
+# Go backend build output and local deployment state.
+backend-go/bin/
+backend-go/data/
+*.sqlite3*
+deploy/run/
+deploy/nginx/logs/
+deploy/nginx/temp/
+deploy/nginx/nginx.conf
+deploy/nginx/certs/

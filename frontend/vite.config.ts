@@ -2,16 +2,16 @@ import {defineConfig, type Plugin} from 'vite';
 import vue from '@vitejs/plugin-vue';
 
 // The standalone Scratch bundle was built with webpack's public path set to
-// "/", so its lazy chunks are requested from /chunks/*. Keep the bundled
-// assets under /assets/scratch and translate only that exact request prefix.
-function scratchChunkRoute(): Plugin {
+// "/", so its lazy chunks and UI assets use root-relative paths. Keep the
+// bundled files under /assets/scratch and translate their exact request prefixes.
+function scratchAssetRoutes(): Plugin {
   const rewrite = (request: {url?: string}) => {
-    if (request.url?.startsWith('/chunks/')) {
+    if (request.url?.startsWith('/chunks/') || request.url?.startsWith('/static/assets/')) {
       request.url = '/assets/scratch' + request.url;
     }
   };
   return {
-    name: 'scratch-chunk-route',
+    name: 'scratch-asset-routes',
     configureServer(server) {
       server.middlewares.use((request, _response, next) => {
         rewrite(request);
@@ -28,7 +28,7 @@ function scratchChunkRoute(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [scratchChunkRoute(), vue()],
+  plugins: [scratchAssetRoutes(), vue()],
   server: {
     host: '0.0.0.0',
     port: 5173,

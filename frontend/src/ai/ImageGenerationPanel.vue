@@ -6,8 +6,11 @@ import {generateImage} from './image-generation-api';
 import {streamTextExpansion} from './text-expansion-api';
 import {
   CANVAS_SIZES,
+  DEFAULT_IMAGE_MODEL,
+  IMAGE_MODELS,
   IMAGE_STYLES,
   type ImageGenerationResponse,
+  type ImageModel,
   type ImageStyle,
   type ImageTarget
 } from './image-generation-types';
@@ -20,6 +23,7 @@ const emit = defineEmits<{
   openCanvas: [result: ImageGenerationResponse];
   assetSaved: [asset: GeneratedAsset];
 }>();
+const model = ref<ImageModel>(DEFAULT_IMAGE_MODEL);
 const prompt = ref('');
 const size = ref(CANVAS_SIZES[0]);
 const style = ref<ImageStyle>('cartoon');
@@ -65,7 +69,8 @@ async function submit() {
       width: selectedSize.width,
       height: selectedSize.height,
       target: target.value,
-      sheet_layout: '1x1' as const
+      sheet_layout: '1x1' as const,
+      model: model.value
     };
     const generated = await generateImage(request, requestController.signal);
     if (controller !== requestController) return;
@@ -168,6 +173,13 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <p v-if="expansionError?.target === 'prompt'" class="expansion-error" role="alert">{{ expansionError.message }}</p>
+
+      <div class="image-model-field">
+        <label class="field-label" for="image-model">模型选择</label>
+        <select id="image-model" v-model="model" class="field-control" :disabled="isBusy">
+          <option v-for="option in IMAGE_MODELS" :key="option.value" :value="option.value">{{ option.label }}</option>
+        </select>
+      </div>
 
       <div class="field-grid">
         <label class="field-group">

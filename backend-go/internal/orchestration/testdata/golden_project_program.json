@@ -1,0 +1,177 @@
+{
+ "fixtures": {
+  "requirements": "<requirements>{\"ready\": true, \"title\": \"Project\", \"goal\": \"Update the sprite\", \"behavior_steps\": [\"React\"], \"triggers\": [\"Green flag\"], \"controls\": [], \"success_criteria\": [\"Sprite moves\"], \"missing_questions\": []}</requirements>",
+  "task_spec": "<task_spec>{\"schema_version\": 2, \"title\": \"Move sprite\", \"goal\": \"Move after green flag\", \"assumptions\": [], \"entities\": [{\"entity_id\": \"sprite_1\", \"role\": \"sprite\", \"description\": \"Main sprite\", \"existing_target_ref\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}}], \"state\": [], \"behaviors\": [{\"behavior_id\": \"behavior_1\", \"owner_entity_id\": \"sprite_1\", \"trigger\": {\"kind\": \"green_flag\"}, \"conditions\": [], \"actions\": [{\"kind\": \"move_steps\", \"steps\": {\"kind\": \"literal\", \"value\": 10}}], \"reads\": [], \"writes\": []}], \"success_criteria\": [{\"criterion_id\": \"criterion_1\", \"description\": \"Sprite moves\", \"related_behavior_ids\": [\"behavior_1\"], \"priority\": \"must\", \"verification\": \"manual\"}], \"unsupported\": []}</task_spec>",
+  "blueprint": "<blueprint>{\"schema_version\": 2, \"task_spec_hash\": \"5d7b8ed664d5181093638092a3457748ffa838ebe2fa24e8493fe760988abb06\", \"asset_needs\": [], \"entity_bindings\": [{\"entity_id\": \"sprite_1\", \"resolution\": {\"kind\": \"existing_target\", \"target_ref\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}}}], \"state_plan\": [], \"behavior_graph\": [{\"behavior_id\": \"behavior_1\", \"owner_entity_id\": \"sprite_1\", \"depends_on\": [], \"produces_broadcasts\": [], \"consumes_broadcasts\": []}], \"program_jobs\": [{\"job_id\": \"job_1\", \"owner_entity_id\": \"sprite_1\", \"mode\": \"append\", \"behavior_ids\": [\"behavior_1\"]}], \"acceptance_tests\": []}</blueprint>",
+  "plan": "<plan>{\"steps\": [\"Update sprite\"]}</plan>",
+  "manifest": "<manifest>{\"schema_version\": 3, \"scope\": \"project\", \"summary\": \"Update sprite\", \"resource_ops\": [], \"program_targets\": [{\"job_id\": \"job_1\", \"behavior_ids\": [\"behavior_1\"], \"owner_entity_id\": \"sprite_1\", \"target\": {\"kind\": \"existing_sprite\", \"name\": \"Sprite1\"}, \"mode\": \"append\", \"intent\": \"Move the sprite\"}], \"shared_state\": {\"variables\": [], \"lists\": [], \"broadcasts\": []}}</manifest>",
+  "program": "<program target_index=\"0\"><metadata>{\"schema_version\": 1, \"summary\": \"Move when green flag is clicked\", \"remove_script_ids\": []}</metadata><shared_state>{\"variables\": [], \"lists\": [], \"broadcasts\": []}</shared_state><script index=\"0\" total=\"1\">{\"id\": \"script_new_1\", \"purpose\": \"Move\", \"x\": 20, \"y\": 20, \"blocks\": [{\"opcode\": \"event_whenflagclicked\", \"fields\": {}, \"inputs\": {}, \"substacks\": {}}, {\"opcode\": \"motion_movesteps\", \"fields\": {}, \"inputs\": {\"STEPS\": {\"kind\": \"number\", \"value\": 10}}, \"substacks\": {}}]}</script></program>"
+ },
+ "events": [
+  {
+   "type": "phase_start",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1
+   }
+  },
+  {
+   "type": "cache_hit",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "segment": "program",
+    "keys": {
+     "knowledge_base": "knowledge:scratch-ai-v2:extensions=",
+     "project": "project:project-1:v4:dc4ee864bd1c939c",
+     "target": "target:sprite-1:v3:0449ef3fc1fbeb68"
+    },
+    "hits": {
+     "knowledge_base": false,
+     "project": false,
+     "target": false
+    },
+    "estimated_hit_rate": 0.0
+   }
+  },
+  {
+   "type": "metadata",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "schema_version": 1,
+    "summary": "Move when green flag is clicked",
+    "remove_script_ids": [],
+    "procedures": []
+   }
+  },
+  {
+   "type": "shared_state",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "variables": [],
+    "lists": [],
+    "broadcasts": []
+   }
+  },
+  {
+   "type": "script_ready",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "index": 0,
+    "total": 1,
+    "script": {
+     "id": "script_new_1",
+     "purpose": "Move",
+     "x": 20,
+     "y": 20,
+     "blocks": [
+      {
+       "opcode": "event_whenflagclicked",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {},
+       "substacks": {}
+      },
+      {
+       "opcode": "motion_movesteps",
+       "procedure_id": null,
+       "argument_id": null,
+       "fields": {},
+       "inputs": {
+        "STEPS": {
+         "kind": "number",
+         "value": 10.0
+        }
+       },
+       "substacks": {}
+      }
+     ]
+    }
+   }
+  },
+  {
+   "type": "phase_complete",
+   "request_id": "request-1",
+   "phase": "program",
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "script_count": 1,
+    "summary": "Move when green flag is clicked"
+   }
+  },
+  {
+   "type": "complete",
+   "request_id": "request-1",
+   "phase": null,
+   "data": {
+    "target_index": 0,
+    "target_name": "Sprite1",
+    "target_count": 1,
+    "scope": "project",
+    "output_contract": "project_program",
+    "program_count": 1,
+    "program": {
+     "schema_version": 1,
+     "summary": "Move when green flag is clicked",
+     "remove_script_ids": [],
+     "variables": [],
+     "lists": [],
+     "broadcasts": [],
+     "procedures": [],
+     "scripts": [
+      {
+       "id": "script_new_1",
+       "purpose": "Move",
+       "x": 20,
+       "y": 20,
+       "blocks": [
+        {
+         "opcode": "event_whenflagclicked",
+         "procedure_id": null,
+         "argument_id": null,
+         "fields": {},
+         "inputs": {},
+         "substacks": {}
+        },
+        {
+         "opcode": "motion_movesteps",
+         "procedure_id": null,
+         "argument_id": null,
+         "fields": {},
+         "inputs": {
+          "STEPS": {
+           "kind": "number",
+           "value": 10.0
+          }
+         },
+         "substacks": {}
+        }
+       ]
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

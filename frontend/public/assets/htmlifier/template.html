@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta property=”og:type” content=”website” />
+    <meta property=”og:title” content=”{TITLE}”>
+    <meta property=”og:description” content="{DESCRIPTION}">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{TITLE}</title>
+    <style media="screen">
+      html, body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color:#333;
+        font-size: 0;
+        font-family: -apple-system, BlinkMacSystemFont,"Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB", "Heiti SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;
+        overflow: hidden;
+      }
+      a:link,
+      a:visited {
+        text-decoration: none;
+      }
+
+      a:hover,
+      a:active {
+        background-color: hsla(215, 100%, 65%, 0.35) !important;
+      }
+      #wrapper {
+        display: block;
+        position: relative;
+        % no-cursor % cursor: none; % /no-cursor %
+      }
+      .loading #wrapper {
+        visibility: hidden;
+      }
+      #monitors {
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+      % stretch %
+      #wrapper {
+        width: 100vw;
+        height: 100vh;
+      }
+      % /stretch %
+      % fit %
+      #wrapper {
+        background: hsla(215, 100%, 95%, 1);
+        width: 100vw;
+        /* height: {HEIGHT/WIDTH%}vw; */
+      }
+      @media (min-aspect-ratio: {PROJECT_RATIO}) {
+        #wrapper {
+          height: calc(100vh - 50px);
+          width: calc({WIDTH/HEIGHT%}vh - 50px);
+          margin-bottom: 50px;
+        }
+      }
+      % /fit %
+      #stage {
+        width: 100%;
+        height: 100%;
+      }
+      % loading-progress %
+      #loading-progress {
+        color: #0ff;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        font-size: 16px;
+      }
+      % /loading-progress %
+      % loading-image %
+      #loading-image {
+        position: fixed;
+        max-width: 100%;
+        max-height: 100%;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        margin: auto;
+      }
+      % /loading-image %
+      % fullscreen %
+      .fullscreen #fullscreen-btn {
+        background-image: url('data:image/svg+xml,<%3Fxml%20version%3D"1.0"%20encoding%3D"UTF-8"%20standalone%3D"no"%3F>%20<svg%20viewBox%3D"0%200%2020%2020"%20version%3D"1.1"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20xmlns%3Axlink%3D"http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink">%20<title>un-fullscreen<%2Ftitle>%20<desc>Created%20with%20Sketch.<%2Fdesc>%20<defs><%2Fdefs>%20<g%20id%3D"Page-1"%20stroke%3D"none"%20stroke-width%3D"1"%20fill%3D"none"%20fill-rule%3D"evenodd">%20<g%20id%3D"un-fullscreen"%20fill%3D"%23575E75">%20<g%20transform%3D"translate(2.000000%2C%202.000000)">%20<path%20d%3D"M15.338093%2C4.35035264%20L14.4488644%2C3.45883199%20L11.3148351%2C5.83342741%20C10.9571379%2C6.10825708%2010.4389784%2C6.03619808%2010.1648553%2C5.66752413%20C9.94254816%2C5.37090918%209.94756261%2C4.96201625%2010.1648553%2C4.6821592%20L12.5333457%2C1.54005165%20L11.6658464%2C0.668640487%20C11.4167955%2C0.418947674%2011.5939727%2C0.00502737208%2011.9349551%2C0.00502737208%20L15.6122161%2C0%20C15.8244944%2C0.00502737208%2016%2C0.180985395%2016%2C0.388783441%20L16%2C4.08055034%20C16%2C4.42241164%2015.5821294%2C4.59501808%2015.338093%2C4.35035264"%20id%3D"Fill-1"%20transform%3D"translate(13.000000%2C%203.000000)%20rotate(180.000000)%20translate(-13.000000%2C%20-3.000000)%20"><%2Fpath>%20<path%20d%3D"M0.661906989%2C11.6492883%20L1.55113557%2C12.5408826%20L4.68516488%2C10.1660912%20C5.04286209%2C9.89123882%205.5610216%2C9.9649797%205.8351447%2C10.3320081%20C6.05745184%2C10.6286476%206.05243739%2C11.0375743%205.8351447%2C11.3174544%20L3.4649828%2C14.4598213%20L4.33415359%2C15.3313043%20C4.58320446%2C15.5810178%204.40602733%2C15.9949722%204.06504494%2C15.9949722%20L0.387783893%2C16%20C0.175505641%2C15.9949722%200%2C15.8189997%200%2C15.6111845%20L0%2C11.9191129%20C0%2C11.5772234%200.417870574%2C11.4046027%200.661906989%2C11.6492883"%20id%3D"Fill-3"%20transform%3D"translate(3.000000%2C%2013.000000)%20rotate(180.000000)%20translate(-3.000000%2C%20-13.000000)%20"><%2Fpath>%20<path%20d%3D"M0.661906989%2C4.35035264%20L1.55113557%2C3.45883199%20L4.68516488%2C5.83342741%20C5.04286209%2C6.10825708%205.5610216%2C6.03619808%205.8351447%2C5.66752413%20C6.05745184%2C5.37090918%206.05243739%2C4.96201625%205.8351447%2C4.6821592%20L3.4649828%2C1.54005165%20L4.33415359%2C0.668640487%20C4.58320446%2C0.418947674%204.40602733%2C0.00502737208%204.06504494%2C0.00502737208%20L0.387783893%2C0%20C0.175505641%2C0.00502737208%200%2C0.180985395%200%2C0.388783441%20L0%2C4.08055034%20C0%2C4.42241164%200.417870574%2C4.59501808%200.661906989%2C4.35035264"%20id%3D"Fill-5"%20transform%3D"translate(3.000000%2C%203.000000)%20rotate(180.000000)%20translate(-3.000000%2C%20-3.000000)%20"><%2Fpath>%20<path%20d%3D"M15.338093%2C11.6492883%20L14.4488644%2C12.5408826%20L11.3148351%2C10.1660912%20C10.9571379%2C9.89123882%2010.4389784%2C9.9649797%2010.1648553%2C10.3320081%20C9.94254816%2C10.6286476%209.94756261%2C11.0375743%2010.1648553%2C11.3174544%20L12.5333457%2C14.4598213%20L11.6658464%2C15.3313043%20C11.4167955%2C15.5810178%2011.5939727%2C15.9949722%2011.9349551%2C15.9949722%20L15.6122161%2C16%20C15.8244944%2C15.9949722%2016%2C15.8189997%2016%2C15.6111845%20L16%2C11.9191129%20C16%2C11.5772234%2015.5821294%2C11.4046027%2015.338093%2C11.6492883"%20id%3D"Fill-7"%20transform%3D"translate(13.000000%2C%2013.000000)%20rotate(180.000000)%20translate(-13.000000%2C%20-13.000000)%20"><%2Fpath>%20<%2Fg>%20<%2Fg>%20<%2Fg>%20<%2Fsvg>');
+      }
+      % /fullscreen %
+      .monitor {
+        position: absolute;
+        border: 1px solid transparent;
+        % monitor-box %
+        border-color: rgba(0, 0, 0, 0.2);
+        background-color: rgba(0, 0, 0, 0.3);
+        % /monitor-box %
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        overflow: hidden;
+        padding: 3px;
+        color: {MONITOR_TEXT};
+        color: inherit;
+        white-space: pre;
+        background-color: hsla(215, 100%, 95%, 1);
+      }
+      .monitor-label {
+        margin: 0 5px;
+        font-weight: bold;
+      }
+      .monitor-value {
+        display: inline-block;
+        vertical-align: top;
+        min-width: 34px;
+        text-align: center;
+        border-radius: 0.25rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        user-select: text;
+        transform: translateZ(0);
+      }
+      .default .monitor-value, .slider .monitor-value {
+        % monitor-box % background-color: rgba(0, 0, 0, 0.5); % /monitor-box %
+        background: rgb(255, 140, 26);
+        color: white;
+        margin: 0 5px;
+        padding: 1px 3px;
+      }
+      .large {
+        % monitor-box % background-color: rgba(0, 0, 0, 0.6); % /monitor-box %
+        background: rgb(255, 140, 26);
+        color: white;
+        padding: 0.1rem 0.25rem;
+        min-width: 3rem;
+      }
+      .large .monitor-label {
+        display: none;
+      }
+      .large .monitor-value {
+        font-size: 1rem;
+        width: 100%;
+      }
+      .list {
+        padding: 0;
+        overflow: auto;
+        overflow-x: hidden;
+      }
+      .list .monitor-label {
+        text-align: center;
+        padding: 3px;
+        width: 100%;
+        display: block;
+        margin: 0;
+        box-sizing: border-box;
+        white-space: pre-wrap;
+        background: white;
+      }
+      .list .monitor-value {
+        display: block;
+      }
+      .row {
+        margin: 2px 5px;
+        transform: translateZ(0);
+        text-align: left;
+        border-radius: 0.25rem;
+        border: 1px solid transparent;
+        % monitor-box %
+        border-color: rgba(0, 0, 0, 0.2);
+        /* background-color: rgba(0, 0, 0, 0.5); */
+        % /monitor-box %
+        height: 20px;
+        line-height: 20px;
+        padding: 0 5px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        background: rgb(252, 102, 44);
+        color: white;
+      }
+      % monitor-colour %
+      .default .monitor-value, .slider .monitor-value, .large, .row {
+        background-color: {COLOUR};
+      }
+      % /monitor-colour %
+      .slider input {
+        display: block;
+        width: 100%;
+        transform: translateZ(0);
+      }
+      #asking-box {
+        display: none;
+        position: absolute;
+        left: 0.5rem;
+        bottom: 10px;
+        right: 0.5rem;
+        background-color: white;
+        border: 1px solid hsla(0, 0%, 0%, 0.15);
+        border-radius: 0.5rem;
+        padding: 1rem;
+      }
+      .asking #asking-box {
+        display: block;
+      }
+      #question {
+        display: block;
+        margin: 0;
+        font-size: 14px;
+        font-weight: bold;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: hsla(225, 15%, 40%, 1);
+        padding-bottom: 0.5rem;
+      }
+      .answer-wrapper {
+        position: relative;
+      }
+      .answer-wrapper:after{
+      }
+      #answer {
+        border: none;
+        background: none;
+        width: 100%;
+        font: inherit;
+        font-size: 16px;
+        box-sizing: border-box;
+        height: 2rem;
+        border-radius: 2rem;;
+        padding: 0 2rem 0 .75rem;
+        border: 1px solid hsla(0, 0%, 0%, 0.15);
+        transition: all 0.2s ease-in;
+        box-shadow: none;
+      }
+      #answer:focus {
+        outline: none;
+        border-color:  hsla(215, 100%, 65%, 1);
+        box-shadow: 0 0 0 4px  hsla(215, 100%, 65%, 0.6);
+      }
+      #answer-btn {
+        background: hsla(215, 100%, 65%, 1) url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAAsCAYAAAFHxksFAAAABGdBTUEAALGPC/xhBQAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAOKADAAQAAAABAAAALAAAAAC7/3srAAAEKUlEQVRoBeVay08TQRgvYpr4IBATr/4HeFGjifEkmvgPcDMx0bsXPRmP3tQYE/8CExJ7IRIKLZa2FCx9QAQED4YEfPAQUUqVPunifku/dnZmdmf20QdxDnwz3+v3/WZmd2e3eDwGLZn+ONnBsx2oDfSMEQ2Kohx4SqWyAorY5MwASGiVSkWpRYIC00NEZ2fnMRxrkozQGYwGTEHgSMLoAsEATVMedg8HZB+MWtqaJyjUpkWRf0gH1LNeaOFIMoFUIBkA+bRpDwaDp8AADaaeBDrU1v/icoAPQ5IMxD5vmXSlQm50BskLIO3SfZ/vXXc8MReQDgDHZGphos5WX5lhIjqIpsQNTKQWYiSS8yAyGwkpRCIDsQy4lHl6MnEHOpNKus/b+cKdwwuCxLWdw0M2CtIFwoAMNgsC34a1RHI+TE+wPzB523VA3u4kgV0D5O0zEgj6e3v5imNAGSDyRqUB+v0TvWoB2gMGKgmMxe+LKrEFBElXVr9nAITX6Fss+POuNjqWYQSB2FKzi2k6gB4DsGOgKqDphYhFiaSVW30NEJMCO+yLpBUgzMUAosEM2A4Q5hXK7V+ZEq7p+sZWXhjQSoex8PST2Q9Lc/7R2J2G14GzgnIvl68fGt1GN1p/9awxYrhp7BZhBAb5CoXigf74axelGmcGBi6/M9mCa4AiMACcmV86D9JxAzBRC0WTzxwDQQIRENhbD7b4afkLVrq2Lnc3QX8zGRpPPGWmcWPzZ4ETpF2kjHNVwfFnVIbTyHjWFVzQutm4ZwgGBRuHaRYdqMBXM5uCSQBCEg1UCoy3ZtVlqIlwNPVKJpnIR8ishqh2Yu9nfKKEZnZLYAhsF9QWmF1Q7nWGyWSlLFNXwLAoEairYCLQhoAhaCAUf0zuztHg1F20/VcyFEm8yGSy++RkYH9ldW13aGTq1pGcENHLNZIEuZPJln0jsbNHgqjMqy9JDvtfv238aWuCVlYMSZGyWCzpHuZtQ9buipHkoA8T1DakoBC3iMEHlOD49KO2IecmMUdnD7dnpBnEmFftt/7Ixa7TJ+95vd5zyn4l8zdX8N+6eXVA/cIr/aFINBFA7PKl3msiP5EdvhNFounnfdevPDD1HR6O9KnPDe6DEy9cNZkSjaVfmyYSGJuxYkwJ5O98SEYgFd7XUyYxoZD54CnA1Mxw87B8Vszl8hWZ5BwfIVFXidn99LH5Y5v3Xs/hY6hiiLpKTObFltgtTHdwMHyhWCrVfjUwpCE2KJ+XV7fEbmIPW1uRYUYpRC9l4rKce2jE7G5Fio/hsBVEm0KMZtwMoi0h1gyiDbnG6MKtjt1Y0bYkRk+EHaJHghhNdGJq9g0c38zuneXyvvWTBw3kcMwctq3m8/niJ3rOeB52d3fd8HqP9xSK5e3sTnZod3f9ZX9/v/P/CbBaEOX/DyLYXMjpLQs6AAAAAElFTkSuQmCC") no-repeat center;
+        content: '\b';
+        display: inline-block;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        position: absolute;
+        right: 3px;
+        top: 3px;
+        background-size: 16px;
+        outline: none;
+        border: none;
+      }
+
+      .actions {
+        padding: 8px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      #wrapper .content {
+        /* width: 100vw;
+        height: 75vw; */
+        position: relative;
+      }
+
+      #green-flag,
+      #stop-btn,
+      #desc-btn,
+      #fullscreen-btn {
+        border: none;
+        width: 2rem;
+        height: 2rem;
+        padding: 0.375rem;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        user-select: none;
+        background-size: 70%;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-color: transparent;
+        outline: none;
+      }
+
+      .actions button:hover,
+      .actions button:active {
+        background-color: hsla(215, 100%, 65%, 0.35) !important;
+      }
+
+      #green-flag {
+        background-image: url('data:image/svg+xml,<svg%20id%3D"Layer_1"%20data-name%3D"Layer%201"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20viewBox%3D"0%200%2016.63%2017.5"><defs><style>.cls-1%2C.cls-2%7Bfill%3A%234cbf56%3Bstroke%3A%2345993d%3Bstroke-linecap%3Around%3Bstroke-linejoin%3Around%3B%7D.cls-2%7Bstroke-width%3A1.5px%3B%7D<%2Fstyle><%2Fdefs><title>icon--green-flag<%2Ftitle><path%20class%3D"cls-1"%20d%3D"M.75%2C2A6.44%2C6.44%2C0%2C0%2C1%2C8.44%2C2h0a6.44%2C6.44%2C0%2C0%2C0%2C7.69%2C0V12.4a6.44%2C6.44%2C0%2C0%2C1-7.69%2C0h0a6.44%2C6.44%2C0%2C0%2C0-7.69%2C0"%2F><line%20class%3D"cls-2"%20x1%3D"0.75"%20y1%3D"16.75"%20x2%3D"0.75"%20y2%3D"0.75"%2F><%2Fsvg>');
+        margin-right: 8px;
+      }
+
+      #stop-btn {
+        background-image: url('data:image/svg+xml,<%3Fxml%20version%3D"1.0"%20encoding%3D"utf-8"%3F>%20<svg%20version%3D"1.1"%20id%3D"Layer_1"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20xmlns%3Axlink%3D"http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink"%20x%3D"0px"%20y%3D"0px"%20viewBox%3D"0%200%2014%2014"%20style%3D"enable-background%3Anew%200%200%2014%2014%3B"%20xml%3Aspace%3D"preserve">%20<style%20type%3D"text%2Fcss">%20.st0%7Bfill%3A%23EC5959%3Bstroke%3A%23B84848%3Bstroke-linecap%3Around%3Bstroke-linejoin%3Around%3Bstroke-miterlimit%3A10%3B%7D%20<%2Fstyle>%20<polygon%20class%3D"st0"%20points%3D"4.3%2C0.5%209.7%2C0.5%2013.5%2C4.3%2013.5%2C9.7%209.7%2C13.5%204.3%2C13.5%200.5%2C9.7%200.5%2C4.3%20"%2F>%20<%2Fsvg>');
+      }
+      
+      #fullscreen-btn {
+        /* margin-left: auto; */
+        background-image: url('data:image/svg+xml,<%3Fxml%20version%3D"1.0"%20encoding%3D"UTF-8"%20standalone%3D"no"%3F>%20<svg%20viewBox%3D"0%200%2020%2020"%20version%3D"1.1"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20xmlns%3Axlink%3D"http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink">%20<title>Fullscreen<%2Ftitle>%20<defs><%2Fdefs>%20<g%20id%3D"Page-1"%20stroke%3D"none"%20stroke-width%3D"1"%20fill%3D"none"%20fill-rule%3D"evenodd">%20<g%20id%3D"Fullscreen"%20fill%3D"%23575E75">%20<g%20id%3D"fullscreen"%20transform%3D"translate(3.000000%2C%203.000000)">%20<path%20d%3D"M13.338093%2C4.35035264%20L12.4488644%2C3.45883199%20L9.31483512%2C5.83342741%20C8.95713791%2C6.10825708%208.4389784%2C6.03619808%208.1648553%2C5.66752413%20C7.94254816%2C5.37090918%207.94756261%2C4.96201625%208.1648553%2C4.6821592%20L10.5333457%2C1.54005165%20L9.66584641%2C0.668640487%20C9.41679554%2C0.418947674%209.59397267%2C0.00502737208%209.93495506%2C0.00502737208%20L13.6122161%2C0%20C13.8244944%2C0.00502737208%2014%2C0.180985395%2014%2C0.388783441%20L14%2C4.08055034%20C14%2C4.42241164%2013.5821294%2C4.59501808%2013.338093%2C4.35035264"%20id%3D"Fill-1"><%2Fpath>%20<path%20d%3D"M0.661906989%2C9.64928834%20L1.55113557%2C10.5408826%20L4.68516488%2C8.16609118%20C5.04286209%2C7.89123882%205.5610216%2C7.9649797%205.8351447%2C8.33200815%20C6.05745184%2C8.62864758%206.05243739%2C9.03757425%205.8351447%2C9.3174544%20L3.4649828%2C12.4598213%20L4.33415359%2C13.3313043%20C4.58320446%2C13.5810178%204.40602733%2C13.9949722%204.06504494%2C13.9949722%20L0.387783893%2C14%20C0.175505641%2C13.9949722%200%2C13.8189997%200%2C13.6111845%20L0%2C9.9191129%20C0%2C9.57722339%200.417870574%2C9.4046027%200.661906989%2C9.64928834"%20id%3D"Fill-3"><%2Fpath>%20<path%20d%3D"M0.661906989%2C4.35035264%20L1.55113557%2C3.45883199%20L4.68516488%2C5.83342741%20C5.04286209%2C6.10825708%205.5610216%2C6.03619808%205.8351447%2C5.66752413%20C6.05745184%2C5.37090918%206.05243739%2C4.96201625%205.8351447%2C4.6821592%20L3.4649828%2C1.54005165%20L4.33415359%2C0.668640487%20C4.58320446%2C0.418947674%204.40602733%2C0.00502737208%204.06504494%2C0.00502737208%20L0.387783893%2C0%20C0.175505641%2C0.00502737208%200%2C0.180985395%200%2C0.388783441%20L0%2C4.08055034%20C0%2C4.42241164%200.417870574%2C4.59501808%200.661906989%2C4.35035264"%20id%3D"Fill-5"><%2Fpath>%20<path%20d%3D"M13.338093%2C9.64928834%20L12.4488644%2C10.5408826%20L9.31483512%2C8.16609118%20C8.95713791%2C7.89123882%208.4389784%2C7.9649797%208.1648553%2C8.33200815%20C7.94254816%2C8.62864758%207.94756261%2C9.03757425%208.1648553%2C9.3174544%20L10.5333457%2C12.4598213%20L9.66584641%2C13.3313043%20C9.41679554%2C13.5810178%209.59397267%2C13.9949722%209.93495506%2C13.9949722%20L13.6122161%2C14%20C13.8244944%2C13.9949722%2014%2C13.8189997%2014%2C13.6111845%20L14%2C9.9191129%20C14%2C9.57722339%2013.5821294%2C9.4046027%2013.338093%2C9.64928834"%20id%3D"Fill-7"><%2Fpath>%20<%2Fg>%20<%2Fg>%20<%2Fg>%20<%2Fsvg>');
+      }
+
+      .external-link {
+        position: fixed;
+        bottom: 0;
+        font-size: 12px;
+        text-align: center;
+        padding: 4px 8px;
+        color: #9c9c9c;
+        background: #4c4c4c;
+        margin: 13px 0;
+        border-radius: 16px;
+        left: 50%;
+        transform: translate(-50%, 0);
+        white-space: nowrap;
+      }
+
+      #converter-btn {
+        font-size: inherit;
+        color: hsl(215deg 100% 67%);
+        outline: none;
+      }
+
+      #desc-btn {
+        margin-left: auto;
+        background-image: url('data:image/svg+xml,<%3Fxml%20version%3D"1.0"%20encoding%3D"UTF-8"%3F>%20<svg%20viewBox%3D"0%200%2024%2024"%20version%3D"1.1"%20xmlns%3D"http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg"%20xmlns%3Axlink%3D"http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink">%20<title>Artboard<%2Ftitle>%20<desc>Created%20with%20Sketch.<%2Fdesc>%20<g%20id%3D"Artboard"%20stroke%3D"none"%20stroke-width%3D"1"%20fill%3D"none"%20fill-rule%3D"evenodd">%20<g%20id%3D"align-left"%20transform%3D"translate(1.000000%2C%201.000000)">%20<g%20id%3D"Group">%20<rect%20id%3D"Rectangle"%20fill%3D"%23000000"%20opacity%3D"0"%20x%3D"0"%20y%3D"0"%20width%3D"22"%20height%3D"22"><%2Frect>%20<path%20d%3D"M2.578125%2C4.94140625%20L13.234375%2C4.94140625%20C13.3289062%2C4.94140625%2013.40625%2C4.8640625%2013.40625%2C4.76953125%20L13.40625%2C3.56640625%20C13.40625%2C3.471875%2013.3289062%2C3.39453125%2013.234375%2C3.39453125%20L2.578125%2C3.39453125%20C2.48359375%2C3.39453125%202.40625%2C3.471875%202.40625%2C3.56640625%20L2.40625%2C4.76953125%20C2.40625%2C4.8640625%202.48359375%2C4.94140625%202.578125%2C4.94140625%20Z%20M2.578125%2C14.0507812%20L13.234375%2C14.0507812%20C13.3289062%2C14.0507812%2013.40625%2C13.9734375%2013.40625%2C13.8789062%20L13.40625%2C12.6757812%20C13.40625%2C12.58125%2013.3289062%2C12.5039062%2013.234375%2C12.5039062%20L2.578125%2C12.5039062%20C2.48359375%2C12.5039062%202.40625%2C12.58125%202.40625%2C12.6757812%20L2.40625%2C13.8789062%20C2.40625%2C13.9734375%202.48359375%2C14.0507812%202.578125%2C14.0507812%20Z%20M19.421875%2C17.0585938%20L2.578125%2C17.0585938%20C2.48359375%2C17.0585938%202.40625%2C17.1359375%202.40625%2C17.2304688%20L2.40625%2C18.4335938%20C2.40625%2C18.528125%202.48359375%2C18.6054688%202.578125%2C18.6054688%20L19.421875%2C18.6054688%20C19.5164062%2C18.6054688%2019.59375%2C18.528125%2019.59375%2C18.4335938%20L19.59375%2C17.2304688%20C19.59375%2C17.1359375%2019.5164062%2C17.0585938%2019.421875%2C17.0585938%20Z%20M19.421875%2C7.94921875%20L2.578125%2C7.94921875%20C2.48359375%2C7.94921875%202.40625%2C8.0265625%202.40625%2C8.12109375%20L2.40625%2C9.32421875%20C2.40625%2C9.41875%202.48359375%2C9.49609375%202.578125%2C9.49609375%20L19.421875%2C9.49609375%20C19.5164062%2C9.49609375%2019.59375%2C9.41875%2019.59375%2C9.32421875%20L19.59375%2C8.12109375%20C19.59375%2C8.0265625%2019.5164062%2C7.94921875%2019.421875%2C7.94921875%20Z"%20id%3D"Shape"%20fill%3D"%23575F75"%20fill-rule%3D"nonzero"><%2Fpath>%20<%2Fg>%20<%2Fg>%20<%2Fg>%20<%2Fsvg>');
+      }
+
+      #desc-overlay {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 99;
+        display: none;
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        background: rgba(0, 0, 0, .2);
+      }
+
+      #desc-overlay.open {
+        display: flex;
+      }
+      
+      #desc {
+        max-width: 600px;
+        margin: 0 10%;
+        background: white;
+        border-radius: 8px;
+        text-align: left;
+        /* height: 300px; */
+        width: 80%;
+        overflow: hidden;
+        box-shadow: 0 1px 2px #888;
+        position: relative;
+      }
+
+      #desc-overlay.open #desc {
+        animation: modal-scale-in 0.1s ease-out;
+      }
+
+      #desc .desc-title {
+        display: block;
+        font-size: 16px;
+        text-align: center;
+        padding: 8px;
+        background: hsla(215, 100%, 65%, 1);
+        color: white;
+      }
+
+      #desc .desc-content {
+        white-space: pre-wrap;
+        padding: 16px;
+        font-size: 16px;
+        overflow: auto;
+        height: 220px;
+      }
+
+      #desc .close-btn {
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        background: transparent url('data:image/svg+xml,%3C%3Fxml%20version%3D%221.0%22%20encoding%3D%22UTF-8%22%3F%3E%20%3Csvg%20viewBox%3D%220%200%2024%2024%22%20version%3D%221.1%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%3E%20%3Ctitle%3EArtboard%3C%2Ftitle%3E%20%3Cdesc%3ECreated%20with%20Sketch.%3C%2Fdesc%3E%20%3Cg%20id%3D%22Artboard%22%20stroke%3D%22none%22%20stroke-width%3D%221%22%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%20%3Cg%20id%3D%22close%22%20transform%3D%22translate(2.000000%2C%202.000000)%22%3E%20%3Cg%20id%3D%22Group%22%3E%20%3Crect%20id%3D%22Rectangle%22%20fill%3D%22%23000000%22%20opacity%3D%220%22%20x%3D%220%22%20y%3D%220%22%20width%3D%2220%22%20height%3D%2220%22%3E%3C%2Frect%3E%20%3Cpath%20d%3D%22M18.0755548%2C16.060431%20L12.1523107%2C10.0001199%20L18.0763542%2C3.93894939%20C18.753755%2C3.39515809%2018.8243871%2C2.45843318%2018.2349867%2C1.84486918%20C17.6464057%2C1.23218457%2016.6191022%2C1.17574285%2015.9418614%2C1.71863477%20L10.00001%2C7.79799297%20L4.05813857%2C1.71861479%20C3.38087775%2C1.17572287%202.35359426%2C1.23216459%201.76501332%2C1.8448492%20C1.17559295%2C2.4584132%201.24624504%2C3.39515809%201.92364576%2C3.93892941%20L7.84768926%2C10.0000999%20L1.92444523%2C16.060431%20C1.24622506%2C16.6038026%201.17559295%2C17.5418067%201.76589273%2C18.1540915%20C2.35447367%2C18.7680953%203.38169723%2C18.824537%204.05901799%2C18.2807657%20L10.00001%2C12.2022669%20L15.940982%2C18.2807657%20C16.6183028%2C18.824537%2017.6455063%2C18.7680953%2018.2341073%2C18.1540915%20C18.8243871%2C17.5418067%2018.7528556%2C16.6037826%2018.0755548%2C16.060431%20Z%22%20id%3D%22Path%22%20fill%3D%22%23FFFFFF%22%3E%3C%2Fpath%3E%20%3C%2Fg%3E%20%3C%2Fg%3E%20%3C%2Fg%3E%20%3C%2Fsvg%3E') no-repeat center;
+        background-size: 18px;
+        z-index: 99;
+        border: none;
+        cursor: pointer;
+        outline: none;
+      }
+
+      @keyframes modal-scale-in {
+        from { transform: scale(0.7) }
+        to { transform: scale(1); }
+      }
+    </style>
+  </head>
+  <body class="loading">
+    <script type="text/javascript">
+      if (true % loading-image % && false % /loading-image %) {
+        document.body.classList.remove('loading');
+      }
+    </script>
+    <div id="wrapper">
+      <div class="actions">
+        <button id="green-flag"></button>
+        <button id="stop-btn"></button>
+        <button id="desc-btn">
+        </button>
+        <button id="fullscreen-btn"></button>
+      </div>
+      <div class="content">
+        <canvas id="stage"></canvas>
+        <div id="monitors"></div>
+        <div id="asking-box">
+          <label id="question" for="answer">Question</label>
+          <div class="answer-wrapper">
+            <input type="text" id="answer" />
+            <button id="answer-btn"></button>
+          </div>
+        </div>
+      </div>
+      <div id="desc-overlay">
+        <div id="desc">
+          <button class="close-btn"></button>
+          <b class="desc-title">作品说明</b>
+          <div class="desc-content">{DESCRIPTION}</div>
+        </div>
+      </div>
+    </div>
+    % no-vm % % vanilla %
+    <script src="https://sheeptester.github.io/scratch-vm/vm.min.js"></script>
+    % /vanilla % % modded %
+    <script src="https://sheeptester.github.io/scratch-vm/16-9/vm.min.js"></script>
+    % /modded % % /no-vm % % loading-progress %
+    <span id="loading-progress" style="display: none">...</span>
+    % /loading-progress % % loading-image %
+    <img src="{LOADING_IMAGE}" id="loading-image" />
+    % /loading-image % % fullscreen %
+    % /fullscreen %
+    <script type="text/javascript">
+      {SCRIPTS}
+
+      /* https://www.npmjs.com/package/get-user-media-promise */
+      !function(e){"use strict";function n(){this.name="NotSupportedError",this.message="getUserMedia is not implemented in this browser"}function i(){this.then=function(){return this};var i=new n;this.catch=function(e){setTimeout(function(){e(i)})}}n.prototype=Error.prototype;var r="undefined"!=typeof Promise,t="undefined"!=typeof navigator,a=t&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia,o=t&&(navigator.getUserMedia||navigator.webkitGetUserMedia||navigator.mozGetUserMedia||navigator.msGetUserMedia);function s(t){return r?a?navigator.mediaDevices.getUserMedia(t):new Promise(function(e,i){if(!o)return i(new n);o.call(navigator,t,e,i)}):new i}s.NotSupportedError=n,s.isSupported=!(!r||!a&&!o),"function"==typeof define&&define.amd?define([],function(){return s}):"object"==typeof module&&module.exports?module.exports=s:(e.navigator||(e.navigator={}),e.navigator.mediaDevices||(e.navigator.mediaDevices={}),e.navigator.mediaDevices.getUserMedia||(e.navigator.mediaDevices.getUserMedia=s))}(this);
+
+      /* https://github.com/LLK/scratch-gui/blob/7b658c60c7c04055e575601a861195fe6c9933f3/src/lib/video/camera.js */
+      const requestStack = [];
+      const requestVideoStream = videoDesc => {
+          let streamPromise;
+          if (requestStack.length === 0) {
+              streamPromise = navigator.mediaDevices.getUserMedia({
+                  audio: false,
+                  video: videoDesc
+              });
+              requestStack.push(streamPromise);
+          } else if (requestStack.length > 0) {
+              streamPromise = requestStack[0];
+              requestStack.push(true);
+          }
+          return streamPromise;
+      };
+
+      const requestDisableVideo = () => {
+          requestStack.pop();
+          if (requestStack.length > 0) return false;
+          return true;
+      };
+
+      /* https://github.com/LLK/scratch-gui/blob/7b658c60c7c04055e575601a861195fe6c9933f3/src/lib/video/video-provider.js */
+      class VideoProvider {
+          constructor () {
+              this.mirror = true;
+
+              this._frameCacheTimeout = 16;
+
+              this._video = null;
+
+              this._track = null;
+
+              this._workspace = [];
+          }
+
+          static get FORMAT_IMAGE_DATA () {
+              return 'image-data';
+          }
+
+          static get FORMAT_CANVAS () {
+              return 'canvas';
+          }
+
+          static get DIMENSIONS () {
+              return [WIDTH, HEIGHT];
+          }
+
+          static get ORDER () {
+              return 1;
+          }
+
+          get video () {
+              return this._video;
+          }
+
+          enableVideo () {
+              this.enabled = true;
+              return this._setupVideo();
+          }
+
+          disableVideo () {
+              this.enabled = false;
+              if (this._singleSetup) {
+                  this._singleSetup
+                      .then(this._teardown.bind(this))
+                      .catch(err => this.onError(err));
+              }
+          }
+
+          _teardown () {
+              if (this.enabled === false) {
+                  const disableTrack = requestDisableVideo();
+                  this._singleSetup = null;
+                  this._video = null;
+                  if (this._track && disableTrack) {
+                      this._track.stop();
+                  }
+                  this._track = null;
+              }
+          }
+
+          getFrame ({
+              dimensions = VideoProvider.DIMENSIONS,
+              mirror = this.mirror,
+              format = VideoProvider.FORMAT_IMAGE_DATA,
+              cacheTimeout = this._frameCacheTimeout
+          }) {
+              if (!this.videoReady) {
+                  return null;
+              }
+              const [width, height] = dimensions;
+              const workspace = this._getWorkspace({dimensions, mirror: Boolean(mirror)});
+              const {videoWidth, videoHeight} = this._video;
+              const {canvas, context, lastUpdate, cacheData} = workspace;
+              const now = Date.now();
+
+              if (lastUpdate + cacheTimeout < now) {
+
+                  if (mirror) {
+                      context.scale(-1, 1);
+                      context.translate(width * -1, 0);
+                  }
+
+                  context.drawImage(this._video,
+                      0, 0, videoWidth, videoHeight,
+                      0, 0, width, height
+                  );
+
+                  context.setTransform(1, 0, 0, 1, 0, 0);
+                  workspace.lastUpdate = now;
+              }
+
+              if (!cacheData[format]) {
+                  cacheData[format] = {lastUpdate: 0};
+              }
+              const formatCache = cacheData[format];
+
+              if (formatCache.lastUpdate + cacheTimeout < now) {
+                  if (format === VideoProvider.FORMAT_IMAGE_DATA) {
+                      formatCache.lastData = context.getImageData(0, 0, width, height);
+                  } else if (format === VideoProvider.FORMAT_CANVAS) {
+                      formatCache.lastUpdate = Infinity;
+                      formatCache.lastData = canvas;
+                  } else {
+                      console.error(`video io error - unimplemented format ${format}`);
+                      formatCache.lastUpdate = Infinity;
+                      formatCache.lastData = null;
+                  }
+
+                  formatCache.lastUpdate = Math.max(workspace.lastUpdate, formatCache.lastUpdate);
+              }
+
+              return formatCache.lastData;
+          }
+
+          onError (error) {
+              console.error('Unhandled video io device error', error);
+          }
+
+          _setupVideo () {
+              if (this._singleSetup) {
+                  return this._singleSetup;
+              }
+
+              this._singleSetup = requestVideoStream({
+                  width: {min: WIDTH, ideal: 480 * WIDTH / HEIGHT},
+                  height: {min: HEIGHT, ideal: 480}
+              })
+                  .then(stream => {
+                      this._video = document.createElement('video');
+
+                      try {
+                          this._video.srcObject = stream;
+                      } catch (error) {
+                          this._video.src = window.URL.createObjectURL(stream);
+                      }
+                      this._video.play();
+                      this._track = stream.getTracks()[0];
+                      return this;
+                  })
+                  .catch(error => {
+                      this._singleSetup = null;
+                      this.onError(error);
+                  });
+
+              return this._singleSetup;
+          }
+
+          get videoReady () {
+              if (!this.enabled) {
+                  return false;
+              }
+              if (!this._video) {
+                  return false;
+              }
+              if (!this._track) {
+                  return false;
+              }
+              const {videoWidth, videoHeight} = this._video;
+              if (typeof videoWidth !== 'number' || typeof videoHeight !== 'number') {
+                  return false;
+              }
+              if (videoWidth === 0 || videoHeight === 0) {
+                  return false;
+              }
+              return true;
+          }
+
+          _getWorkspace ({dimensions, mirror}) {
+              let workspace = this._workspace.find(space => (
+                  space.dimensions.join('-') === dimensions.join('-') &&
+                  space.mirror === mirror
+              ));
+              if (!workspace) {
+                  workspace = {
+                      dimensions,
+                      mirror,
+                      canvas: document.createElement('canvas'),
+                      lastUpdate: 0,
+                      cacheData: {}
+                  };
+                  workspace.canvas.width = dimensions[0];
+                  workspace.canvas.height = dimensions[1];
+                  workspace.context = workspace.canvas.getContext('2d');
+                  this._workspace.push(workspace);
+              }
+              return workspace;
+          }
+      }
+
+      const Scratch = window.Scratch = window.Scratch || {};
+
+      const CLOUD_PREFIX = '\u2601 ';
+
+      const runBenchmark = function () {
+        const vm = new window.NotVirtualMachine(% custom-ratio % WIDTH, HEIGHT % /custom-ratio %);
+        Scratch.vm = vm;
+
+        const storage = new ScratchStorage();
+        Scratch.storage = storage;
+        % loading-progess %
+        const AssetType = storage.AssetType;
+        storage.addWebStore([AssetType.Project], () => TYPE === 'zip' ? './project.json' : PROJECT_JSON);
+        storage.addWebStore(
+          [AssetType.ImageVector, AssetType.ImageBitmap, AssetType.Sound],
+          ({ assetId, dataFormat }) => TYPE === 'zip'
+            ? `./${assetId}.${dataFormat}`
+            : ASSETS[`${assetId}.${dataFormat}`]
+        );
+        % /loading-progess %
+        vm.attachStorage(storage);
+
+        function resize() {
+          const rect = canvas.getBoundingClientRect();
+          renderer.resize(rect.width, rect.height);
+          % stretch %
+          monitorWrapper.style.transform = `scaleX(${rect.width / WIDTH}) scaleY(${rect.height / HEIGHT})`;
+          % /stretch %
+          % fit %
+          monitorWrapper.style.transform = `scale(${rect.height / HEIGHT})`;
+          % /fit %
+        }
+        const monitorWrapper = document.getElementById('monitors');
+        const canvas = document.getElementById('stage');
+        const renderer = new window.ScratchRender(canvas % custom-ratio % , -WIDTH / 2, WIDTH / 2, -HEIGHT / 2, HEIGHT / 2 % /custom-ratio %);
+        resize();
+        Scratch.renderer = renderer;
+        vm.attachRenderer(renderer);
+
+        const audioEngine = new window.AudioEngine();
+        Scratch.audioEngine = audioEngine;
+        vm.attachAudioEngine(audioEngine);
+
+        const svgRenderer = new ScratchSVGRenderer.SVGRenderer();
+        Scratch.svgRenderer = svgRenderer;
+        vm.attachV2SVGAdapter(svgRenderer);
+
+        const bitmapAdapter = new ScratchSVGRenderer.BitmapAdapter(null, null, % custom-ratio % WIDTH, HEIGHT % /custom-ratio %);
+        Scratch.bitmapAdapter = bitmapAdapter;
+        vm.attachV2BitmapAdapter(bitmapAdapter);
+
+        const videoProvider = new VideoProvider();
+        Scratch.videoProvider = videoProvider;
+        vm.setVideoProvider(videoProvider);
+
+        const noop = () => null;
+        let ws;
+        function openConnection() {
+          try {
+            ws = new WebSocket({CLOUD_HOST});
+          } catch (err) {
+            console.warn(err);
+            return;
+          }
+          ws.onmessage = onMessage;
+          ws.onopen = onOpen;
+          ws.onclose = onClose;
+        }
+        function onMessage(e) {
+          e.data.split('\n').forEach(message => {
+            if (message) {
+              const { name, value } = JSON.parse(message)
+              vm.postIOData('cloud', {
+                varUpdate: {name, value}
+              });
+            }
+          });
+        }
+        function sendData(data) {
+          data.user = DESIRED_USERNAME;
+          data.project_id = PROJECT_ID;
+          ws.send(JSON.stringify(data) + '\n');
+        }
+        function onOpen() {
+          sendData({method: 'handshake'});
+        }
+        function onClose() {
+          setTimeout(openConnection, 500);
+        }
+        const cloudProvider = {
+          updateVariable(name, value) {
+            % special-cloud %
+            if (name === CLOUD_PREFIX + 'eval') {
+              try {
+                vm.postIOData('cloud', {
+                  varUpdate: {
+                    name: CLOUD_PREFIX + 'eval output',
+                    value: eval(value)
+                  }
+                });
+              } catch (err) {
+                vm.postIOData('cloud', {
+                  varUpdate: {
+                    name: CLOUD_PREFIX + 'eval error',
+                    value: err.toString()
+                  }
+                });
+              }
+            } else % cloud-ws % if (name.startsWith(CLOUD_PREFIX + 'local storage')) % /cloud-ws % {
+              % /special-cloud %
+              % cloud-localstorage %
+              try {
+                localStorage.setItem('[s3] ' + name, value);
+              } catch (e) {
+                console.error('Cannot use localStorage?', e);
+              }
+              % /cloud-localstorage %
+              % special-cloud %
+              % cloud-ws %
+            } else {
+              % /cloud-ws %
+              % /special-cloud %
+              % cloud-ws %
+              sendData({method: 'set', name, value});
+              % /cloud-ws %
+              % special-cloud %
+            }
+            % /special-cloud %
+          },
+          createVariable: noop,
+          renameVariable: noop,
+          deleteVariable: noop,
+          % cloud-ws %
+          requestCloseConnection() {
+            if (ws && ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+              ws.onclose = noop;
+              ws.close();
+            }
+          }
+          % /cloud-ws %
+          % cloud-localstorage-provider %
+          requestCloseConnection: noop
+          % /cloud-localstorage-provider %
+        };
+
+        vm.setCompatibilityMode(COMPAT);
+        vm.setTurboMode(TURBO);
+        % limits %
+        vm.requireLimits(false);
+        % /limits %
+
+        vm.start();
+
+        % loading-progress %
+        const progress = document.getElementById('loading-progress');
+        const _load = storage.webHelper.load;
+        let total = 0, complete = 0;
+        storage.webHelper.load = function (...args) {
+          const result = _load.call(this, ...args);
+          total += 1;
+          progress.textContent = complete + '/' + total;
+          result.then(() => {
+            complete += 1;
+            progress.textContent = complete + '/' + total;
+          });
+          return result;
+        };
+        % /loading-progress %
+        % loading-image %
+        const loadingImage = document.getElementById('loading-image');
+        % /loading-image %
+
+        // MOUSE
+        /* https://github.com/LLK/scratch-gui/blob/develop/src/containers/stage.jsx#L176-L300 */
+        const getEventXY = e => {
+          if (e.touches && e.touches[0]) {
+            return {x: e.touches[0].clientX, y: e.touches[0].clientY};
+          } else if (e.changedTouches && e.changedTouches[0]) {
+            return {x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY};
+          }
+          return {x: e.clientX, y: e.clientY};
+        };
+        let mouseDown = false,
+        mouseDownPosition = null,
+        mouseDownTimeoutId = null,
+        isDragging = false,
+        dragId = null,
+        dragOffset = null;
+        function cancelMouseDownTimeout() {
+          if (mouseDownTimeoutId !== null) {
+            clearTimeout(mouseDownTimeoutId);
+          }
+          mouseDownTimeoutId = null;
+        }
+        // https://github.com/LLK/scratch-gui/blob/develop/src/containers/stage.jsx#L337-L366
+        function onStartDrag() {
+          if (dragId) return;
+          const drawableId = renderer.pick(...mouseDownPosition);
+          if (drawableId === null) return;
+          const targetId = vm.getTargetIdForDrawableId(drawableId);
+          if (targetId === null) return;
+          const target = vm.runtime.getTargetById(targetId);
+          if (!target.draggable) return;
+          target.goToFront();
+          const drawableData = renderer.extractDrawable(drawableId, ...mouseDownPosition);
+          vm.startDrag(targetId);
+          isDragging = true;
+          dragId = targetId;
+          dragOffset = drawableData.scratchOffset;
+        }
+        function getScratchCoords(x, y, rect) {
+          const nativeSize = renderer.getNativeSize();
+          return [
+            (nativeSize[0] / rect.width) * (x - (rect.width / 2)),
+            (nativeSize[1] / rect.height) * (y - (rect.height / 2))
+          ];
+        }
+        % pointer-lock %
+        function pointerLocked() {
+          return document.pointerLockElement === canvas ||
+            document.mozPointerLockElement === canvas;
+        }
+        % /pointer-lock %
+        function mousemove(e) {
+          % pointer-lock %
+          if (pointerLocked()) {
+            vm.postIOData('mouse', {
+              x: e.movementX + WIDTH / 2,
+              y: e.movementY + HEIGHT / 2,
+              canvasWidth: WIDTH,
+              canvasHeight: HEIGHT
+            });
+            return;
+          }
+          % /pointer-lock %
+          const {x, y} = getEventXY(e);
+          const rect = canvas.getBoundingClientRect();
+          const mousePosition = [x - rect.left, y - rect.top];
+          if (mouseDown && !isDragging) {
+            const distanceFromMouseDown = Math.sqrt(
+              Math.pow(mousePosition[0] - mouseDownPosition[0], 2) +
+              Math.pow(mousePosition[1] - mouseDownPosition[1], 2)
+            );
+            if (distanceFromMouseDown > 3) {
+              cancelMouseDownTimeout();
+              onStartDrag();
+            }
+          }
+          if (mouseDown && isDragging) {
+            const spritePosition = getScratchCoords(mousePosition[0], mousePosition[1], rect);
+            vm.postSpriteInfo({
+              x: spritePosition[0] + dragOffset[0],
+              y: -(spritePosition[1] + dragOffset[1]),
+              force: true
+            });
+          }
+          vm.postIOData('mouse', {
+            x: mousePosition[0],
+            y: mousePosition[1],
+            canvasWidth: rect.width,
+            canvasHeight: rect.height
+          });
+        }
+        function mousedown(e) {
+          mouseDown = true;
+          % pointer-lock %
+          if (pointerLocked()) {
+            vm.postIOData('mouse', {
+              isDown: true,
+              x: e.movementX + WIDTH / 2,
+              y: e.movementY + HEIGHT / 2,
+              canvasWidth: WIDTH,
+              canvasHeight: HEIGHT
+            });
+            return;
+          }
+          % /pointer-lock %
+          const {x, y} = getEventXY(e);
+          const rect = canvas.getBoundingClientRect();
+          const mousePosition = [x - rect.left, y - rect.top];
+          mouseDownPosition = mousePosition;
+          mouseDownTimeoutId = setTimeout(onStartDrag, 400);
+          vm.postIOData('mouse', {
+            isDown: true,
+            x: mousePosition[0],
+            y: mousePosition[1],
+            canvasWidth: rect.width,
+            canvasHeight: rect.height
+          });
+          e.preventDefault();
+          if (!document.body.classList.contains('asking')) {
+            window.focus();
+          }
+        }
+        function mouseup(e) {
+          cancelMouseDownTimeout();
+          mouseDown = false;
+          mouseDownPosition = null;
+          if (isDragging) {
+            vm.stopDrag(dragId);
+            isDragging = false;
+            dragOffset = null;
+            dragId = null;
+          }
+          % pointer-lock %
+          if (pointerLocked()) {
+            vm.postIOData('mouse', {
+              isDown: false,
+              x: e.movementX + WIDTH / 2,
+              y: e.movementY + HEIGHT / 2,
+              canvasWidth: WIDTH,
+              canvasHeight: HEIGHT
+            });
+            return;
+          }
+          % /pointer-lock %
+          const {x, y} = getEventXY(e);
+          const rect = canvas.getBoundingClientRect();
+          vm.postIOData('mouse', {
+            isDown: false,
+            x: x - rect.left,
+            y: y - rect.top,
+            canvasWidth: rect.width,
+            canvasHeight: rect.height
+          });
+        }
+        document.addEventListener('mousemove', mousemove);
+        canvas.addEventListener('mousedown', mousedown);
+        document.addEventListener('mouseup', mouseup);
+        document.addEventListener('touchmove', mousemove);
+        canvas.addEventListener('touchstart', mousedown, {passive: false});
+        document.addEventListener('touchend', mouseup, {passive: false});
+        canvas.addEventListener('wheel', e => {
+          vm.postIOData('mouseWheel', {
+            deltaX: e.deltaX,
+            deltaY: e.deltaY
+          });
+          e.preventDefault();
+        });
+        window.addEventListener('resize', resize);
+        % pointer-lock %
+        canvas.requestPointerLock = canvas.requestPointerLock ||
+          canvas.mozRequestPointerLock;
+        canvas.addEventListener('click', e => {
+          canvas.requestPointerLock();
+        });
+        % /pointer-lock %
+
+        // KEY PRESSED?
+        /* https://github.com/LLK/scratch-gui/blob/develop/src/lib/vm-listener-hoc.jsx#L86-L115 */
+        document.addEventListener('keydown', e => {
+          if (e.target !== document && e.target !== document.body) return;
+          const key = !e.key || e.key === 'Dead' ? e.keyCode : e.key;
+          vm.postIOData('keyboard', {
+            key: key,
+            isDown: true
+          });
+          if (e.keyCode === 32 || e.keyCode >= 37 && e.keyCode <= 40) {
+            e.preventDefault();
+          }
+        });
+        document.addEventListener('keyup', e => {
+          const key = !e.key || e.key === 'Dead' ? e.keyCode : e.key;
+          vm.postIOData('keyboard', {
+            key: key,
+            isDown: false
+          });
+          if (e.target !== document && e.target !== document.body) {
+            e.preventDefault();
+          }
+        });
+
+        // ASK AND WAIT
+        const question = document.getElementById('question');
+        const askBox = document.getElementById('answer');
+        const askBtn = document.getElementById('answer-btn');
+        vm.runtime.addListener('QUESTION', questionData => {
+          /* null means the asking was interrupted by stop script block */
+          if (questionData === null) {
+            document.body.classList.remove('asking');
+          } else {
+            document.body.classList.add('asking');
+            question.textContent = questionData;
+            askBox.value = '';
+            askBox.focus();
+          }
+        });
+
+        askBox.addEventListener('keydown', e => {
+          if (e.keyCode === 13) {
+            document.body.classList.remove('asking');
+            /* submit answer after because it starts the next question synchronously */
+            vm.runtime.emit('ANSWER', askBox.value);
+          }
+        });
+
+        askBtn.addEventListener('click', e => {
+          document.body.classList.remove('asking');
+          vm.runtime.emit('ANSWER', askBox.value);
+        });
+
+        // MONITORS
+        const getVariable = (targetId, variableId) => {
+            const target = targetId ?
+                vm.runtime.getTargetById(targetId) :
+                vm.runtime.getTargetForStage();
+            return target.variables[variableId];
+        };
+        const monitorStates = {};
+        let once = false;
+        vm.runtime.addListener('MONITORS_UPDATE', monitors => {
+          monitors.forEach((record, id) => {
+            if (!monitorStates[id]) {
+              const monitor = document.createElement('div');
+              monitor.className = 'monitor ' + record.mode;
+              monitor.style.left = record.x + 'px';
+              monitor.style.top = record.y + 'px';
+              if (record.mode === 'list') {
+                // If the list has never been resized, the width/height will be 0. Weird
+                monitor.style.width = (record.width || 100) + 'px';
+                monitor.style.height = (record.height || 200) + 'px';
+              }
+              const label = document.createElement('span');
+              label.className = 'monitor-label';
+              let name = record.params.VARIABLE || record.params.LIST || record.opcode;
+              if (record.spriteName) name = `${record.spriteName}: ${name}`;
+              label.textContent = name;
+              monitor.appendChild(label);
+              const value = document.createElement('span');
+              value.className = 'monitor-value';
+              monitor.appendChild(value);
+              monitorStates[id] = {monitor, value};
+              if (record.mode === 'slider') {
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.min = record.sliderMin;
+                slider.max = record.sliderMax;
+                slider.step = record.isDiscrete ? 1 : 0.01;
+                slider.addEventListener('input', e => {
+                  getVariable(record.targetId, id).value = slider.value;
+                });
+                slider.addEventListener('change', e => {
+                  getVariable(record.targetId, id).value = slider.value;
+                });
+                monitorStates[id].slider = slider;
+                monitor.appendChild(slider);
+              }
+              monitorWrapper.appendChild(monitor);
+            }
+            monitorStates[id].monitor.style.display = record.visible ? null : 'none';
+            if (record.visible) {
+              let value = record.value;
+              if (typeof value === 'number') {
+                value = Number(value.toFixed(6));
+              }
+              if (typeof value === 'boolean') {
+                value = value.toString();
+              }
+              if (Array.isArray(value)) {
+                if (monitorStates[id].lastValue === JSON.stringify(value)) return;
+                monitorStates[id].value.innerHTML = '';
+                value.forEach(val => {
+                  const row = document.createElement('div');
+                  row.className = 'row';
+                  row.textContent = val;
+                  monitorStates[id].value.appendChild(row);
+                });
+              } else {
+                monitorStates[id].value.textContent = value;
+                if (monitorStates[id].slider) monitorStates[id].slider.value = value;
+              }
+            }
+          });
+        });
+
+        vm.postIOData('userData', {username: DESIRED_USERNAME});
+
+        return Promise.resolve()
+
+          % extension-url %
+          .then(() => vm.extensionManager.loadExtensionURL(EXTENSION_URL))
+          % /extension-url %
+
+          .then(
+            () => TYPE === 'file'
+              ? fetch(FILE).then(r => r.arrayBuffer())
+              : storage.load(storage.AssetType.Project).then(asset => asset.data)
+          )
+          .then(data => vm.loadProject(data))
+
+          .then(() => {
+
+        vm.setCloudProvider(cloudProvider);
+        % cloud-localstorage %
+        const stageVariables = vm.runtime.getTargetForStage().variables;
+        for (const { name, isCloud } of Object.values(stageVariables)) {
+          if (isCloud) {
+            % special-cloud %
+            % cloud-ws %
+            if (!name.startsWith(CLOUD_PREFIX + 'local storage')) continue;
+            % /cloud-ws %
+            % /special-cloud %
+            const value = localStorage.getItem('[s3] ' + name);
+            if (value === null) continue;
+            vm.postIOData('cloud', { varUpdate: { name, value } });
+          }
+        }
+        window.addEventListener('storage', e => {
+          if (e.storageArea === localStorage && e.key.slice(0, 5) === '[s3] ') {
+            const name = e.key.slice(5);
+            % special-cloud %
+            % cloud-ws %
+            if (!name.startsWith(`[s3] ${CLOUD_PREFIX}local storage`)) return;
+            % /cloud-ws %
+            % /special-cloud %
+            vm.postIOData('cloud', {
+              varUpdate: {
+                name,
+                value: e.newValue
+              }
+            });
+          }
+        });
+        % /cloud-localstorage %
+        % cloud-ws %
+        openConnection();
+        % /cloud-ws %
+
+        % loading-progress %
+        if (progress.parentNode) {
+        progress.parentNode.removeChild(progress);
+        }
+        % /loading-progress %
+        % loading-image %
+        if (loadingImage.parentNode) {
+        loadingImage.parentNode.removeChild(loadingImage);
+        }
+        document.body.classList.remove('loading');
+        % /loading-image %
+
+        if (window.RUN_DEFAULT) {
+          vm.greenFlag();
+        }
+
+          });
+      };
+
+      window.onload = function () {
+        runBenchmark();
+        window.focus();
+      };
+
+      % fullscreen %
+      function isFullscreen() {
+        return document.fullscreenElement || document.mozFullScreenElement
+          || document.webkitFullscreenElement || document.msFullscreenElement;
+      }
+      const fullscreenBtn = document.getElementById('fullscreen-btn');
+      fullscreenBtn.addEventListener('click', e => {
+        fullscreenBtn.blur();
+        if (isFullscreen()) {
+          if (document.exitFullscreen) document.exitFullscreen();
+          else if (document.msExitFullscreen) document.msExitFullscreen();
+          else if (document.mozCancelFullScreen) document.mozCancelFullScreen();
+          else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        } else {
+          if (document.body.requestFullscreen) document.body.requestFullscreen();
+          else if (document.body.msRequestFullscreen) document.body.msRequestFullscreen();
+          else if (document.body.mozRequestFullScreen) document.body.mozRequestFullScreen();
+          else if (document.body.webkitRequestFullscreen) document.body.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        }
+      });
+      function onFullscreenChange() {
+        if (isFullscreen()) {
+          document.body.classList.add('fullscreen');
+        } else {
+          document.body.classList.remove('fullscreen');
+        }
+      }
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      document.addEventListener('mozfullscreenchange', onFullscreenChange);
+      document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.addEventListener('msfullscreenchange', onFullscreenChange);
+      % /fullscreen %
+
+      const greenFlagBtn = document.querySelector('#green-flag');
+      greenFlagBtn.addEventListener('click', function() {
+        greenFlagBtn.blur();
+        Scratch.vm.greenFlag();
+      }, false);
+
+      document.querySelector('#stop-btn').addEventListener('click', function() {
+        Scratch.vm.stopAll();
+      }, false);
+
+      const descModal = document.querySelector('#desc-overlay');
+      const desc = document.querySelector('#desc');
+      const descBtn = document.querySelector('#desc-btn');
+      const descCloseBtn = document.querySelector('#desc .close-btn');
+
+      function toggleDescModal() {
+        const open = descModal.classList.contains('open');
+        if (open) {
+          descModal.classList.remove('open');
+        } else if (window.DESCRIPTION) {
+          descModal.classList.add('open');
+        }
+      }
+      descBtn.addEventListener('click', function() {
+        descBtn.blur();
+        toggleDescModal()
+      }, false);
+
+      descModal.addEventListener('click', function() {
+        toggleDescModal()
+      }, false);
+
+      desc.addEventListener('click', function(evt) {
+        desc.blur();
+        evt.stopPropagation();
+      }, false);
+
+      descCloseBtn.addEventListener('click', function(evt) {
+        descCloseBtn.blur();
+        descModal.classList.remove('open');
+      }, false);
+
+      if (window.DESCRIPTION && window.OPEN_DESC_DEFAULT) {
+        toggleDescModal()
+      }
+
+    </script>
+  </body>
+</html>

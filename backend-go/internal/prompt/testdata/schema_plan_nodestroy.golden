@@ -1,0 +1,2 @@
+CANONICAL_OUTPUT_JSON_SCHEMA (all properties, enum values, required arrays and limits are authoritative):
+{"additionalProperties":false,"properties":{"steps":{"items":{"maxLength":120,"minLength":1,"type":"string"},"maxItems":40,"minItems":1,"title":"Steps","type":"array"}},"required":["steps"],"title":"Plan","type":"object"}

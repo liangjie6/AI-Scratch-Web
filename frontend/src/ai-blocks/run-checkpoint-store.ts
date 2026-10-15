@@ -1,4 +1,5 @@
 import {openDB} from 'idb';
+import {sha256Hex} from '../shared/sha256';
 
 const DATABASE_NAME = 'ai-scratch-run-checkpoints';
 const DATABASE_VERSION = 1;
@@ -229,9 +230,10 @@ export class AiRunCheckpointStore {
 }
 
 export async function fingerprintBytes(value: Uint8Array): Promise<string> {
-  if (!globalThis.crypto?.subtle) throw new Error('当前浏览器不支持项目完整性校验');
-  const digest = await globalThis.crypto.subtle.digest('SHA-256', value);
-  return [...new Uint8Array(digest)].map(item => item.toString(16).padStart(2, '0')).join('');
+  // The helper prefers WebCrypto and falls back to a portable SHA-256, so
+  // checkpoints keep working when the deployment is opened over plain HTTP
+  // from a non-localhost origin (no secure context, no crypto.subtle).
+  return sha256Hex(value);
 }
 
 export async function fingerprintBlob(value: Blob): Promise<string> {

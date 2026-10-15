@@ -4,6 +4,7 @@ import {ScratchGuiBridge} from './scratch-gui-bridge';
 import {probeScratchEditorPort} from './scratch-editor-port';
 import {recoverInterruptedAiCommits, type CheckpointRecoveryResult} from '../ai-blocks/checkpoint-recovery';
 import {LOCAL_PROJECT_STORAGE_KEY} from '../ai-blocks/run-checkpoint-store';
+import {sha256Hex} from '../shared/sha256';
 
 const props = withDefaults(defineProps<{
   locked?: boolean;
@@ -63,15 +64,13 @@ async function assertScratchEditorArtifactMetadata() {
     for (const [name, expected] of Object.entries(metadata.library_manifest_sha256)) {
       const manifest = await fetch('/assets/scratch/libraries/' + name, {cache: 'no-store'});
       if (!manifest.ok) throw new Error('Scratch 素材清单不可用');
-      const digest = await crypto.subtle.digest('SHA-256', await manifest.arrayBuffer());
-      const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+      const actual = await sha256Hex(new Uint8Array(await manifest.arrayBuffer()));
       if (actual !== expected) throw new Error('Scratch 素材清单校验失败');
     }
   }
   const bundle = await fetch('/assets/scratch/' + metadata.standalone.file, {cache: 'no-store'});
   if (!bundle.ok) throw new Error('Scratch 编辑器 standalone 资源不可用');
-  const digest = await crypto.subtle.digest('SHA-256', await bundle.arrayBuffer());
-  const actual = Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+  const actual = await sha256Hex(new Uint8Array(await bundle.arrayBuffer()));
   if (actual !== metadata.standalone.sha256) throw new Error('Scratch 编辑器 standalone 资源校验失败');
 }
 

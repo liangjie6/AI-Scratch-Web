@@ -7,7 +7,7 @@
     "build": "npm --prefix frontend run build",
     "test:unit": "npm --prefix frontend run test:unit",
     "test:e2e": "npm --prefix frontend run test:e2e",
-    "check:resource-contract": "python scripts/generate-resource-contract.py --check",
+    "check:resource-contract": "python3 scripts/generate-resource-contract.py --check",
     "prepare:frontend": "npm --prefix frontend run prepare:scratch"
   }
 }

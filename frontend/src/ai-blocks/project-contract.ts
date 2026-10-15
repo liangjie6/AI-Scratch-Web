@@ -1,3 +1,4 @@
+import {sha256Hex} from '../shared/sha256';
 import type {ProgramIR, ValidationIssue} from './program-ir';
 import type {ProjectLocalState, ProjectManifest, ProjectProgramTarget, TargetRef} from './project-plan';
 
@@ -115,9 +116,9 @@ export function canonicalContractJson(value: unknown): string {
 }
 
 export async function contractSha256(value: unknown): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalContractJson(value));
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  // Works in insecure contexts too: the helper falls back to a portable
+  // SHA-256 when crypto.subtle is unavailable over plain HTTP.
+  return sha256Hex(new TextEncoder().encode(canonicalContractJson(value)));
 }
 
 /** Validate the deterministic TaskSpec -> Blueprint projection before resource resolution. */

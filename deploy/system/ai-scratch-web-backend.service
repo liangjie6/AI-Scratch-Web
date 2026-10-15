@@ -1,0 +1,22 @@
+[Unit]
+Description=AI Scratch Web Go backend
+Documentation=file://__REPO_ROOT__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__RUN_USER__
+WorkingDirectory=__REPO_ROOT__/backend-go
+ExecStart=__REPO_ROOT__/backend-go/bin/ai-scratch-web-backend --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+# Upstream AI providers are only reachable through the local proxy on this host.
+Environment=HTTPS_PROXY=http://127.0.0.1:7890
+Environment=HTTP_PROXY=http://127.0.0.1:7890
+Environment=NO_PROXY=127.0.0.1,localhost,::1
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

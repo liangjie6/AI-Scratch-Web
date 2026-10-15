@@ -6,9 +6,9 @@ import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'backend'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from app.resource_contract import (  # noqa: E402
+from resource_contract import (  # noqa: E402
     RESOURCE_CONTRACT_VERSION,
     RESOURCE_DIAGNOSTIC_CODES,
     RESOURCE_ERROR_CODES,
