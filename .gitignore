@@ -26,3 +26,6 @@ deploy/nginx/logs/
 deploy/nginx/temp/
 deploy/nginx/nginx.conf
 deploy/nginx/certs/
+
+# Private access password files
+*.htpasswd

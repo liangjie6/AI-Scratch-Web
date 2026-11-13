@@ -1,0 +1,120 @@
+{
+  "case": "broadcast",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/broadcast-attempt-437e72d4",
+  "request_id": "a58d3e63-99b3-453a-b1ba-c73266250af6",
+  "request_log_ref": "59ca2c9081f8082e",
+  "catalog_hash": "a377553fbd30c0f52460fcf3f44582706d07931afa54e166561db2cba194e821",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"CONTRACT_REVISION_REQUIRED\", \"detail\": \"slot requested a separately authorized contract revision\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/revision\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"sender_send\"}, \"phase\": \"program\", \"request_id\": \"a58d3e63-99b3-453a-b1ba-c73266250af6\"}}",
+  "duration_seconds": 23.91,
+  "model_request_seconds": [
+    9.815,
+    9.813,
+    4.272
+  ],
+  "tokens": {
+    "input_tokens": 20081,
+    "output_tokens": 1153,
+    "reasoning_tokens": 0,
+    "total_tokens": 21234,
+    "cached_input_tokens": 4864
+  },
+  "usage": [
+    {
+      "input_tokens": 1790,
+      "output_bytes": 2791,
+      "output_tokens": 916,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7208,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2706,
+      "usage": {
+        "input_tokens": 1790,
+        "output_tokens": 916,
+        "reasoning_tokens": 0,
+        "total_tokens": 2706
+      }
+    },
+    {
+      "input_tokens": 4059,
+      "output_bytes": 160,
+      "output_tokens": 43,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 15793,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "stage_init",
+      "total_tokens": 4102,
+      "usage": {
+        "input_tokens": 4059,
+        "output_tokens": 43,
+        "reasoning_tokens": 0,
+        "total_tokens": 4102
+      }
+    },
+    {
+      "input_tokens": 4190,
+      "output_bytes": 271,
+      "output_tokens": 99,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 16344,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "stage_init",
+      "total_tokens": 4289,
+      "usage": {
+        "input_tokens": 4190,
+        "output_tokens": 99,
+        "reasoning_tokens": 0,
+        "total_tokens": 4289
+      }
+    },
+    {
+      "input_tokens": 4961,
+      "output_bytes": 129,
+      "output_tokens": 36,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19603,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "sender_send",
+      "total_tokens": 4997,
+      "usage": {
+        "input_tokens": 4961,
+        "output_tokens": 36,
+        "reasoning_tokens": 0,
+        "total_tokens": 4997
+      }
+    },
+    {
+      "cached_input_tokens": 4864,
+      "input_tokens": 5081,
+      "output_bytes": 282,
+      "output_tokens": 59,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 20121,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "sender_send",
+      "total_tokens": 5140,
+      "usage": {
+        "cached_input_tokens": 4864,
+        "input_tokens": 5081,
+        "output_tokens": 59,
+        "reasoning_tokens": 0,
+        "total_tokens": 5140
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 5,
+  "missing_usage_events": 0,
+  "repairs": 2
+}

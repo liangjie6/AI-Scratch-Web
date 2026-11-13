@@ -1,0 +1,132 @@
+{
+  "case": "keyboard",
+  "model_tier": "advanced",
+  "provider": "DeepSeek",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:52:33.194049+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/deepseek/keyboard",
+  "request_id": "312aa196-e1ff-4d61-9b41-fe5e237ce938",
+  "request_log_ref": "35588c5f9793fc36",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "no key means no motion",
+        "status": "PASS",
+        "ticks": 5,
+        "primitiveCalls": 129418,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      },
+      {
+        "name": "held key produces repeated movement",
+        "status": "PASS",
+        "ticks": 8,
+        "primitiveCalls": 198173,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 89546,
+            "expected": {
+              "min": 10,
+              "max": 10000000
+            }
+          },
+          {
+            "name": "key:right arrow",
+            "status": "PASS",
+            "actual": true,
+            "expected": true
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1324,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "4d23d727fcbfef4a0a005215e3b24dd4beadd22d321802eefba0f3b3db5b31ff",
+  "duration_seconds": 22.088,
+  "backend_request_seconds": [
+    19.164
+  ],
+  "tokens": {
+    "cached_input_tokens": 6016,
+    "input_tokens": 7443,
+    "output_tokens": 2914,
+    "reasoning_tokens": 2518,
+    "total_tokens": 10357
+  },
+  "usage": [
+    {
+      "cached_input_tokens": 896,
+      "input_tokens": 1580,
+      "output_bytes": 1090,
+      "output_tokens": 2239,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 6526,
+      "provider": "deepseek",
+      "reasoning_tokens": 1956,
+      "slot_id": "",
+      "total_tokens": 3819,
+      "usage": {
+        "cached_input_tokens": 896,
+        "input_tokens": 1580,
+        "output_tokens": 2239,
+        "reasoning_tokens": 1956,
+        "total_tokens": 3819
+      }
+    },
+    {
+      "cached_input_tokens": 5120,
+      "input_tokens": 5863,
+      "output_bytes": 350,
+      "output_tokens": 675,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19947,
+      "provider": "deepseek",
+      "reasoning_tokens": 562,
+      "slot_id": "main",
+      "total_tokens": 6538,
+      "usage": {
+        "cached_input_tokens": 5120,
+        "input_tokens": 5863,
+        "output_tokens": 675,
+        "reasoning_tokens": 562,
+        "total_tokens": 6538
+      }
+    }
+  ],
+  "observed_providers": [
+    "deepseek"
+  ],
+  "model_calls": 2,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

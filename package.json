@@ -8,7 +8,9 @@
     "test:unit": "npm --prefix frontend run test:unit",
     "test:e2e": "npm --prefix frontend run test:e2e",
     "check:resource-contract": "python3 scripts/generate-resource-contract.py --check",
-    "prepare:frontend": "npm --prefix frontend run prepare:scratch"
+    "prepare:frontend": "npm --prefix frontend run prepare:scratch",
+    "generate:scratch-capabilities": "node scripts/generate-scratch-capabilities.mjs",
+    "check:scratch-capabilities": "node scripts/generate-scratch-capabilities.mjs --check",
+    "test:scratch-capabilities": "node --test scripts/scratch-capabilities.test.mjs"
   }
 }
-

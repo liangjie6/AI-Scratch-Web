@@ -1,3 +1,5 @@
+<p><img src="./frontend/public/logo.png" alt="AI-Scratch-Web Logo" width="96"></p>
+
 # AI Scratch Web
 
 AI Scratch Web 是一个本地优先的 Scratch 3 创作工作台。浏览器运行仓库内打包的 Scratch 编辑器，Python/FastAPI 后端提供 AI 生图、文本扩写和 AI 写积木服务。生成的图片可以进入 Scratch 项目、无边画布或本地素材库，项目可以导出为标准 SB3 文件。
@@ -583,7 +585,7 @@ python scripts\\generate-resource-contract.py --check
 ## Go 后端与 nginx 部署
 
 后端由 Go 1:1 完整实现（`backend-go/`）。
-当前站点由系统 nginx 和 systemd 托管，入口为 `https://kfcv50.icu:9966/`。详见：
+当前站点由系统 nginx 和 systemd 托管，入口为 `https://scratch.example.com:9966/`。详见：
 
 - [backend-go/README.md](backend-go/README.md)：Go 重写的包结构、构建方式、与 Python 版本的差异。
 - [deploy/README.md](deploy/README.md)：nginx 配置、IPv6 双栈、防火墙与 systemd 安装。
@@ -595,7 +597,7 @@ sudo bash deploy/system/publish-frontend.sh
 bash deploy/scripts/status.sh
 
 # 浏览器端到端探测
-node deploy/scripts/probe-page.mjs https://kfcv50.icu:9966/
+node deploy/scripts/probe-page.mjs https://scratch.example.com:9966/
 ```
 
 nginx 同时监听 `0.0.0.0:9966` 与 `[::]:9966`，`/api/`、`/health` 反代到
@@ -605,3 +607,5 @@ nginx 同时监听 `0.0.0.0:9966` 与 `[::]:9966`，`/api/`、`/health` 反代�
 ```bash
 sudo bash deploy/system/open-firewall.sh
 ```
+
+部署前先配置[私人访问口令与 HTTPS](docs/private-access.md)，缺少口令时后端拒绝启动。

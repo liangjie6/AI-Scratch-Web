@@ -1,0 +1,162 @@
+{
+  "case": "keyboard",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/keyboard-attempt-67923930",
+  "request_id": "0a057288-4dd8-4b7d-993f-688174cb8b46",
+  "request_log_ref": "e60a71af288454d3",
+  "catalog_hash": "a377553fbd30c0f52460fcf3f44582706d07931afa54e166561db2cba194e821",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "no key means no motion",
+        "status": "PASS",
+        "ticks": 5,
+        "primitiveCalls": 131083,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      },
+      {
+        "name": "held key produces repeated movement",
+        "status": "PASS",
+        "ticks": 8,
+        "primitiveCalls": 202018,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 91938,
+            "expected": {
+              "min": 10,
+              "max": 10000000
+            }
+          },
+          {
+            "name": "key:right arrow",
+            "status": "PASS",
+            "actual": true,
+            "expected": true
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1204,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "7ae20f57a356971e4ac3986460a0fb6f09cbad102f95fee9f0318228a5949b64",
+  "duration_seconds": 21.296,
+  "model_request_seconds": [
+    18.451
+  ],
+  "tokens": {
+    "input_tokens": 12970,
+    "output_tokens": 888,
+    "reasoning_tokens": 0,
+    "total_tokens": 13858,
+    "cached_input_tokens": 4608
+  },
+  "usage": [
+    {
+      "input_tokens": 1401,
+      "output_bytes": 873,
+      "output_tokens": 210,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 5941,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1611,
+      "usage": {
+        "input_tokens": 1401,
+        "output_tokens": 210,
+        "reasoning_tokens": 0,
+        "total_tokens": 1611
+      }
+    },
+    {
+      "input_tokens": 1692,
+      "output_bytes": 1086,
+      "output_tokens": 347,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7179,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2039,
+      "usage": {
+        "input_tokens": 1692,
+        "output_tokens": 347,
+        "reasoning_tokens": 0,
+        "total_tokens": 2039
+      }
+    },
+    {
+      "input_tokens": 4845,
+      "output_bytes": 413,
+      "output_tokens": 107,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19323,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "move_right",
+      "total_tokens": 4952,
+      "usage": {
+        "input_tokens": 4845,
+        "output_tokens": 107,
+        "reasoning_tokens": 0,
+        "total_tokens": 4952
+      }
+    },
+    {
+      "cached_input_tokens": 4608,
+      "input_tokens": 5032,
+      "output_bytes": 811,
+      "output_tokens": 224,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 20096,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "move_right",
+      "total_tokens": 5256,
+      "usage": {
+        "cached_input_tokens": 4608,
+        "input_tokens": 5032,
+        "output_tokens": 224,
+        "reasoning_tokens": 0,
+        "total_tokens": 5256
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 4,
+  "missing_usage_events": 0,
+  "repairs": 2
+}

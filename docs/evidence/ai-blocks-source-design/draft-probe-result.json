@@ -1,0 +1,129 @@
+{
+  "status": "PASS",
+  "scope": "sample normalization and existing TypeScript compiler only",
+  "normalizedProgram": {
+    "schema_version": 1,
+    "summary": "初始化位置、移动并检查结果",
+    "remove_script_ids": [],
+    "variables": [],
+    "lists": [],
+    "broadcasts": [],
+    "procedures": [],
+    "scripts": [
+      {
+        "id": "script_move_and_check",
+        "purpose": "初始化位置、移动并检查结果",
+        "x": 0,
+        "y": 0,
+        "blocks": [
+          {
+            "opcode": "event_whenflagclicked"
+          },
+          {
+            "opcode": "motion_gotoxy",
+            "inputs": {
+              "X": {
+                "kind": "number",
+                "value": 0
+              },
+              "Y": {
+                "kind": "number",
+                "value": 0
+              }
+            }
+          },
+          {
+            "opcode": "control_repeat",
+            "inputs": {
+              "TIMES": {
+                "kind": "number",
+                "value": 5
+              }
+            },
+            "substacks": {
+              "SUBSTACK": [
+                {
+                  "opcode": "motion_changexby",
+                  "inputs": {
+                    "DX": {
+                      "kind": "number",
+                      "value": 10
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "opcode": "control_if",
+            "inputs": {
+              "CONDITION": {
+                "kind": "block",
+                "block": {
+                  "opcode": "operator_gt",
+                  "inputs": {
+                    "OPERAND1": {
+                      "kind": "block",
+                      "block": {
+                        "opcode": "motion_xposition"
+                      }
+                    },
+                    "OPERAND2": {
+                      "kind": "text",
+                      "value": "40"
+                    }
+                  }
+                }
+              }
+            },
+            "substacks": {
+              "SUBSTACK": [
+                {
+                  "opcode": "looks_say",
+                  "inputs": {
+                    "MESSAGE": {
+                      "kind": "text",
+                      "value": "完成"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "compiled": {
+    "visibleBlocks": 8,
+    "shadowBlocks": 7,
+    "topLevelScripts": 1
+  },
+  "negativeCasesRejected": [
+    "wrong_slot",
+    "unknown_port",
+    "text_literal_as_number",
+    "boolean_literal_in_condition",
+    "reporter_in_stack",
+    "hat_in_body",
+    "cap_with_following_block",
+    "missing_required_input"
+  ],
+  "existingContractObservations": {
+    "frontendAcceptsCapFollowed": true,
+    "note": "The demo normalizer rejects this; the current Go validator also has an explicit cap-last rule. Production files were not changed."
+  },
+  "utf8Bytes": {
+    "draft": 432,
+    "normalizedProgram": 903
+  },
+  "byteComparisonIsNotTokenOrCostMeasurement": true,
+  "sourceHashes": {
+    "frontend/package-lock.json": "66b0292382375fd41926bbfad7e042c2d10f607f6f4b5c573d4599357ad66947",
+    "frontend/src/ai-blocks/block-catalog.ts": "2a4d097cf00e6e9d79b4b3cbcc82a527f41fe99180650a99114fe61d2b5a009d",
+    "frontend/src/ai-blocks/program-compiler.ts": "89854b7556aa47e9e729b54a9d91ac9385033b7cfedfdce4b90c76ca06aa040a",
+    "frontend/node_modules/scratch-blocks/src/blocks/control.ts": "a0153c4782c339e7069f684b6b2e3bbd29e8995816df6b6cf256462749c77e16",
+    "frontend/node_modules/@scratch/scratch-gui/src/lib/blocks.js": "d9e49356870cdb2c1c91ff463424ebbf0f4c00fd449b4dc23e90d1312a45881b",
+    "frontend/node_modules/@scratch/scratch-vm/src/engine/runtime.js": "fc30983d1213ba4c0053086464045f26e2cc0abb7957361d3e6054179aae2d78"
+  }
+}

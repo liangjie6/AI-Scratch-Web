@@ -1,0 +1,43 @@
+{
+  "status": "PASS",
+  "vmVersion": "15.1.1",
+  "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+  "scenarios": [
+    {
+      "name": "rewrite preserves unrelated code/state",
+      "status": "PASS",
+      "ticks": 10,
+      "primitiveCalls": 1,
+      "assertions": [
+        {
+          "name": "x",
+          "status": "PASS",
+          "actual": 20,
+          "expected": 20
+        },
+        {
+          "name": "y",
+          "status": "PASS",
+          "actual": 0,
+          "expected": 0
+        },
+        {
+          "name": "variable:untouched",
+          "status": "PASS",
+          "actual": 7,
+          "expected": 7
+        }
+      ],
+      "preservation": {
+        "status": "PASS",
+        "mode": "rewrite",
+        "removedScripts": 2,
+        "preservedBlocks": 1
+      }
+    }
+  ],
+  "roundTrip": {
+    "status": "SKIPPED",
+    "reason": "not requested"
+  }
+}

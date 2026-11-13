@@ -1,0 +1,56 @@
+{
+  "case": "keyboard",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"program\", \"request_id\": \"3a2bd0d8-a248-4983-b826-49f0fb5db430\"}}",
+  "duration_seconds": 11.629,
+  "model_request_seconds": [
+    11.623
+  ],
+  "tokens": {
+    "input_tokens": 6223,
+    "output_tokens": 347,
+    "reasoning_tokens": 0,
+    "total_tokens": 6570
+  },
+  "usage": [
+    {
+      "input_tokens": 1401,
+      "output_bytes": 972,
+      "output_tokens": 232,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 5941,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1633,
+      "usage": {
+        "input_tokens": 1401,
+        "output_tokens": 232,
+        "reasoning_tokens": 0,
+        "total_tokens": 1633
+      }
+    },
+    {
+      "input_tokens": 4822,
+      "output_bytes": 443,
+      "output_tokens": 115,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19160,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "move_right",
+      "total_tokens": 4937,
+      "usage": {
+        "input_tokens": 4822,
+        "output_tokens": 115,
+        "reasoning_tokens": 0,
+        "total_tokens": 4937
+      }
+    }
+  ],
+  "model_calls": 3,
+  "repairs": 1
+}

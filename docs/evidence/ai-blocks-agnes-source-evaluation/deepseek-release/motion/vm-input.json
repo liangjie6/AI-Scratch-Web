@@ -1,0 +1,98 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "X": {
+                    "kind": "number",
+                    "value": 0
+                  },
+                  "Y": {
+                    "kind": "number",
+                    "value": 0
+                  }
+                },
+                "opcode": "motion_gotoxy",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "TIMES": {
+                    "kind": "number",
+                    "value": 3
+                  }
+                },
+                "opcode": "control_repeat",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {},
+                      "inputs": {
+                        "DX": {
+                          "kind": "number",
+                          "value": 10
+                        }
+                      },
+                      "opcode": "motion_changexby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_0d6e4079e36703eb",
+            "purpose": "点击绿旗后移动到x=0、y=0，然后重复3次：每次将x增加10；必须是有限3次而非永久循环。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "绿旗后移动到原点并有限重复3次加x",
+        "variables": []
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "states": []
+  },
+  "scenarios": [
+    {
+      "name": "exactly three moves",
+      "maxTicks": 12,
+      "expect": {
+        "x": 30,
+        "y": 0
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

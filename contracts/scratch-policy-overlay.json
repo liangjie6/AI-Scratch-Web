@@ -1,0 +1,1708 @@
+{
+  "schema_version": 1,
+  "pinnedVersions": {
+    "scratch-blocks": "2.1.19",
+    "blockly": "12.5.1",
+    "@scratch/scratch-gui": "15.1.1",
+    "@scratch/scratch-vm": "15.1.1"
+  },
+  "allowedExtensions": [
+    "pen",
+    "music",
+    "text2speech"
+  ],
+  "description": "Reviewed AI authoring subset. Literal kinds, target restrictions and compiler shadow/reference policy are explicit; native structure is extracted. Native menu defaults never widen permissions.",
+  "dynamicMenus": {
+    "motion_goto_menu.TO": "sprites_except_self",
+    "motion_glideto_menu.TO": "sprites_except_self",
+    "motion_pointtowards_menu.TOWARDS": "sprites_except_self",
+    "sensing_touchingobjectmenu.TOUCHINGOBJECTMENU": "sprites_except_self",
+    "sensing_distancetomenu.DISTANCETOMENU": "sprites_except_self",
+    "control_create_clone_of_menu.CLONE_OPTION": "clone_targets",
+    "sound_sounds_menu.SOUND_MENU": "sounds_of_target",
+    "looks_costume.COSTUME": "costumes_of_target",
+    "looks_backdrops.BACKDROP": "backdrops_of_stage",
+    "event_whenbackdropswitchesto.BACKDROP": "backdrops_of_stage",
+    "event_broadcast_menu.BROADCAST_OPTION": "broadcasts_in_scope",
+    "event_whenbroadcastreceived.BROADCAST_OPTION": "broadcasts_in_scope",
+    "control_stop.STOP_OPTION": "stop_options"
+  },
+  "excludedMenuValues": [
+    "RENAME_VARIABLE_ID",
+    "DELETE_VARIABLE_ID",
+    "NEW_BROADCAST_MESSAGE_ID",
+    "SOUND_RECORD"
+  ],
+  "blocks": {
+    "event_whenflagclicked": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "event_whenkeypressed": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "event_whenthisspriteclicked": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "event_whenstageclicked": {
+      "targets": [
+        "stage"
+      ]
+    },
+    "event_whenbackdropswitchesto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "BACKDROP": {
+          "required": true,
+          "resourceType": "backdrop"
+        }
+      }
+    },
+    "event_whengreaterthan": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "event_whenbroadcastreceived": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "BROADCAST_OPTION": {
+          "required": true,
+          "resolver": "broadcast"
+        }
+      }
+    },
+    "event_broadcast": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "BROADCAST_INPUT": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "event_broadcast_menu",
+          "shadowField": "BROADCAST_OPTION",
+          "shadowResolver": "broadcast"
+        }
+      }
+    },
+    "event_broadcastandwait": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "BROADCAST_INPUT": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "event_broadcast_menu",
+          "shadowField": "BROADCAST_OPTION",
+          "shadowResolver": "broadcast"
+        }
+      }
+    },
+    "motion_movesteps": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "STEPS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_turnright": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DEGREES": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_turnleft": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DEGREES": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_goto": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "TO": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "motion_goto_menu",
+          "shadowField": "TO",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "motion_gotoxy": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "X": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "Y": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_glideto": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "SECS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "TO": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "motion_glideto_menu",
+          "shadowField": "TO",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "motion_glidesecstoxy": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "SECS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "X": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "Y": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_pointindirection": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DIRECTION": {
+          "kind": "angle",
+          "shadow": "angle",
+          "required": true
+        }
+      }
+    },
+    "motion_pointtowards": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "TOWARDS": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "motion_pointtowards_menu",
+          "shadowField": "TOWARDS",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "motion_changexby": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DX": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_setx": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "X": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_changeyby": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DY": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_sety": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "Y": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "motion_ifonedgebounce": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "motion_setrotationstyle": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "motion_xposition": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "motion_yposition": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "motion_direction": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_sayforsecs": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "MESSAGE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "SECS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_say": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "MESSAGE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "looks_thinkforsecs": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "MESSAGE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "SECS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_think": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "MESSAGE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "looks_switchcostumeto": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COSTUME": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "looks_costume",
+          "shadowField": "COSTUME",
+          "resourceType": "costume"
+        }
+      }
+    },
+    "looks_nextcostume": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_switchbackdropto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "BACKDROP": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "looks_backdrops",
+          "shadowField": "BACKDROP",
+          "resourceType": "backdrop"
+        }
+      }
+    },
+    "looks_nextbackdrop": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "looks_changesizeby": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "CHANGE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_setsizeto": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "SIZE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_changeeffectby": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CHANGE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_seteffectto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_cleargraphiceffects": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "looks_show": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_hide": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_gotofrontback": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_goforwardbackwardlayers": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "NUM": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "looks_costumenumbername": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "looks_backdropnumbername": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "looks_size": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "sound_playuntildone": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "SOUND_MENU": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "sound_sounds_menu",
+          "shadowField": "SOUND_MENU",
+          "resourceType": "sound"
+        }
+      }
+    },
+    "sound_play": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "SOUND_MENU": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "sound_sounds_menu",
+          "shadowField": "SOUND_MENU",
+          "resourceType": "sound"
+        }
+      }
+    },
+    "sound_stopallsounds": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sound_changeeffectby": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "sound_seteffectto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "sound_cleareffects": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sound_changevolumeby": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VOLUME": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "sound_setvolumeto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VOLUME": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "sound_volume": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "control_wait": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "DURATION": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "control_repeat": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "TIMES": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "control_forever": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "control_if": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CONDITION": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "control_if_else": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CONDITION": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "control_wait_until": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CONDITION": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "control_repeat_until": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CONDITION": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "control_stop": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "shapeOverride": "cap",
+      "unsupportedVariants": [
+        "STOP_OPTION=other scripts in sprite followed by another block"
+      ]
+    },
+    "control_start_as_clone": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "control_create_clone_of": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "CLONE_OPTION": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "control_create_clone_of_menu",
+          "shadowField": "CLONE_OPTION",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "control_delete_this_clone": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "sensing_touchingobject": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "TOUCHINGOBJECTMENU": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "sensing_touchingobjectmenu",
+          "shadowField": "TOUCHINGOBJECTMENU",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "sensing_touchingcolor": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COLOR": {
+          "kind": "color",
+          "shadow": "color",
+          "required": true
+        }
+      }
+    },
+    "sensing_coloristouchingcolor": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COLOR": {
+          "kind": "color",
+          "shadow": "color",
+          "required": true
+        },
+        "COLOR2": {
+          "kind": "color",
+          "shadow": "color",
+          "required": true
+        }
+      }
+    },
+    "sensing_distanceto": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "DISTANCETOMENU": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "sensing_distancetomenu",
+          "shadowField": "DISTANCETOMENU",
+          "resourceType": "sprite"
+        }
+      }
+    },
+    "sensing_askandwait": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "QUESTION": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "sensing_answer": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_keypressed": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "KEY_OPTION": {
+          "kind": "text",
+          "required": true,
+          "shadow": "text",
+          "shadowOpcode": "sensing_keyoptions",
+          "shadowField": "KEY_OPTION"
+        }
+      }
+    },
+    "sensing_mousedown": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_mousex": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_mousey": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_setdragmode": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "sensing_loudness": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_timer": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_resettimer": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_current": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_dayssince2000": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "sensing_username": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "operator_add": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM1": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "NUM2": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_subtract": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM1": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "NUM2": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_multiply": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM1": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "NUM2": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_divide": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM1": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "NUM2": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_random": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "FROM": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "TO": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_gt": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND1": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        },
+        "OPERAND2": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_lt": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND1": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        },
+        "OPERAND2": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_equals": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND1": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        },
+        "OPERAND2": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_and": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND1": {
+          "kind": "boolean",
+          "required": true
+        },
+        "OPERAND2": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "operator_or": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND1": {
+          "kind": "boolean",
+          "required": true
+        },
+        "OPERAND2": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "operator_not": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "OPERAND": {
+          "kind": "boolean",
+          "required": true
+        }
+      }
+    },
+    "operator_join": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "STRING1": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "STRING2": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_letter_of": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "LETTER": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "STRING": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_length": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "STRING": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_contains": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "STRING1": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "STRING2": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "operator_mod": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM1": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "NUM2": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_round": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "operator_mathop": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NUM": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "data_variable": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "VARIABLE": {
+          "required": true,
+          "resolver": "variable"
+        }
+      }
+    },
+    "data_setvariableto": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "VARIABLE": {
+          "required": true,
+          "resolver": "variable"
+        }
+      }
+    },
+    "data_changevariableby": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "VARIABLE": {
+          "required": true,
+          "resolver": "variable"
+        }
+      }
+    },
+    "data_showvariable": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "VARIABLE": {
+          "required": true,
+          "resolver": "variable"
+        }
+      }
+    },
+    "data_hidevariable": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "VARIABLE": {
+          "required": true,
+          "resolver": "variable"
+        }
+      }
+    },
+    "data_listcontents": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_addtolist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "ITEM": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_deleteoflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "INDEX": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_deletealloflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_insertatlist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "ITEM": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        },
+        "INDEX": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_replaceitemoflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "INDEX": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "ITEM": {
+          "kind": "any",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_itemoflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "INDEX": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_itemnumoflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "ITEM": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_lengthoflist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_listcontainsitem": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "ITEM": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      },
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_showlist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "data_hidelist": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "fieldReferences": {
+        "LIST": {
+          "required": true,
+          "resolver": "list"
+        }
+      }
+    },
+    "pen_clear": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "pen_stamp": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "pen_penDown": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "pen_penUp": {
+      "targets": [
+        "sprite"
+      ]
+    },
+    "pen_setPenColorToColor": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COLOR": {
+          "kind": "color",
+          "shadow": "color",
+          "required": true
+        }
+      }
+    },
+    "pen_changePenColorParamBy": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COLOR_PARAM": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "pen_setPenColorParamTo": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "COLOR_PARAM": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        },
+        "VALUE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "pen_changePenSizeBy": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "SIZE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "pen_setPenSizeTo": {
+      "targets": [
+        "sprite"
+      ],
+      "inputs": {
+        "SIZE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_playDrumForBeats": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "DRUM": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "BEATS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_restForBeats": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "BEATS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_playNoteForBeats": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "NOTE": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        },
+        "BEATS": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_setInstrument": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "INSTRUMENT": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_setTempo": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "TEMPO": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_changeTempo": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "TEMPO": {
+          "kind": "number",
+          "shadow": "number",
+          "required": true
+        }
+      }
+    },
+    "music_getTempo": {
+      "targets": [
+        "stage",
+        "sprite"
+      ]
+    },
+    "text2speech_speakAndWait": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "WORDS": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "text2speech_setVoice": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "VOICE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    },
+    "text2speech_setLanguage": {
+      "targets": [
+        "stage",
+        "sprite"
+      ],
+      "inputs": {
+        "LANGUAGE": {
+          "kind": "text",
+          "shadow": "text",
+          "required": true
+        }
+      }
+    }
+  }
+}

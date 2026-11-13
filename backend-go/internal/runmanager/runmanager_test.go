@@ -351,6 +351,7 @@ func TestToolResultAndProgramContextsEndToEnd(t *testing.T) {
 	// The program task drops the transient contexts in its finally block, so a
 	// context submitted after the run moved on no longer matches the retained
 	// state and is rejected, exactly like the Python manager.
+	fixture.waitForTaskCleanup(t, runID)
 	if _, err := fixture.manager.SubmitProgramContexts(context.Background(), contexts); err == nil {
 		t.Fatal("program context was accepted after the run moved on")
 	} else if err.Error() != "program contexts require run status awaiting_tool_result" {

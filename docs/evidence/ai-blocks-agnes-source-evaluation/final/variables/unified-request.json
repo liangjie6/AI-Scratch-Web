@@ -1,0 +1,37 @@
+{
+  "pipeline_version": "scratch-source/1",
+  "model_tier": "normal",
+  "session_id": "agnes-source-eval-variables",
+  "request_id": "3c262838-6a02-44a4-ab56-0a4711116409",
+  "thinking": {
+    "enabled": false,
+    "strength": "low"
+  },
+  "scope": "single_sprite",
+  "asset_policy": "existing_only",
+  "proceed_with_defaults": true,
+  "permitted_extensions": [],
+  "target": {
+    "name": "Probe",
+    "is_stage": false,
+    "has_scripts": false,
+    "mode": "append",
+    "costumes": [
+      "costume1"
+    ],
+    "backdrops": [
+      "backdrop1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Probe"
+    ],
+    "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": [{\"id\": \"existing_counter\", \"name\": \"counter\", \"type\": \"\", \"value\": 42}]}"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "复用现有全局变量counter。点击绿旗后把counter设为0，再重复5次，每次counter增加2，最后counter必须为10。不移动角色、不添加资源，不使用永远循环。"
+    }
+  ]
+}

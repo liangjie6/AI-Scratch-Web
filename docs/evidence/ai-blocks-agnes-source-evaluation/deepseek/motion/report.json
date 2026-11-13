@@ -1,0 +1,109 @@
+{
+  "case": "motion",
+  "model_tier": "advanced",
+  "provider": "DeepSeek",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:52:01.480507+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/deepseek/motion",
+  "request_id": "fb4be98e-cc82-418b-b73d-dcd4f3ce6815",
+  "request_log_ref": "8e87c0dc37c2f595",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "exactly three moves",
+        "status": "PASS",
+        "ticks": 12,
+        "primitiveCalls": 8,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 30,
+            "expected": 30
+          },
+          {
+            "name": "y",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1157,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "cb1617befa3f10b59002be45a537d0aff6c20be9a5dfe54949113e3c7ee6eda1",
+  "duration_seconds": 16.652,
+  "backend_request_seconds": [
+    13.335
+  ],
+  "tokens": {
+    "cached_input_tokens": 0,
+    "input_tokens": 7368,
+    "output_tokens": 1823,
+    "reasoning_tokens": 1488,
+    "total_tokens": 9191
+  },
+  "usage": [
+    {
+      "cached_input_tokens": 0,
+      "input_tokens": 1568,
+      "output_bytes": 874,
+      "output_tokens": 1742,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 6449,
+      "provider": "deepseek",
+      "reasoning_tokens": 1488,
+      "slot_id": "",
+      "total_tokens": 3310,
+      "usage": {
+        "cached_input_tokens": 0,
+        "input_tokens": 1568,
+        "output_tokens": 1742,
+        "reasoning_tokens": 1488,
+        "total_tokens": 3310
+      }
+    },
+    {
+      "cached_input_tokens": 0,
+      "input_tokens": 5800,
+      "output_bytes": 235,
+      "output_tokens": 81,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19606,
+      "provider": "deepseek",
+      "reasoning_tokens": 0,
+      "slot_id": "main",
+      "total_tokens": 5881,
+      "usage": {
+        "cached_input_tokens": 0,
+        "input_tokens": 5800,
+        "output_tokens": 81,
+        "reasoning_tokens": 0,
+        "total_tokens": 5881
+      }
+    }
+  ],
+  "observed_providers": [
+    "deepseek"
+  ],
+  "model_calls": 2,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

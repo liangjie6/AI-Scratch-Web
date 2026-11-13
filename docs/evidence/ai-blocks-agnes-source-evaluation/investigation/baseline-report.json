@@ -1,0 +1,15 @@
+{
+  "duration_seconds": 5.33,
+  "terminal": {
+    "type": "error",
+    "payload": {
+      "data": {
+        "code": "OUTPUT_PROTOCOL_ERROR",
+        "message": "AI 输出未通过协议校验"
+      },
+      "request_id": "e18d5d6e-5d49-4e86-9182-42914e16b3e2"
+    }
+  },
+  "usage": [],
+  "repairs": 0
+}

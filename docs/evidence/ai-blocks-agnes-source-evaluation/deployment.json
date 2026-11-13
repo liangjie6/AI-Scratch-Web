@@ -1,0 +1,55 @@
+{
+  "checked_at_utc": "2026-10-16T07:36:45.489237+00:00",
+  "base_url": "https://scratch.example.com:9966",
+  "health": {
+    "agnes_configured": true,
+    "deepseek_configured": true,
+    "gpt_configured": true,
+    "provider_configured": true,
+    "status": "ok"
+  },
+  "capabilities": {
+    "ai_blocks_protocol": [
+      2,
+      3
+    ],
+    "ai_runs_protocol": "ai-scratch-run/1",
+    "features": {
+      "ai_commit": true,
+      "asset_auto_match": false,
+      "asset_auto_match_min_margin": 5,
+      "asset_auto_match_min_score": 8,
+      "audio_generation": false,
+      "crash_checkpoint": true,
+      "destructive_sound_ops": false,
+      "destructive_sprite_ops": false,
+      "durable_runs": false,
+      "logical_resource_refs": true,
+      "music_extension": false,
+      "pen_extension": false,
+      "project_assets": true,
+      "short_commit": true,
+      "sound_assets": true,
+      "source_pipeline": true,
+      "text_to_speech_extension": false
+    },
+    "program_ir": [
+      1,
+      2
+    ],
+    "project_manifest": [
+      2,
+      3
+    ],
+    "source_pipeline_version": "scratch-source/1"
+  },
+  "frontend_entry": "/assets/index-DGU_tyKe.js",
+  "frontend_sha256": "7bae844b5f5025b0281956e259d26f6953c11f83fa974f0a2c60ea46b23884bf",
+  "backend_sha256": "6d4249d618bac9e4f74231e2049a2aa5477682a1149316fdd545843cc3fd87ce",
+  "checks": {
+    "served_frontend_matches_build": true,
+    "published_backend_matches_acceptance": true,
+    "source_protocol_enabled": true
+  },
+  "rollback_backup": "/tmp/ai-scratch-release-20261016"
+}

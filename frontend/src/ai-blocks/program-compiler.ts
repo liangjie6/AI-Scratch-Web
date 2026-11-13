@@ -79,6 +79,25 @@ interface ValidationContext {
   enabledExtensions: ReadonlySet<BuiltinAiExtension>;
 }
 
+/** Match the backend sequence contract before compiling parent/next links. */
+const validateSequenceShape = (blocks: unknown[], path: string, script: boolean, issues: ValidationIssue[]): void => {
+  blocks.forEach((block, index) => {
+    if (!isRecord(block) || typeof block.opcode !== 'string') return;
+    const shape = getBlockSpec(block.opcode)?.shape;
+    if (script && index === 0 && shape !== 'hat') {
+      issues.push({path: `${path}[${index}]`, message: 'script must start with an event hat block'});
+    }
+    if (shape === 'hat' && (!script || index > 0)) {
+      issues.push({path: `${path}[${index}]`, message: 'event hat block cannot appear here'});
+    }
+    // Keep the current catalog policy for field-dependent stop variants. Such
+    // variants require a coordinated catalog/backend change before support.
+    if (shape === 'cap' && index < blocks.length - 1) {
+      issues.push({path: `${path}[${index}]`, message: 'cap block must be the last block in its stack'});
+    }
+  });
+};
+
 const validateInput = (
   value: unknown,
   expected: InputKind | 'boolean' | 'any',
@@ -296,7 +315,10 @@ const validateBlock = (
       if (!allowed.includes(name)) context.issues.push({path: `${path}.substacks.${name}`, message: 'substack not allowed for opcode'});
       const stack = actual[name];
       if (!Array.isArray(stack)) context.issues.push({path: `${path}.substacks.${name}`, message: 'must be an array'});
-      else stack.forEach((block, index) => validateBlock(block, `${path}.substacks.${name}[${index}]`, depth + 1, context));
+      else {
+        validateSequenceShape(stack, `${path}.substacks.${name}`, false, context.issues);
+        stack.forEach((block, index) => validateBlock(block, `${path}.substacks.${name}[${index}]`, depth + 1, context));
+      }
     }
     for (const name of allowed) {
       if (!hasOwn(actual, name)) context.issues.push({path: `${path}.substacks.${name}`, message: 'required substack is missing'});
@@ -412,6 +434,7 @@ export const validateProgramIR = (
         return;
       }
       context.procedureArguments = new Map((procedures.get(procedure.id) ?? []).map(parameter => [parameter.id, parameter]));
+      validateSequenceShape(procedure.body, `$.procedures[${procedureIndex}].body`, false, issues);
       procedure.body.forEach((block, blockIndex) => {
         const blockPath = `$.procedures[${procedureIndex}].body[${blockIndex}]`;
         if (isRecord(block) && (String(block.opcode).startsWith('event_') || block.opcode === 'procedures_call')) {
@@ -436,7 +459,10 @@ export const validateProgramIR = (
       checkFinite(script.x, path + '.x', issues);
       checkFinite(script.y, path + '.y', issues);
       if (!Array.isArray(script.blocks) || script.blocks.length === 0) issues.push({path: path + '.blocks', message: 'must be a non-empty array'});
-      else script.blocks.forEach((block, index) => validateBlock(block, `${path}.blocks[${index}]`, 1, context));
+      else {
+        validateSequenceShape(script.blocks, `${path}.blocks`, true, issues);
+        script.blocks.forEach((block, index) => validateBlock(block, `${path}.blocks[${index}]`, 1, context));
+      }
     });
     if (context.visibleBlocks > PROGRAM_IR_LIMITS.visibleBlocks) issues.push({path: '$.scripts', message: `maximum is ${PROGRAM_IR_LIMITS.visibleBlocks} visible blocks`});
   }

@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-10-16T07:15:57.598187+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "pid": 520767,
+  "binary_path": "/tmp/ai-scratch-agnes-refactor/backend-release",
+  "binary_sha256": "6d4249d618bac9e4f74231e2049a2aa5477682a1149316fdd545843cc3fd87ce",
+  "vm_version": "15.1.1",
+  "model_tier": "advanced",
+  "configured_provider": "DeepSeek",
+  "scope": "release acceptance backend binary fingerprint, without provider credentials",
+  "completed_at": "2026-10-16T07:18:14.334232+00:00",
+  "completion_pid": 520767,
+  "completion_binary_sha256": "6d4249d618bac9e4f74231e2049a2aa5477682a1149316fdd545843cc3fd87ce",
+  "binary_unchanged": true
+}

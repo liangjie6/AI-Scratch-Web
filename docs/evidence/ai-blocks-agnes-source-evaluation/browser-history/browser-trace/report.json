@@ -1,0 +1,40 @@
+{
+  "provider": "deepseek",
+  "modelTier": "advanced",
+  "baseURL": "http://127.0.0.1:18066",
+  "startedAt": "2026-10-16T07:30:00.809Z",
+  "loadedScripts": [
+    "http://127.0.0.1:18066/@vite/client",
+    "http://127.0.0.1:18066/assets/scratch/scratch-gui-standalone.js",
+    "http://127.0.0.1:18066/src/main.ts?t=1792135240000"
+  ],
+  "status": "FAIL",
+  "durationSeconds": 92.181,
+  "error": "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText('已撤销本次 AI 生成。', { exact: true }) to be visible\u001b[22m\n",
+  "pageErrors": [],
+  "visibleText": "AI 写积木\n角色1\n生成范围\n当前角色\n整个项目\n写入模式\n修改当前代码\n旁路新增\n清空重写\n素材策略\n内置素材优先\n仅已有素材\n允许生图\n请等待 Scratch 编辑器加载完成\n\n角色“角色1”已就绪。告诉我想实现的效果，我会一次完成需求整理、规划和积木生成。\n\n你\n\n点击绿旗后移动到x=0、y=0，然后重复3次，每次将x增加10。只修改当前角色，不添加资源。\n\n已完成统一生成并写入 1 个目标。\n\n计划大纲\n已完成\n运行查看\n撤销生成\n模型档位\n普通\n高级\n超级\n思考\n关\n6,966\ntokens",
+  "targetTrace": [
+    {
+      "event": "beforeLoad",
+      "editingId": "7d;hfM-49TLxK0U;HAD;",
+      "targets": [
+        {
+          "id": "/m=86_vqgG?}HR{8prei",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "7d;hfM-49TLxK0U;HAD;",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    },
+    {
+      "event": "loadError",
+      "message": "请等待 Scratch 编辑器加载完成",
+      "stack": "Error: 请等待 Scratch 编辑器加载完成\n    at readAiTargetSnapshot (http://127.0.0.1:18066/src/ai-blocks/target-context.ts?t=1792132935544:106:29)\n    at refreshTarget (http://127.0.0.1:18066/src/ai-blocks/AiBlocksPanel.vue?t=1792135240000:227:20)\n    at http://127.0.0.1:18066/src/ai-blocks/AiBlocksPanel.vue?t=1792135240000:255:28\n    at http://127.0.0.1:18066/src/scratch/scratch-gui-bridge.ts:68:70\n    at Set.forEach (<anonymous>)\n    at e.exports.onTargetsUpdate (http://127.0.0.1:18066/src/scratch/scratch-gui-bridge.ts:68:48)\n    at a.emit (http://127.0.0.1:18066/assets/scratch/scratch-gui-standalone.js:2:12547294)\n    at e.exports.emitTargetsUpdate (http://127.0.0.1:18066/assets/scratch/scratch-gui-standalone.js:2:885165)\n    at e.exports.clear (http://127.0.0.1:18066/assets/scratch/scratch-gui-standalone.js:2:872021)\n    at e.exports.deserializeProject (http://127.0.0.1:18066/assets/scratch/scratch-gui-standalone.js:2:874678)",
+      "targets": []
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "status": "FAIL",
+  "vmVersion": "15.1.1",
+  "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+  "scenarios": [
+    {
+      "name": "repeat-exactly-three",
+      "status": "TIMEOUT",
+      "error": "primitive budget exceeded",
+      "primitiveCalls": 100001
+    }
+  ],
+  "roundTrip": {
+    "status": "PASS",
+    "bytes": 1113,
+    "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+  }
+}

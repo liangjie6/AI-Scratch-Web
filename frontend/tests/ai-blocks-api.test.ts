@@ -1,5 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {streamAiBlocksChat, streamUnifiedGeneration, type AiBlocksTargetContext, type UnifiedGenerationRequest} from '../src/ai-blocks/ai-blocks-api';
+import {streamAiBlocksChat, streamSourceProgram, streamUnifiedGeneration, type AiBlocksTargetContext, type UnifiedGenerationRequest} from '../src/ai-blocks/ai-blocks-api';
+import fixture from './fixtures/source-project.json';
+import type {FrozenSourceContract} from '../src/ai-blocks/source-contract';
 
 const target: AiBlocksTargetContext = {
   name: '角色1', is_stage: false, has_scripts: false, mode: 'append', costumes: ['造型1'], sounds: [], sprite_names: ['角色1'], current_program: '{}'
@@ -45,6 +47,23 @@ function generatedFrames() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('unified AI blocks API', () => {
+  it('uses the negotiated source endpoint and parses a real normalized ProgramIR response', async () => {
+    const program = fixture.programs[0];
+    const sourceRequest = {
+      request: {...base, pipeline_version: 'scratch-source/1' as const},
+      source_contract: fixture.source_contract as unknown as FrozenSourceContract,
+      target_index: 0,
+      target,
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse([frame('complete', {target_index: 0, program})], 2));
+    vi.stubGlobal('fetch', fetchMock);
+    const received: unknown[] = [];
+    await streamSourceProgram(sourceRequest, event => received.push(event.data.program));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/ai-blocks/generate-source-program');
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toEqual(sourceRequest);
+    expect(received).toEqual([program]);
+  });
+
   it('uses one request and parses split UTF-8 unified events', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => sseResponse(generatedFrames(), 2));
     vi.stubGlobal('fetch', fetchMock);

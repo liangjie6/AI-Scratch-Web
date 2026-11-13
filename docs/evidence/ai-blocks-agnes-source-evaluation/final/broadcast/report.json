@@ -1,0 +1,16 @@
+{
+  "case": "broadcast",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"7576c2f1-d427-404d-9c51-f0b8781d520f\"}}",
+  "duration_seconds": 0.404,
+  "model_request_seconds": [
+    0.401
+  ],
+  "tokens": {},
+  "usage": [],
+  "model_calls": 1,
+  "repairs": 0
+}

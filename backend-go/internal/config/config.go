@@ -21,6 +21,8 @@ func (e *ConfigurationError) Error() string { return e.Message }
 
 // Settings is the Go equivalent of the pydantic Settings model.
 type Settings struct {
+	AccessUser     string
+	AccessPassword string
 	SuiXiangAPIKey string
 	AgnesAPIKey    string
 	DeepSeekAPIKey string
@@ -36,6 +38,7 @@ type Settings struct {
 	AIBlocksProviderTimeoutSeconds  float64
 	AIBlocksVerboseLogging          bool
 	AIBlocksMaxRepairRounds         int
+	AIBlocksSourcePipelineEnabled   bool
 	AIBlocksCommitEnabled           bool
 	AIProjectAssetsEnabled          bool
 	AISoundAssetsEnabled            bool
@@ -48,6 +51,8 @@ type Settings struct {
 	AIRunsDatabasePath              string
 	AIRunsEventRetentionHours       int
 	AIRunsRetentionDays             int
+	AIRunsMaxActive                 int
+	AIRunsMaxActivePerScope         int
 	AIDurableRunsEnabled            bool
 	AIDurableRunsRolloutPercent     int
 	AICrashCheckpointEnabled        bool
@@ -238,6 +243,8 @@ func Load() (*Settings, error) {
 	}
 
 	settings := &Settings{
+		AccessUser:        optionalValue(env, fieldSpec{"AI_SCRATCH_ACCESS_USER", ""}),
+		AccessPassword:    env["AI_SCRATCH_ACCESS_PASSWORD"],
 		SuiXiangAPIKey:    optionalValue(env, fieldSpec{"SUI_XIANG_API_KEY", ""}),
 		AgnesAPIKey:       optionalValue(env, fieldSpec{"AGNES_API_KEY", ""}),
 		DeepSeekAPIKey:    optionalValue(env, fieldSpec{"DEEPSEEK_API_KEY", ""}),
@@ -285,6 +292,12 @@ func Load() (*Settings, error) {
 	if settings.AIRunsEventRetentionHours, err = intValue(env, fieldSpec{"AI_RUNS_EVENT_RETENTION_HOURS", ""}, 24, 1, 24*30); err != nil {
 		return nil, err
 	}
+	if settings.AIRunsMaxActive, err = intValue(env, fieldSpec{"AI_RUNS_MAX_ACTIVE", ""}, 32, 1, 256); err != nil {
+		return nil, err
+	}
+	if settings.AIRunsMaxActivePerScope, err = intValue(env, fieldSpec{"AI_RUNS_MAX_ACTIVE_PER_SCOPE", ""}, 8, 1, 64); err != nil {
+		return nil, err
+	}
 	if settings.AIRunsRetentionDays, err = intValue(env, fieldSpec{"AI_RUNS_RETENTION_DAYS", ""}, 7, 1, 90); err != nil {
 		return nil, err
 	}
@@ -293,6 +306,7 @@ func Load() (*Settings, error) {
 	}
 
 	settings.AIBlocksVerboseLogging = boolValue(env, fieldSpec{"AI_BLOCKS_VERBOSE_LOGGING", ""}, false)
+	settings.AIBlocksSourcePipelineEnabled = boolValue(env, fieldSpec{"AI_BLOCKS_SOURCE_PIPELINE_ENABLED", ""}, true)
 	settings.AIBlocksCommitEnabled = boolValue(env, fieldSpec{"AI_BLOCKS_COMMIT_ENABLED", ""}, true)
 	settings.AIProjectAssetsEnabled = boolValue(env, fieldSpec{"AI_PROJECT_ASSETS_ENABLED", ""}, true)
 	settings.AISoundAssetsEnabled = boolValue(env, fieldSpec{"AI_SOUND_ASSETS_ENABLED", ""}, true)

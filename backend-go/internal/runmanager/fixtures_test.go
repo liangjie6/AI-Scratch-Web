@@ -515,6 +515,25 @@ func (m *testManager) waitForTerminal(t *testing.T, runID string, timeout time.D
 	}
 }
 
+func (m *testManager) waitForTaskCleanup(t *testing.T, runID string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for {
+		m.manager.guard.Lock()
+		_, task := m.manager.tasks[runID]
+		_, request := m.manager.requests[runID]
+		_, contexts := m.manager.programContexts[runID]
+		m.manager.guard.Unlock()
+		if !task && !request && !contexts {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("terminal program task did not release its transient state")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func (m *testManager) waitForStatus(t *testing.T, runID string, status runstore.RunStatus, timeout time.Duration) runstore.RunRecord {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

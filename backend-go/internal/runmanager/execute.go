@@ -65,15 +65,32 @@ func isGenerationTimeout(err error) bool {
 // acquireSemaphore ports async with semaphore, including cancellation while
 // waiting. The generation timeout starts after the semaphore is held, exactly
 // like the nested async with blocks in Python.
+var errRunQueueTimeout = errors.New("run queue wait exceeded")
+
 func acquireSemaphore(ctx context.Context, semaphore chan struct{}) error {
+	return acquireSemaphoreWithin(ctx, semaphore, 120*time.Second)
+}
+
+func acquireSemaphoreWithin(ctx context.Context, semaphore chan struct{}, timeout time.Duration) error {
 	if semaphore == nil {
 		return nil
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	select {
 	case semaphore <- struct{}{}:
+		if err := ctx.Err(); err != nil {
+			<-semaphore
+			return err
+		}
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-timer.C:
+		return errRunQueueTimeout
 	}
 }
 
@@ -183,6 +200,12 @@ func (m *AiRunManager) runPrograms(
 	artifacts, ok := jsonObjectValue(record.ArtifactSummary["contracts"])
 	if !ok {
 		return runstore.NewRunTransitionError("run is missing the validated generation contracts")
+	}
+	if _, source := artifacts["source_contract"]; source {
+		return m.runSourcePrograms(ctx, runID, ownerScopeHash, request, prov, semaphore, orch, artifacts)
+	}
+	if request.PipelineVersion != "" {
+		return runstore.NewRunTransitionError("source run is missing its pinned source_contract")
 	}
 	requirements, err := decodeContract[schema.RequirementsResponse](artifacts, "requirements")
 	if err != nil {
@@ -397,6 +420,8 @@ func (m *AiRunManager) handleExecutionError(ctx context.Context, runID string, o
 	}
 	var providerErr *provider.TextProviderError
 	switch {
+	case errors.Is(err, errRunQueueTimeout):
+		_ = m.failIfActive(runID, ownerScopeHash, "AI_QUEUE_TIMEOUT", "任务排队超过120秒，请稍后重试")
 	case isGenerationTimeout(err):
 		// A store failure here would surface as an unhandled task exception in
 		// Python, which never reaches this module's logger.
@@ -575,6 +600,7 @@ func buildManifestRequest(request *schema.UnifiedGenerationRequest) (*schema.Pro
 // manifest pipeline from the project scope.
 func manifestRequestToUnified(manifest *schema.ProjectManifestGenerationRequest) *schema.UnifiedGenerationRequest {
 	return &schema.UnifiedGenerationRequest{
+		PipelineVersion:     manifest.PipelineVersion,
 		OutputContract:      manifest.OutputContract,
 		ModelTier:           manifest.ModelTier,
 		SessionID:           manifest.SessionID,

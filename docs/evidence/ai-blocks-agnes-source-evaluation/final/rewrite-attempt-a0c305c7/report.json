@@ -1,0 +1,21 @@
+{
+  "case": "rewrite",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/rewrite-attempt-a0c305c7",
+  "request_id": "31ccaa44-dba9-460f-9433-a616d3245a34",
+  "request_log_ref": "fea17f32125b167f",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"31ccaa44-dba9-460f-9433-a616d3245a34\"}}",
+  "duration_seconds": 0.958,
+  "model_request_seconds": [
+    0.956
+  ],
+  "tokens": {},
+  "usage": [],
+  "observed_providers": [],
+  "model_calls": 1,
+  "missing_usage_events": 1,
+  "repairs": 0
+}

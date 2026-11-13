@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -38,7 +39,11 @@ type StreamDelta struct {
 }
 
 // TextProviderError reports a provider transport or protocol failure.
-type TextProviderError struct{ Message string }
+type TextProviderError struct {
+	Message           string
+	StatusCode        int
+	RetryAfterSeconds int
+}
 
 func (e *TextProviderError) Error() string { return e.Message }
 
@@ -48,14 +53,25 @@ func newTextProviderError(format string, args ...any) *TextProviderError {
 
 // TextProvider streams completions from Agnes, DeepSeek or the ChatGPT Responses API.
 type TextProvider struct {
-	Settings *config.Settings
-	Provider string
-	Client   *http.Client
+	Settings        *config.Settings
+	Provider        string
+	Client          *http.Client
+	sourceAuthoring bool
 }
 
 // NewTextProvider builds a provider for the given backend id (agnes, deepseek or gpt).
 func NewTextProvider(settings *config.Settings, provider string) *TextProvider {
 	return &TextProvider{Settings: settings, Provider: provider}
+}
+
+// ForSourceAuthoring pins source-only transport options without mutating the
+// shared provider or changing legacy generation/chat requests. Agnes JSON-object
+// support was verified against its configured model and OpenAI endpoint; this
+// is syntax guidance, never an opcode-specific strict schema guarantee.
+func (p *TextProvider) ForSourceAuthoring() *TextProvider {
+	copy := *p
+	copy.sourceAuthoring = true
+	return &copy
 }
 
 // ForTier returns a provider selected by the request model tier.
@@ -208,6 +224,10 @@ func (p *TextProvider) streamOpenAI(
 		"stream_options": map[string]any{"include_usage": true},
 		"stop":           StopSequences,
 	}
+	if p.sourceAuthoring && p.Provider == "agnes" {
+		payload["response_format"] = map[string]any{"type": "json_object"}
+		payload["temperature"] = 0.2
+	}
 	if enableThinking != nil && p.Provider == "agnes" {
 		payload["chat_template_kwargs"] = map[string]any{"enable_thinking": *enableThinking}
 	}
@@ -304,6 +324,16 @@ func (p *TextProvider) requestStream(ctx context.Context, endpoint string, paylo
 	return p.requestStreamWithHeaders(ctx, endpoint, payload, headers, parser)
 }
 
+func retryAfterSeconds(raw string, now time.Time) int {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && seconds > 0 {
+		return seconds
+	}
+	if date, err := http.ParseTime(raw); err == nil && date.After(now) {
+		return int(date.Sub(now).Seconds()) + 1
+	}
+	return 0
+}
+
 func failedStream(err error) (<-chan StreamDelta, <-chan error) {
 	deltas := make(chan StreamDelta)
 	errs := make(chan error, 1)
@@ -366,17 +396,13 @@ func (p *TextProvider) requestStreamWithHeaders(
 		defer response.Body.Close()
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
 			io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
-			errs <- newTextProviderError("AI provider rejected request with status %d", response.StatusCode)
+			errs <- &TextProviderError{Message: fmt.Sprintf("AI provider rejected request with status %d", response.StatusCode), StatusCode: response.StatusCode, RetryAfterSeconds: retryAfterSeconds(response.Header.Get("Retry-After"), time.Now())}
 			return
 		}
 		scanner := bufio.NewScanner(response.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 		for scanner.Scan() {
 			items, stop, err := parser(scanner.Text())
-			if err != nil {
-				errs <- err
-				return
-			}
 			for _, item := range items {
 				select {
 				case deltas <- item:
@@ -384,6 +410,10 @@ func (p *TextProvider) requestStreamWithHeaders(
 					errs <- ctx.Err()
 					return
 				}
+			}
+			if err != nil {
+				errs <- err
+				return
 			}
 			if stop {
 				return
@@ -426,6 +456,9 @@ func parseOpenAILines(raw string) ([]StreamDelta, bool, error) {
 	var delta map[string]any
 	if choices, ok := item["choices"].([]any); ok && len(choices) > 0 {
 		if first, ok := choices[0].(map[string]any); ok {
+			if reason, _ := first["finish_reason"].(string); reason == "length" || reason == "content_filter" {
+				return result, false, newTextProviderError("AI provider output was not completed: %s", reason)
+			}
 			if candidate, ok := first["delta"].(map[string]any); ok {
 				delta = candidate
 			}
@@ -520,6 +553,9 @@ func parseAnthropicLines(raw string) ([]StreamDelta, bool, error) {
 	eventType, _ := item["type"].(string)
 	result := make([]StreamDelta, 0, 1)
 	if eventType == "message_start" || eventType == "message_delta" {
+		if delta, ok := item["delta"].(map[string]any); ok && delta["stop_reason"] == "max_tokens" {
+			return nil, false, newTextProviderError("AI provider output was not completed: max_tokens")
+		}
 		var usage map[string]any
 		if message, ok := item["message"].(map[string]any); ok {
 			if candidate, ok := message["usage"].(map[string]any); ok {
@@ -606,10 +642,24 @@ func NormalizeUsage(usage map[string]any) map[string]int {
 		cached = details["cached_tokens"]
 	}
 	if cached == nil {
-		cached = firstPresent(usage, "cached_input_tokens", "cache_read_input_tokens")
+		cached = firstPresent(usage, "cached_input_tokens", "cache_read_input_tokens", "prompt_cache_hit_tokens")
 	}
 	if cached != nil {
 		normalized["cached_input_tokens"] = intFrom(cached)
+	}
+	var outputDetails map[string]any
+	if candidate, ok := usage["output_tokens_details"].(map[string]any); ok {
+		outputDetails = candidate
+	} else if candidate, ok := usage["completion_tokens_details"].(map[string]any); ok {
+		outputDetails = candidate
+	}
+	reasoning := firstPresent(usage, "reasoning_tokens", "thinking_tokens")
+	if outputDetails != nil && outputDetails["reasoning_tokens"] != nil {
+		reasoning = outputDetails["reasoning_tokens"]
+	}
+	if reasoning != nil {
+		// This is a breakdown of output_tokens, not an extra term in total_tokens.
+		normalized["reasoning_tokens"] = intFrom(reasoning)
 	}
 	return normalized
 }

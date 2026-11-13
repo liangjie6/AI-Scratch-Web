@@ -1,0 +1,193 @@
+{
+  "duration_seconds": 31.29,
+  "terminal": {
+    "type": "complete",
+    "payload": {
+      "data": {
+        "pipeline_version": "scratch-source/1",
+        "program": {
+          "broadcasts": [],
+          "lists": [],
+          "procedures": [],
+          "remove_script_ids": [],
+          "schema_version": 1,
+          "scripts": [
+            {
+              "blocks": [
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {},
+                  "opcode": "event_whenflagclicked",
+                  "procedure_id": null,
+                  "substacks": {}
+                },
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {
+                    "X": {
+                      "kind": "number",
+                      "value": 0
+                    }
+                  },
+                  "opcode": "motion_setx",
+                  "procedure_id": null,
+                  "substacks": {}
+                },
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {
+                    "Y": {
+                      "kind": "number",
+                      "value": 0
+                    }
+                  },
+                  "opcode": "motion_sety",
+                  "procedure_id": null,
+                  "substacks": {}
+                },
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {},
+                  "opcode": "control_forever",
+                  "procedure_id": null,
+                  "substacks": {
+                    "SUBSTACK": [
+                      {
+                        "argument_id": null,
+                        "fields": {},
+                        "inputs": {
+                          "DX": {
+                            "kind": "number",
+                            "value": 10
+                          }
+                        },
+                        "opcode": "motion_changexby",
+                        "procedure_id": null,
+                        "substacks": {}
+                      }
+                    ]
+                  }
+                }
+              ],
+              "id": "script_581060e3b44d5ba7",
+              "purpose": "移动到原点并循环增加x坐标",
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "summary": "Move to center and loop 3 times",
+          "variables": []
+        },
+        "program_count": 1,
+        "scope": "single_sprite",
+        "target_count": 1,
+        "target_index": 0,
+        "target_name": "Probe"
+      },
+      "request_id": "230da9c9-058b-4041-a86d-a0bf7d5f8ea7"
+    }
+  },
+  "usage": [
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 1045,
+          "output_bytes": 986,
+          "output_tokens": 239,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 4219,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1284,
+          "usage": {
+            "input_tokens": 1045,
+            "output_tokens": 239,
+            "reasoning_tokens": 0,
+            "total_tokens": 1284
+          }
+        },
+        "phase": "requirements",
+        "request_id": "230da9c9-058b-4041-a86d-a0bf7d5f8ea7"
+      }
+    },
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 1341,
+          "output_bytes": 846,
+          "output_tokens": 217,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 5447,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1558,
+          "usage": {
+            "input_tokens": 1341,
+            "output_tokens": 217,
+            "reasoning_tokens": 0,
+            "total_tokens": 1558
+          }
+        },
+        "phase": "requirements",
+        "request_id": "230da9c9-058b-4041-a86d-a0bf7d5f8ea7"
+      }
+    },
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 1328,
+          "output_bytes": 822,
+          "output_tokens": 200,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 5284,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1528,
+          "usage": {
+            "input_tokens": 1328,
+            "output_tokens": 200,
+            "reasoning_tokens": 0,
+            "total_tokens": 1528
+          }
+        },
+        "phase": "requirements",
+        "request_id": "230da9c9-058b-4041-a86d-a0bf7d5f8ea7"
+      }
+    },
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 3684,
+          "output_bytes": 263,
+          "output_tokens": 76,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 14403,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "move_and_increment",
+          "total_tokens": 3760,
+          "usage": {
+            "input_tokens": 3684,
+            "output_tokens": 76,
+            "reasoning_tokens": 0,
+            "total_tokens": 3760
+          }
+        },
+        "phase": "program",
+        "request_id": "230da9c9-058b-4041-a86d-a0bf7d5f8ea7"
+      }
+    }
+  ],
+  "repairs": 2
+}

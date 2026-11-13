@@ -1,0 +1,43 @@
+{
+  "status": "FAIL",
+  "vmVersion": "15.1.1",
+  "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+  "scenarios": [
+    {
+      "name": "modify preserves unrelated code/state",
+      "status": "FAIL",
+      "ticks": 10,
+      "primitiveCalls": 237468,
+      "assertions": [
+        {
+          "name": "x",
+          "status": "FAIL",
+          "actual": 1187340,
+          "expected": 20
+        },
+        {
+          "name": "y",
+          "status": "FAIL",
+          "actual": 178101,
+          "expected": 3
+        },
+        {
+          "name": "variable:untouched",
+          "status": "PASS",
+          "actual": 7,
+          "expected": 7
+        }
+      ],
+      "preservation": {
+        "status": "PASS",
+        "mode": "modify",
+        "removedScripts": 2,
+        "preservedBlocks": 1
+      }
+    }
+  ],
+  "roundTrip": {
+    "status": "SKIPPED",
+    "reason": "not requested"
+  }
+}

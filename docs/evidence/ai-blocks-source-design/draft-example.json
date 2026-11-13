@@ -1,0 +1,25 @@
+{
+  "slot_id": "move_and_check",
+  "body": [
+    {"opcode": "motion_gotoxy", "inputs": {"X": 0, "Y": 0}},
+    {
+      "opcode": "control_repeat",
+      "inputs": {"TIMES": 5},
+      "substacks": {
+        "SUBSTACK": [{"opcode": "motion_changexby", "inputs": {"DX": 10}}]
+      }
+    },
+    {
+      "opcode": "control_if",
+      "inputs": {
+        "CONDITION": {
+          "opcode": "operator_gt",
+          "inputs": {"OPERAND1": {"opcode": "motion_xposition"}, "OPERAND2": "40"}
+        }
+      },
+      "substacks": {
+        "SUBSTACK": [{"opcode": "looks_say", "inputs": {"MESSAGE": "完成"}}]
+      }
+    }
+  ]
+}

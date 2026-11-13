@@ -41,10 +41,10 @@ echo $! > "$PID_FILE"
 echo "[START] backend pid $(cat "$PID_FILE") on http://$HOST:$PORT"
 
 for _ in $(seq 1 50); do
-  if curl -fsS "http://$HOST:$PORT/health" > /dev/null 2>&1; then
+  if curl -fsS "http://$HOST:$PORT/healthz" > /dev/null 2>&1; then
     echo "[READY] backend health check passed"
     exit 0
   fi
   sleep 0.2
 done
-echo "[WARN] backend did not answer /health yet; see $RUN_DIR/backend.log" >&2
+echo "[WARN] backend did not answer /healthz yet; see $RUN_DIR/backend.log" >&2

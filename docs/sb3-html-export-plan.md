@@ -72,4 +72,4 @@ VM 从源仓库原样复制，大小为 **5,322,872 字节**，LF SHA-256 为：
 
 全量单元测试为 139 项通过、24 项失败；使用原测试配置并排除新增导出测试后，同样存在这 24 项失败，未出现新增失败。失败集中在现有 AI 事务、资源契约和积木目录相关测试。
 
-[实施报告](/home/HwHiAiUser/Documents/AI-Scratch-Web/docs/sb3-html-export-implementation.md) · [最终复核](/home/HwHiAiUser/Documents/AI-Scratch-Web/docs/sb3-html-export-final-review.md)
+[实施报告](/path/to/AI-Scratch-Web/docs/sb3-html-export-implementation.md) · [最终复核](/path/to/AI-Scratch-Web/docs/sb3-html-export-final-review.md)

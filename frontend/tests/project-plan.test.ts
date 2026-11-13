@@ -1,18 +1,29 @@
 import {describe, expect, it} from 'vitest';
-import {validateProjectManifest, validateProjectProgramSharedState} from '../src/ai-blocks/project-plan';
+import {normalizeProjectManifestTargets, validateProjectManifest, validateProjectProgramSharedState, type ProjectManifest} from '../src/ai-blocks/project-plan';
 import type {ProgramIR} from '../src/ai-blocks/program-ir';
 
 const costumeSource = {kind: 'scratch_library', asset_type: 'costume', search_terms: ['猫']};
-const base = {schema_version: 2, scope: 'project', summary: '添加造型', resource_ops: [], program_targets: [], shared_state: {variables: [], lists: [], broadcasts: []}};
+const base = {schema_version: 3, scope: 'project', summary: '添加造型', assumptions: [], required_extensions: [], local_state: [], resource_ops: [], program_targets: [], shared_state: {variables: [], lists: [], broadcasts: []}};
 
 describe('ProjectManifest contract', () => {
+  it('normalizes Go null pointer fields in local state targets without hiding invalid fields', () => {
+    const wire = {...base, local_state: [{ref_id: 'state_local', kind: 'variable', name: 'score', value: 0, target: {kind: 'existing_sprite', name: 'Probe', op_id: null}}]} as unknown as ProjectManifest;
+    const normalized = normalizeProjectManifestTargets(wire);
+    expect(normalized.local_state?.[0].target).toEqual({kind: 'existing_sprite', name: 'Probe'});
+    expect(validateProjectManifest(normalized, ['Probe']).valid).toBe(true);
+    const invalid = structuredClone(wire) as unknown as {local_state: Array<{target: Record<string, unknown>}>};
+    invalid.local_state[0].target.op_id = 'illegal-extra-id';
+    const rejected = validateProjectManifest(normalizeProjectManifestTargets(invalid as unknown as ProjectManifest), ['Probe']);
+    expect(rejected.valid).toBe(false);
+    expect(rejected.issues.some(issue => issue.path === '/local_state/0/target')).toBe(true);
+  });
   it('accepts a project costume operation', () => {
-    const result = validateProjectManifest({...base, resource_ops: [{op: 'add_costume', op_id: 'costume_1', target: {kind: 'current_target'}, name: '新造型', source: costumeSource, tags: [], select_after: true}]});
+    const result = validateProjectManifest({...base, resource_ops: [{op: 'add_costume', op_id: 'costume_1', source_need_id: 'need_costume', target: {kind: 'current_target'}, name: '新造型', source: costumeSource, tags: [], select_after: true}]});
     expect(result.valid).toBe(true);
   });
 
   it('accepts a backdrop operation in project scope', () => {
-    const result = validateProjectManifest({...base, resource_ops: [{op: 'add_backdrop', op_id: 'backdrop_1', name: '背景', source: {...costumeSource, asset_type: 'backdrop'}, tags: [], select_after: true}]});
+    const result = validateProjectManifest({...base, resource_ops: [{op: 'add_backdrop', op_id: 'backdrop_1', source_need_id: 'need_backdrop', name: '背景', source: {...costumeSource, asset_type: 'backdrop'}, tags: [], select_after: true}]});
     expect(result.valid).toBe(true);
   });
 

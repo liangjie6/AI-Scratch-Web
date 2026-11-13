@@ -29,6 +29,7 @@ import {
 } from './ai-blocks-api';
 import {assertProjectManifest, frontendEnabledBuiltinExtensions, normalizeProjectManifestTargets, validateProjectProgramSharedState, validateProjectProgramStateRefs, type ProjectManifest, type TargetRef} from './project-plan';
 import {contractSha256, projectBlueprintToManifest, projectTaskSpecToBlueprint, type ProjectBlueprint, type ScratchTaskSpec} from './project-contract';
+import {assertFrozenSourceContract, sourceContractSha256, SOURCE_PIPELINE_VERSION, validateFrozenProjection, type FrozenSourceContract} from './source-contract';
 import {assertProjectSnapshotIsCurrent, assertSnapshotIsCurrent, isAiEditableScript, readAiProjectSnapshot, readAiTargetSnapshot, type AiProjectSnapshot, type AiTargetSnapshot} from './target-context';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {
@@ -71,6 +72,7 @@ export interface AiGenerationResult {
 export interface UnifiedCommitResult {
   backup: Uint8Array;
   originalTargetId: string;
+  originalTargetLocator: LogicalTargetLocator;
   revisionAtComplete: number;
   programs: AiGenerationResult[];
   project?: ProjectApplyResult;
@@ -480,7 +482,7 @@ function targetIdForRef(bridge: ScratchGuiBridge, ref: TargetRef, originalTarget
 }
 
 async function originalTargetLocator(bridge: ScratchGuiBridge, snapshot: AiTargetSnapshot): Promise<LogicalTargetLocator> {
-  if (snapshot.isStage) return {kind: 'stage'};
+  if (snapshot.isStage) return {kind: 'stage', name: snapshot.targetName};
   const sprites = (bridge.currentVm?.runtime.targets ?? []).filter(target => !target.isStage && target.isOriginal !== false);
   const target = sprites.find(item => item.id === snapshot.targetId);
   const name = String(target?.getName?.() ?? target?.sprite?.name ?? snapshot.targetName);
@@ -492,6 +494,18 @@ async function originalTargetLocator(bridge: ScratchGuiBridge, snapshot: AiTarge
     program: snapshot.context.current_program
   });
   return {kind: 'sprite', ordinal, name, fingerprint};
+}
+
+function restoreOriginalEditingTarget(bridge: ScratchGuiBridge, originalId: string, locator: LogicalTargetLocator) {
+  const targets = (bridge.currentVm?.runtime.targets ?? []).filter(target => target.isOriginal !== false);
+  const matchesIdentity = (target: ScratchTargetLike) => Boolean(target.isStage) === (locator.kind === 'stage')
+    && String(target.getName?.() ?? target.sprite?.name ?? '') === locator.name;
+  // SB3 reload allocates fresh target IDs. Only reuse an ID that still identifies
+  // the original target; otherwise require one exact logical match.
+  const preserved = targets.find(target => target.id === originalId && matchesIdentity(target));
+  const matches = preserved ? [preserved] : targets.filter(matchesIdentity);
+  if (matches.length !== 1) throw new Error('恢复项目后无法唯一定位原编辑目标：' + (locator.name ?? locator.kind));
+  bridge.currentVm?.setEditingTarget?.(matches[0].id);
 }
 
 export class UnifiedGenerationRunner {
@@ -519,6 +533,8 @@ export class UnifiedGenerationRunner {
     const blueprint: {value: ProjectBlueprint | null} = {value: null};
     const taskSpecHash: {value: string | null} = {value: null};
     const blueprintHash: {value: string | null} = {value: null};
+    const sourceContract: {value: unknown} = {value: undefined};
+    const sourceContractHash: {value: unknown} = {value: undefined};
     const plan: {value: AiBlocksPlan | null} = {value: null};
     const manifest: {value: ProjectManifest | undefined} = {value: undefined};
     const programs = new Map<number, UnifiedProgramDraft>();
@@ -539,6 +555,7 @@ export class UnifiedGenerationRunner {
       }
       if (event.type === 'phase_complete' && event.phase === 'requirements') requirements.value = asRequirements(event);
       if (event.type === 'phase_complete' && event.phase === 'task_spec') {
+        if (request.pipeline_version === SOURCE_PIPELINE_VERSION) throw new Error('源码生成流不允许输出旧任务动作合同');
         if (!event.data.task_spec || typeof event.data.task_spec !== 'object' || Array.isArray(event.data.task_spec)) throw new Error('统一流未提供有效 TaskSpec');
         taskSpec.value = event.data.task_spec as ScratchTaskSpec;
         taskSpecHash.value = typeof event.data.task_spec_hash === 'string' ? event.data.task_spec_hash : null;
@@ -550,6 +567,12 @@ export class UnifiedGenerationRunner {
       }
       if (event.type === 'phase_complete' && event.phase === 'plan') {
         plan.value = asPlan(event);
+        if (request.pipeline_version === SOURCE_PIPELINE_VERSION && event.data.task_spec !== undefined) throw new Error('源码生成流不允许输出旧任务动作合同');
+        if (event.data.source_contract !== undefined) {
+          if (request.pipeline_version !== SOURCE_PIPELINE_VERSION) throw new Error('旧版生成请求收到未协商的源码合同');
+          sourceContract.value = event.data.source_contract;
+          sourceContractHash.value = event.data.source_contract_hash;
+        }
         if (!taskSpec.value && event.data.task_spec && typeof event.data.task_spec === 'object' && !Array.isArray(event.data.task_spec)) taskSpec.value = event.data.task_spec as ScratchTaskSpec;
         if (!blueprint.value && event.data.blueprint && typeof event.data.blueprint === 'object' && !Array.isArray(event.data.blueprint)) blueprint.value = event.data.blueprint as ProjectBlueprint;
         if (!taskSpecHash.value && typeof event.data.task_spec_hash === 'string') taskSpecHash.value = event.data.task_spec_hash;
@@ -608,7 +631,19 @@ export class UnifiedGenerationRunner {
     assertSnapshotIsCurrent(this.bridge, snapshot);
     if (projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, projectSnapshot);
     if (!requirements.value || !plan.value) throw new Error('统一生成流缺少需求或计划');
-    if (request.scope === 'project') {
+    let validatedSource: FrozenSourceContract | undefined;
+    if (request.pipeline_version === SOURCE_PIPELINE_VERSION) {
+      validatedSource = await assertFrozenSourceContract(sourceContract.value, sourceContractHash.value, request);
+      if (!blueprint.value || !blueprintHash.value || await contractSha256(blueprint.value) !== blueprintHash.value) throw new Error('源码生成蓝图哈希校验失败');
+      if (validatedSource.required_extensions.some(extension => !this.enabledExtensions.has(extension))) throw new Error('源码生成使用了当前编辑器未启用的扩展');
+      if (request.scope === 'project') {
+        if (!manifest.value) throw new Error('源码生成流缺少项目清单');
+        assertProjectManifest(manifest.value, this.existingSpriteNames(), request.permitted_extensions, this.enabledExtensions);
+      }
+      const lineageIssues = await validateFrozenProjection(validatedSource, blueprint.value, manifest.value);
+      if (manifest.value) lineageIssues.push(...projectBlueprintToManifest(blueprint.value, manifest.value));
+      if (lineageIssues.length) throw new ProgramIRValidationError(lineageIssues);
+    } else if (request.scope === 'project') {
       if (!manifest.value || !taskSpec.value || !blueprint.value) throw new Error('统一生成流缺少任务合同、蓝图或项目清单');
       if (!taskSpecHash.value || !blueprintHash.value || await contractSha256(taskSpec.value) !== taskSpecHash.value || await contractSha256(blueprint.value) !== blueprintHash.value) throw new Error('任务合同或蓝图哈希校验失败');
       assertProjectManifest(manifest.value, this.existingSpriteNames(), request.permitted_extensions, this.enabledExtensions);
@@ -622,7 +657,7 @@ export class UnifiedGenerationRunner {
     for (const item of ordered) {
       const planForTarget = targetPlan(request, manifest.value, item.targetIndex);
       const targetKind = planForTarget.targetRef.kind === 'stage' || (planForTarget.targetRef.kind === 'current_target' && snapshot.isStage) ? 'stage' : 'sprite';
-      const enabledExtensions = new Set<BuiltinAiExtension>((manifest.value?.required_extensions ?? []).filter(isBuiltinAiExtension));
+      const enabledExtensions = new Set<BuiltinAiExtension>((manifest.value?.required_extensions ?? validatedSource?.required_extensions ?? []).filter(isBuiltinAiExtension));
       const result = validateProgramIR(item.program, targetKind, enabledExtensions);
       if (!result.valid) throw new ProgramIRValidationError(result.issues);
       if (request.scope === 'project') {
@@ -637,7 +672,7 @@ export class UnifiedGenerationRunner {
     throwIfAborted(signal);
     await prewarmCandidateVerificationRuntime();
     throwIfAborted(signal);
-    return {request, snapshot, projectSnapshot, requirements: requirements.value, taskSpec: taskSpec.value ?? undefined, blueprint: blueprint.value ?? undefined, plan: plan.value, manifest: manifest.value, programs: ordered};
+    return {request, snapshot, projectSnapshot, requirements: requirements.value, taskSpec: taskSpec.value ?? undefined, sourceContract: validatedSource, blueprint: blueprint.value ?? undefined, plan: plan.value, manifest: manifest.value, programs: ordered};
   }
 
   async commit(
@@ -648,6 +683,7 @@ export class UnifiedGenerationRunner {
     let backup: Uint8Array | undefined;
     let transactionLock: {assertActive: () => void; release: () => void} | undefined;
     let transactionVm = this.bridge.currentVm;
+    let recoveryLocator: LogicalTargetLocator = {kind: draft.snapshot.isStage ? 'stage' : 'sprite', name: draft.snapshot.targetName};
     const appliedPrograms: AiGenerationResult[] = [];
     const journal: ApplyEntry[] = (options.generatedAssets ?? []).map(asset => ({kind: 'asset', assetId: asset.id}));
     // A mutation can throw before its detailed journal receipt is returned.
@@ -681,6 +717,13 @@ export class UnifiedGenerationRunner {
       });
     };
     try {
+      if (draft.request.pipeline_version === SOURCE_PIPELINE_VERSION) {
+        if (!draft.sourceContract || !draft.blueprint) throw new Error('源码生成草稿缺少冻结合同或蓝图');
+        const source = await assertFrozenSourceContract(draft.sourceContract, await sourceContractSha256(draft.sourceContract), draft.request);
+        const issues = await validateFrozenProjection(source, draft.blueprint, draft.manifest);
+        if (draft.manifest) issues.push(...projectBlueprintToManifest(draft.blueprint, draft.manifest));
+        if (issues.length) throw new ProgramIRValidationError(issues);
+      }
       if (draft.request.scope === 'project' && draft.manifest && draft.programs.length !== draft.manifest.program_targets.length) {
         throw new Error('项目程序必须在提交前全部生成并校验');
       }
@@ -694,6 +737,7 @@ export class UnifiedGenerationRunner {
       assertSnapshotIsCurrent(this.bridge, draft.snapshot);
       if (draft.projectSnapshot) assertProjectSnapshotIsCurrent(this.bridge, draft.projectSnapshot);
       const originalLocator = await originalTargetLocator(this.bridge, draft.snapshot);
+      recoveryLocator = originalLocator;
       const baseProjectFingerprint = await fingerprintBytes(capturedBackup);
       if (options.checkpointEnabled === false) throw new Error('当前部署已暂停 AI 项目恢复保护，无法安全提交');
       await checkpointStore.begin({
@@ -714,7 +758,7 @@ export class UnifiedGenerationRunner {
         backup: capturedBackup
       });
       checkpointStarted = true;
-      const builtinExtensions = (draft.manifest?.required_extensions ?? [])
+      const builtinExtensions = (draft.manifest?.required_extensions ?? draft.sourceContract?.required_extensions ?? [])
         .filter(isBuiltinAiExtension);
       if (builtinExtensions.length) {
         // Built-in extension loading is a project mutation, so it happens only
@@ -785,7 +829,7 @@ export class UnifiedGenerationRunner {
         const targetSnapshot = readAiTargetSnapshot(this.bridge, targetPlanForProgram.mode, target);
         if (!item.program) throw new Error('项目程序草稿缺失：' + index);
         const program = item.program;
-        const enabledExtensions = new Set<BuiltinAiExtension>((draft.manifest?.required_extensions ?? []).filter(isBuiltinAiExtension));
+        const enabledExtensions = new Set<BuiltinAiExtension>((draft.manifest?.required_extensions ?? draft.sourceContract?.required_extensions ?? []).filter(isBuiltinAiExtension));
         const preflight = preflightProgram(program, targetSnapshot.isStage ? 'stage' : 'sprite', enabledExtensions, draft.request.scope === 'project' ? draft.manifest : undefined);
         if (!preflight.valid) throw new ProgramIRValidationError(preflight.issues);
         const prepared = prepareProgramForTarget(this.bridge, targetSnapshot, targetPlanForProgram.mode, program, resourceBindings, stateBindings, enabledExtensions);
@@ -847,6 +891,7 @@ export class UnifiedGenerationRunner {
       const result = {
         backup: capturedBackup,
         originalTargetId: draft.snapshot.targetId,
+        originalTargetLocator: originalLocator,
         revisionAtComplete: this.bridge.projectRevision,
         programs: appliedPrograms,
         ...(project ? {project} : {}),
@@ -877,7 +922,7 @@ export class UnifiedGenerationRunner {
         try {
           // A stale lock must not prevent restoring the durable backup.
           await this.bridge.loadProject(backup);
-          this.bridge.currentVm?.setEditingTarget?.(draft.snapshot.targetId);
+          restoreOriginalEditingTarget(this.bridge, draft.snapshot.targetId, recoveryLocator);
           this.bridge.refreshWorkspace();
           if (checkpointStarted) await checkpointStore.markRolledBack(checkpointRunId);
         } catch (caught) {
@@ -938,7 +983,7 @@ export async function undoUnifiedGeneration(bridge: ScratchGuiBridge, result: Un
   try {
     bridge.stop();
     await bridge.loadProject(result.backup);
-    bridge.currentVm?.setEditingTarget?.(result.originalTargetId);
+    restoreOriginalEditingTarget(bridge, result.originalTargetId, result.originalTargetLocator);
     bridge.refreshWorkspace();
     bridge.activateCodeTab();
   } finally {

@@ -6,8 +6,8 @@
 #
 #   AI_SCRATCH_TLS=1 bash deploy/scripts/start-nginx.sh
 # serves HTTPS on the same port using deploy/nginx/certs (see
-# deploy/scripts/make-self-signed-cert.sh). HTTPS is optional: the app ships a
-# portable SHA-256 fallback, so plain HTTP works from any host.
+# deploy/scripts/make-self-signed-cert.sh). HTTPS is the default for public
+# access. AI_SCRATCH_TLS=0 binds only to loopback for local development.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -15,10 +15,18 @@ PREFIX="${AI_SCRATCH_NGINX_PREFIX:-$REPO_ROOT/deploy/nginx}"
 PORT="${AI_SCRATCH_PORT:-9966}"
 BACKEND="${AI_SCRATCH_BACKEND:-127.0.0.1:8000}"
 WEB_ROOT="${AI_SCRATCH_WEB_ROOT:-$REPO_ROOT/frontend/dist}"
-TLS="${AI_SCRATCH_TLS:-0}"
+TLS="${AI_SCRATCH_TLS:-1}"
 CERT_DIR="${AI_SCRATCH_CERT_DIR:-$PREFIX/certs}"
 NGINX_BIN="${NGINX_BIN:-/usr/sbin/nginx}"
 CONFIG="$PREFIX/nginx.conf"
+AUTH_FILE="${AI_SCRATCH_AUTH_FILE:-$PREFIX/private.htpasswd}"
+if [ ! -r "$AUTH_FILE" ]; then
+  echo "[ERROR] Create a private htpasswd file before starting nginx: $AUTH_FILE" >&2
+  exit 1
+fi
+LISTEN_IPV4="127.0.0.1"
+LISTEN_IPV6="[::1]"
+if [ "$TLS" = "1" ]; then LISTEN_IPV4="0.0.0.0"; LISTEN_IPV6="[::]"; fi
 
 if [ "$PORT" = "9966" ] && [ -e /etc/nginx/sites-enabled/ai-scratch-web-https.conf ] \
    && command -v systemctl > /dev/null 2>&1 && systemctl is-active --quiet nginx; then
@@ -61,7 +69,10 @@ if [ "$TLS" = "1" ]; then
   } > "$TLS_DIRECTIVES_FILE"
 fi
 
-sed -e "s|__PORT__|$PORT|g" \
+sed -e "s|__AUTH_FILE__|$AUTH_FILE|g" \
+    -e "s|__LISTEN_IPV4__|$LISTEN_IPV4|g" \
+    -e "s|__LISTEN_IPV6__|$LISTEN_IPV6|g" \
+    -e "s|__PORT__|$PORT|g" \
     -e "s|__BACKEND__|$BACKEND|g" \
     -e "s|__WEB_ROOT__|$WEB_ROOT|g" \
     -e "s|__TLS_LISTEN_SUFFIX__|$TLS_LISTEN_SUFFIX|g" \

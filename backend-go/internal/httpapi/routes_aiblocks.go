@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ai-scratch-web/backend/internal/authoring"
 	"github.com/ai-scratch-web/backend/internal/orchestration"
 	"github.com/ai-scratch-web/backend/internal/prompt"
 	"github.com/ai-scratch-web/backend/internal/provider"
@@ -19,6 +20,7 @@ import (
 func (s *Server) registerAIBlocks(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/ai-blocks/chat", s.handleAIBlocksChat)
 	mux.HandleFunc("POST /api/ai-blocks/generate-unified", s.handleAIBlocksGenerateUnified)
+	mux.HandleFunc("POST /api/ai-blocks/generate-source-program", s.handleAIBlocksGenerateSourceProgram)
 	mux.HandleFunc("POST /api/ai-blocks/generate", s.handleAIBlocksGenerate)
 	mux.HandleFunc("POST /api/ai-blocks/validate", s.handleAIBlocksValidate)
 }
@@ -126,73 +128,35 @@ func (s *Server) handleAIBlocksChat(writer http.ResponseWriter, request *http.Re
 	ctx, cancel := context.WithTimeout(request.Context(), s.providerTimeout())
 	defer cancel()
 
-	terminal := false
 	contentChunks := 0
 	deltas, errs := selected.StreamWithReasoning(ctx, providerMessages, decoded.Thinking.Enabled, string(decoded.Thinking.Strength), false, nil)
-	for {
-		select {
-		case <-ctx.Done():
-			if !terminal {
-				sse.Event("message_error", map[string]any{
-					"request_id": decoded.RequestID,
-					"code":       "AI_PROVIDER_TIMEOUT",
-					"message":    "AI 对话超时，请稍后重试",
-				})
+	err = consumeTextStream(ctx, deltas, errs, func(delta provider.StreamDelta) {
+		switch delta.Kind {
+		case provider.DeltaReasoning:
+			if delta.Text != "" {
+				sse.Event("reasoning_delta", map[string]any{"request_id": decoded.RequestID, "text": delta.Text})
 			}
-			return
-		case delta, open := <-deltas:
-			if !open {
-				if !terminal {
-					terminal = true
-					if contentChunks == 0 {
-						s.log().Error("ai_chat_failed", "request_ref", requestLogRef(decoded.RequestID), "error_type", "EmptyResponse")
-						sse.Event("message_error", map[string]any{
-							"request_id": decoded.RequestID,
-							"code":       "AI_CHAT_ERROR",
-							"message":    "AI 对话暂时不可用，请稍后重试",
-						})
-						return
-					}
-					s.log().Info("ai_chat_completed", "request_ref", requestLogRef(decoded.RequestID), "content_chunks", contentChunks)
-					sse.Event("message_complete", map[string]any{"request_id": decoded.RequestID})
-				}
-				return
+		case provider.DeltaContent:
+			if delta.Text != "" {
+				contentChunks++
+				sse.Event("assistant_delta", map[string]any{"request_id": decoded.RequestID, "text": delta.Text})
 			}
-			switch delta.Kind {
-			case provider.DeltaReasoning:
-				if delta.Text != "" {
-					sse.Event("reasoning_delta", map[string]any{"request_id": decoded.RequestID, "text": delta.Text})
-				}
-			case provider.DeltaContent:
-				if delta.Text != "" {
-					contentChunks++
-					sse.Event("assistant_delta", map[string]any{"request_id": decoded.RequestID, "text": delta.Text})
-				}
-			}
-		case err, open := <-errs:
-			if !open {
-				continue
-			}
-			if !terminal {
-				terminal = true
-				if errors.Is(err, context.DeadlineExceeded) {
-					sse.Event("message_error", map[string]any{
-						"request_id": decoded.RequestID,
-						"code":       "AI_PROVIDER_TIMEOUT",
-						"message":    "AI 对话超时，请稍后重试",
-					})
-					return
-				}
-				s.log().Error("ai_chat_failed", "request_ref", requestLogRef(decoded.RequestID), "error_type", "ProviderError")
-				sse.Event("message_error", map[string]any{
-					"request_id": decoded.RequestID,
-					"code":       "AI_CHAT_ERROR",
-					"message":    "AI 对话暂时不可用，请稍后重试",
-				})
-			}
-			return
 		}
+	})
+	if errors.Is(err, context.Canceled) {
+		return
 	}
+	if err != nil || contentChunks == 0 {
+		code, message := "AI_CHAT_ERROR", "AI 对话暂时不可用，请稍后重试"
+		if errors.Is(err, context.DeadlineExceeded) {
+			code, message = "AI_PROVIDER_TIMEOUT", "AI 对话超时，请稍后重试"
+		}
+		s.log().Error("ai_chat_failed", "request_ref", requestLogRef(decoded.RequestID), "content_chunks", contentChunks)
+		sse.Event("message_error", map[string]any{"request_id": decoded.RequestID, "code": code, "message": message})
+		return
+	}
+	s.log().Info("ai_chat_completed", "request_ref", requestLogRef(decoded.RequestID), "content_chunks", contentChunks)
+	sse.Event("message_complete", map[string]any{"request_id": decoded.RequestID})
 }
 
 func (s *Server) handleAIBlocksGenerateUnified(writer http.ResponseWriter, request *http.Request) {
@@ -433,3 +397,30 @@ func manifestToUnified(manifest *schema.ProjectManifestGenerationRequest) *schem
 }
 
 var _ = resourcecontract.BoundedActual
+
+func (s *Server) handleAIBlocksGenerateSourceProgram(writer http.ResponseWriter, request *http.Request) {
+	if !s.Settings.AIBlocksSourcePipelineEnabled {
+		WriteError(writer, http.StatusConflict, "SOURCE_PIPELINE_DISABLED", "新积木流水线当前未启用")
+		return
+	}
+	body, ok := s.ReadBody(writer, request)
+	if !ok {
+		return
+	}
+	if err := authoring.CheckJSON(body, authoring.Limits{MaxBytes: s.Settings.AIBlocksMaxRequestBytes}); err != nil {
+		s.writeDecodeError(writer, err)
+		return
+	}
+	var decoded orchestration.SourceProgramRequest
+	if err := schema.DecodeStrict(body, &decoded); err != nil {
+		s.writeDecodeError(writer, err)
+		return
+	}
+	selected, ok := s.requireProvider(writer, string(decoded.Request.ModelTier))
+	if !ok {
+		return
+	}
+	s.streamGeneration(writer, request, decoded.Request.RequestID, func(ctx context.Context) (<-chan orchestration.GenerationEvent, <-chan error) {
+		return s.deps().orchestrator.GenerateSourceProgram(ctx, &decoded, selected)
+	})
+}

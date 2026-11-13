@@ -1,0 +1,109 @@
+{
+  "pipeline_version": "scratch-source/1",
+  "model_tier": "normal",
+  "session_id": "source-eval-normal-broadcast",
+  "request_id": "54c0aa14-a800-4725-a10b-98ec0d28b353",
+  "thinking": {
+    "enabled": false,
+    "strength": "low"
+  },
+  "scope": "project",
+  "asset_policy": "existing_only",
+  "proceed_with_defaults": true,
+  "permitted_extensions": [],
+  "target": {
+    "name": "Stage",
+    "is_stage": true,
+    "has_scripts": false,
+    "mode": "append",
+    "costumes": [
+      "backdrop1"
+    ],
+    "backdrops": [
+      "backdrop1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Sender",
+      "Receiver"
+    ],
+    "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+  },
+  "project_context": {
+    "project_id": "isolated-agnes-broadcast-fixture",
+    "version": 1,
+    "targets": [
+      {
+        "name": "Stage",
+        "is_stage": true,
+        "has_scripts": false,
+        "mode": "append",
+        "costumes": [
+          "backdrop1"
+        ],
+        "backdrops": [
+          "backdrop1"
+        ],
+        "sounds": [],
+        "sprite_names": [
+          "Sender",
+          "Receiver"
+        ],
+        "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+        "target_id": "stage",
+        "revision": 1
+      },
+      {
+        "name": "Sender",
+        "is_stage": false,
+        "has_scripts": false,
+        "mode": "append",
+        "costumes": [
+          "costume1"
+        ],
+        "backdrops": [
+          "backdrop1"
+        ],
+        "sounds": [],
+        "sprite_names": [
+          "Sender",
+          "Receiver"
+        ],
+        "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+        "target_id": "sender",
+        "revision": 1
+      },
+      {
+        "name": "Receiver",
+        "is_stage": false,
+        "has_scripts": false,
+        "mode": "append",
+        "costumes": [
+          "costume1"
+        ],
+        "backdrops": [
+          "backdrop1"
+        ],
+        "sounds": [],
+        "sprite_names": [
+          "Sender",
+          "Receiver"
+        ],
+        "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+        "target_id": "receiver",
+        "revision": 1
+      }
+    ],
+    "shared_state": {
+      "variables": [],
+      "lists": [],
+      "broadcasts": []
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "只使用现有舞台Stage和现有角色Sender、Receiver。绿旗时舞台把全局变量rounds设为0。Sender绿旗时广播go一次。Receiver收到go后，先移到x=0、y=0，再重复3次，每次x增加5并且rounds增加1。最后Receiver x=15，rounds=3。不要新建角色或素材，广播go在Sender发送并在Receiver接收。"
+    }
+  ]
+}

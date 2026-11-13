@@ -28,6 +28,11 @@ func (m *AiRunManager) ingestGenerationEvent(
 	terminalOnComplete bool,
 ) (map[int]string, error) {
 	data := copyMap(event.Data)
+	if event.Type == "usage" && data["pipeline_version"] == "scratch-source/1" {
+		if err := m.persistSourceBudget(runID, ownerScopeHash, orch); err != nil {
+			return jobIDs, err
+		}
+	}
 	if event.Type == "content_delta" || event.Type == "reasoning_delta" {
 		// Provider text is deliberately excluded from durable storage and the
 		// public event stream.
@@ -40,6 +45,11 @@ func (m *AiRunManager) ingestGenerationEvent(
 		updated, err := m.ingestPhaseComplete(runID, ownerScopeHash, event.Phase, data, jobIDs)
 		if err != nil {
 			return jobIDs, err
+		}
+		if event.Phase == "plan" && data["pipeline_version"] == "scratch-source/1" {
+			if err := m.persistSourceBudget(runID, ownerScopeHash, orch); err != nil {
+				return jobIDs, err
+			}
 		}
 		m.signal(runID)
 		return updated, nil
@@ -179,6 +189,11 @@ func (m *AiRunManager) ingestPhaseComplete(runID string, ownerScopeHash string, 
 			return jobIDs, err
 		}
 	case "plan":
+		if _, source := data["source_contract"]; source {
+			if err := m.persistSourceContract(runID, ownerScopeHash, data); err != nil {
+				return jobIDs, err
+			}
+		}
 		manifest := data["manifest"]
 		if manifestObject, ok := jsonObjectValue(manifest); ok {
 			if targets, ok := jsonArray(manifestObject["program_targets"]); ok {

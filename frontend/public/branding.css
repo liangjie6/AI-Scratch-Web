@@ -1,0 +1,7 @@
+/* The bundled Scratch menu owns this image; keep branding outside its vendor bundle. */
+.scratch-host #logo_img {
+  content: url('/logo.png');
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}

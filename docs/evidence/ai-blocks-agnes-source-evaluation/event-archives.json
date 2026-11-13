@@ -1,0 +1,583 @@
+[
+  {
+    "path": "investigation/source-motion-events.sse",
+    "archive": "investigation/source-motion-events.sse.gz",
+    "sha256": "d74412cb21f234beca0d9d509757813695ab08981f0e1deac9edf2d8d244c367",
+    "original_bytes": 9404,
+    "compressed_bytes": 2193
+  },
+  {
+    "path": "investigation/baseline-events.json",
+    "archive": "investigation/baseline-events.json.gz",
+    "sha256": "79675d8fa7ccdfe203ce4d73b0a953bd674f1302a55ce17ba941e4bd2776357f",
+    "original_bytes": 12380,
+    "compressed_bytes": 1114
+  },
+  {
+    "path": "investigation/source-motion-retry-events.sse",
+    "archive": "investigation/source-motion-retry-events.sse.gz",
+    "sha256": "ba86a60a5d0421546d5c8c9806dfba1dafe936fb35657ac18a391964dda7eb66",
+    "original_bytes": 8317,
+    "compressed_bytes": 1951
+  },
+  {
+    "path": "investigation/source-motion-events.json",
+    "archive": "investigation/source-motion-events.json.gz",
+    "sha256": "8521b8c25485c818572672dc5f9e69d5f1976b9d85fd181cdbb85ee4815ccbda",
+    "original_bytes": 16491,
+    "compressed_bytes": 2594
+  },
+  {
+    "path": "investigation/source-motion-retry-events.json",
+    "archive": "investigation/source-motion-retry-events.json.gz",
+    "sha256": "6e48cbdf37656962e6f6ee06d9fc22a6f5c013b39d0eb1965044f2e012dbea2b",
+    "original_bytes": 14801,
+    "compressed_bytes": 2356
+  },
+  {
+    "path": "investigation/keyboard/unified-events.json",
+    "archive": "investigation/keyboard/unified-events.json.gz",
+    "sha256": "df64d0aeca855d114c96e5509abbad8ceb9c7550dec6084b60d22a7fe7b4e177",
+    "original_bytes": 22579,
+    "compressed_bytes": 2758
+  },
+  {
+    "path": "investigation/keyboard/unified-events.sse",
+    "archive": "investigation/keyboard/unified-events.sse.gz",
+    "sha256": "5d6abe8c45aa1344a648c2c6e2962f23567ece2cf8557734ca954ae8f2662fed",
+    "original_bytes": 12956,
+    "compressed_bytes": 2249
+  },
+  {
+    "path": "investigation/variables/unified-events.json",
+    "archive": "investigation/variables/unified-events.json.gz",
+    "sha256": "e05cf8c13cfd0d4c00728961badc7b3ad81c3094e3a37b3a011bd2660c3e6a9d",
+    "original_bytes": 5603,
+    "compressed_bytes": 724
+  },
+  {
+    "path": "investigation/variables/unified-events.sse",
+    "archive": "investigation/variables/unified-events.sse.gz",
+    "sha256": "a896bd5f0b8a555ea809a9e24651cc580a68298d8160dd875ad23ae217ccdd05",
+    "original_bytes": 3754,
+    "compressed_bytes": 671
+  },
+  {
+    "path": "deepseek-release/rewrite/unified-events.json",
+    "archive": "deepseek-release/rewrite/unified-events.json.gz",
+    "sha256": "c4b513a8d5595074d9174fc5eab6641a595525eb6c1f006790171e87489dc98a",
+    "original_bytes": 737074,
+    "compressed_bytes": 15234
+  },
+  {
+    "path": "deepseek-release/rewrite/unified-events.sse",
+    "archive": "deepseek-release/rewrite/unified-events.sse.gz",
+    "sha256": "1b78ef4e41fa8108790324783755534d5387ffad3f55a0a2118aaf4ff1491684",
+    "original_bytes": 471303,
+    "compressed_bytes": 13415
+  },
+  {
+    "path": "deepseek-release/keyboard/unified-events.json",
+    "archive": "deepseek-release/keyboard/unified-events.json.gz",
+    "sha256": "82839c3d6705e917521b786685d7712214befbc7d936de841c72a6903697b28e",
+    "original_bytes": 450755,
+    "compressed_bytes": 10657
+  },
+  {
+    "path": "deepseek-release/keyboard/unified-events.sse",
+    "archive": "deepseek-release/keyboard/unified-events.sse.gz",
+    "sha256": "7457b4f1b1298b5a610808c2777a181bc492d69f6f1ebdb44ec9c73c05a61730",
+    "original_bytes": 286404,
+    "compressed_bytes": 8878
+  },
+  {
+    "path": "deepseek-release/broadcast/target-1-events.json",
+    "archive": "deepseek-release/broadcast/target-1-events.json.gz",
+    "sha256": "c52158b920f97755d35016edd42f19950520f7aa34b8ce2f2b9c0d24ae58907f",
+    "original_bytes": 57448,
+    "compressed_bytes": 1884
+  },
+  {
+    "path": "deepseek-release/broadcast/target-0-events.json",
+    "archive": "deepseek-release/broadcast/target-0-events.json.gz",
+    "sha256": "d517072d1830228e70b5be6c73bdcf00b5f7f44a346a470bf9807ea032df336c",
+    "original_bytes": 20950,
+    "compressed_bytes": 1318
+  },
+  {
+    "path": "deepseek-release/broadcast/target-2-events.json",
+    "archive": "deepseek-release/broadcast/target-2-events.json.gz",
+    "sha256": "58df387b6833ee14ac5b4f6ef2b8b7e4cc58222b07930dd353b6e2483d1d4e1e",
+    "original_bytes": 53742,
+    "compressed_bytes": 2176
+  },
+  {
+    "path": "deepseek-release/broadcast/target-0-events.sse",
+    "archive": "deepseek-release/broadcast/target-0-events.sse.gz",
+    "sha256": "bbb8daf74459df115cb68c2471c18692fd610828eec8eb8850b9ed3b98cf58e0",
+    "original_bytes": 13077,
+    "compressed_bytes": 1100
+  },
+  {
+    "path": "deepseek-release/broadcast/unified-events.json",
+    "archive": "deepseek-release/broadcast/unified-events.json.gz",
+    "sha256": "f2398b444a6574940dc46b63962295a4a26cf28b1b28dd63b8f01ad53f2bf468",
+    "original_bytes": 421592,
+    "compressed_bytes": 9631
+  },
+  {
+    "path": "deepseek-release/broadcast/target-2-events.sse",
+    "archive": "deepseek-release/broadcast/target-2-events.sse.gz",
+    "sha256": "1e97be5be446682e198c79bdac31353e9d7a59de43b852e1f8276007d2bf9372",
+    "original_bytes": 33410,
+    "compressed_bytes": 1680
+  },
+  {
+    "path": "deepseek-release/broadcast/target-1-events.sse",
+    "archive": "deepseek-release/broadcast/target-1-events.sse.gz",
+    "sha256": "43f2cf283ce1691a9bfaaa767340638cfb09f4151901bb616fbce3828e367d29",
+    "original_bytes": 36697,
+    "compressed_bytes": 1612
+  },
+  {
+    "path": "deepseek-release/broadcast/unified-events.sse",
+    "archive": "deepseek-release/broadcast/unified-events.sse.gz",
+    "sha256": "745bad9e7e81b872d9594bfaca47368e9fc03fd686e182b899d45dd550bfac8c",
+    "original_bytes": 268158,
+    "compressed_bytes": 8511
+  },
+  {
+    "path": "deepseek-release/modify/unified-events.json",
+    "archive": "deepseek-release/modify/unified-events.json.gz",
+    "sha256": "1567cbcf597c107b7b09ccac4c3e39529458f99afa26e10794564d84125222e7",
+    "original_bytes": 769842,
+    "compressed_bytes": 15378
+  },
+  {
+    "path": "deepseek-release/modify/unified-events.sse",
+    "archive": "deepseek-release/modify/unified-events.sse.gz",
+    "sha256": "d3fee32638d9c7f16d9e6f9b8de8b1435b7fc0beb4db45a6b27542b39e83575f",
+    "original_bytes": 491852,
+    "compressed_bytes": 13661
+  },
+  {
+    "path": "deepseek-release/motion/unified-events.json",
+    "archive": "deepseek-release/motion/unified-events.json.gz",
+    "sha256": "f356c44c21691cf72901abec021097789f39b20cd516e28edfbff7ea797d85fe",
+    "original_bytes": 381034,
+    "compressed_bytes": 8929
+  },
+  {
+    "path": "deepseek-release/motion/unified-events.sse",
+    "archive": "deepseek-release/motion/unified-events.sse.gz",
+    "sha256": "579f998a7195de00d4b0b3e00c25aef8f5da61fdb13d6afc89f250289f871a3b",
+    "original_bytes": 242555,
+    "compressed_bytes": 7765
+  },
+  {
+    "path": "deepseek-release/variables/unified-events.json",
+    "archive": "deepseek-release/variables/unified-events.json.gz",
+    "sha256": "95d3d0b1289f6faeaf6c725cfd29a3149cfc36aab68d85204cca711a22610a35",
+    "original_bytes": 1248386,
+    "compressed_bytes": 22850
+  },
+  {
+    "path": "deepseek-release/variables/unified-events.sse",
+    "archive": "deepseek-release/variables/unified-events.sse.gz",
+    "sha256": "43c0084298201ca26f330b2acf31e0feecc941e345de5ba7627f248838a04bd4",
+    "original_bytes": 796710,
+    "compressed_bytes": 19479
+  },
+  {
+    "path": "deepseek/rewrite/unified-events.json",
+    "archive": "deepseek/rewrite/unified-events.json.gz",
+    "sha256": "d26513191637b081a03cd56a5b3d720cdd251a89d4e1eae96b199ec8fcd6c492",
+    "original_bytes": 860107,
+    "compressed_bytes": 16614
+  },
+  {
+    "path": "deepseek/rewrite/unified-events.sse",
+    "archive": "deepseek/rewrite/unified-events.sse.gz",
+    "sha256": "b8ee0207e8672181c5459c1847960f77b9895f3e91ae3e0ca6c7a97d5a21fab6",
+    "original_bytes": 549572,
+    "compressed_bytes": 14545
+  },
+  {
+    "path": "deepseek/keyboard/unified-events.json",
+    "archive": "deepseek/keyboard/unified-events.json.gz",
+    "sha256": "b8754b19909ffdae0309af8d926400dec7e842ce97376bd446ae8ad8845e10ac",
+    "original_bytes": 581842,
+    "compressed_bytes": 12704
+  },
+  {
+    "path": "deepseek/keyboard/unified-events.sse",
+    "archive": "deepseek/keyboard/unified-events.sse.gz",
+    "sha256": "b0b28238f3956782a82d479e6883ae9fee2a8c008d3e4b0660111765a93102e1",
+    "original_bytes": 370094,
+    "compressed_bytes": 10995
+  },
+  {
+    "path": "deepseek/broadcast/target-1-events.json",
+    "archive": "deepseek/broadcast/target-1-events.json.gz",
+    "sha256": "7e91f730748b7ff1db0657992773ab5943479d364bbd55162fcf07af58ab973f",
+    "original_bytes": 30253,
+    "compressed_bytes": 1355
+  },
+  {
+    "path": "deepseek/broadcast/target-0-events.json",
+    "archive": "deepseek/broadcast/target-0-events.json.gz",
+    "sha256": "a737b371bd0acb2c4d30d5ac557ecc4d3c865d51563148bbd12730a7f7a15933",
+    "original_bytes": 28191,
+    "compressed_bytes": 1435
+  },
+  {
+    "path": "deepseek/broadcast/target-2-events.json",
+    "archive": "deepseek/broadcast/target-2-events.json.gz",
+    "sha256": "a080e83aaa136b2ddcef5c3590aac0d423b537c4a11f16aed4d2688c1af834d0",
+    "original_bytes": 29169,
+    "compressed_bytes": 1747
+  },
+  {
+    "path": "deepseek/broadcast/target-0-events.sse",
+    "archive": "deepseek/broadcast/target-0-events.sse.gz",
+    "sha256": "25f2b04e254354e2f70869d232e17daee23d358033116f8ead823ea1ad6eb9e2",
+    "original_bytes": 18050,
+    "compressed_bytes": 1212
+  },
+  {
+    "path": "deepseek/broadcast/unified-events.json",
+    "archive": "deepseek/broadcast/unified-events.json.gz",
+    "sha256": "9835f2646fe91c94a662339d3a05872ce2d569da4b07cf6eddb13afb96e4e372",
+    "original_bytes": 741864,
+    "compressed_bytes": 14345
+  },
+  {
+    "path": "deepseek/broadcast/target-2-events.sse",
+    "archive": "deepseek/broadcast/target-2-events.sse.gz",
+    "sha256": "fb71b72f296f25e56500d01056cc354c476a2c4330a4e3c4bce498dbd02e0fb1",
+    "original_bytes": 17747,
+    "compressed_bytes": 1374
+  },
+  {
+    "path": "deepseek/broadcast/target-1-events.sse",
+    "archive": "deepseek/broadcast/target-1-events.sse.gz",
+    "sha256": "4cd84ab887d122225da5b99fa403e843f826e8dc95d7d4e815892bf9b1046c48",
+    "original_bytes": 19546,
+    "compressed_bytes": 1147
+  },
+  {
+    "path": "deepseek/broadcast/unified-events.sse",
+    "archive": "deepseek/broadcast/unified-events.sse.gz",
+    "sha256": "f15dbb59198f86a34373c52edbc40443ab94279f0af1ea6704a511a71a3da31b",
+    "original_bytes": 472701,
+    "compressed_bytes": 12511
+  },
+  {
+    "path": "deepseek/modify/unified-events.json",
+    "archive": "deepseek/modify/unified-events.json.gz",
+    "sha256": "c6ab870bc5f1305d6e70b5fd4074bd9e5c3afbe944f641cce4a5b6ea812599f1",
+    "original_bytes": 752034,
+    "compressed_bytes": 14778
+  },
+  {
+    "path": "deepseek/modify/unified-events.sse",
+    "archive": "deepseek/modify/unified-events.sse.gz",
+    "sha256": "f2b06619bd56ca4567d22a83d4a9b636804507bb711a616cd63c5f218a22b873",
+    "original_bytes": 480552,
+    "compressed_bytes": 13043
+  },
+  {
+    "path": "deepseek/motion/unified-events.json",
+    "archive": "deepseek/motion/unified-events.json.gz",
+    "sha256": "d3970e4d9e24a8c2857a8f2ad54f086d35bf7e0aa27e1fed4b784ff97638068c",
+    "original_bytes": 348766,
+    "compressed_bytes": 8146
+  },
+  {
+    "path": "deepseek/motion/unified-events.sse",
+    "archive": "deepseek/motion/unified-events.sse.gz",
+    "sha256": "2918eee7364207649e44a487b578b12d41efba51b50233c8285d24074d2ae136",
+    "original_bytes": 221727,
+    "compressed_bytes": 6923
+  },
+  {
+    "path": "deepseek/variables/unified-events.json",
+    "archive": "deepseek/variables/unified-events.json.gz",
+    "sha256": "3d180ea0428212324dc4550b98347938d92adaaa63dea6acc097f5ef1e6dd16d",
+    "original_bytes": 349339,
+    "compressed_bytes": 8473
+  },
+  {
+    "path": "deepseek/variables/unified-events.sse",
+    "archive": "deepseek/variables/unified-events.sse.gz",
+    "sha256": "ff7f0df97b3975d57ef110422808f267f6ea1a23a9948a343244a0ffd59e3a7e",
+    "original_bytes": 222469,
+    "compressed_bytes": 7155
+  },
+  {
+    "path": "final/modify-attempt-a2196046/unified-events.json",
+    "archive": "final/modify-attempt-a2196046/unified-events.json.gz",
+    "sha256": "e042cd5edfbc000a2363192cf55eb7327900a3ef69a9edba543f6433a92e3c81",
+    "original_bytes": 24067,
+    "compressed_bytes": 3240
+  },
+  {
+    "path": "final/modify-attempt-a2196046/unified-events.sse",
+    "archive": "final/modify-attempt-a2196046/unified-events.sse.gz",
+    "sha256": "976c20f379b2ef790b54dba01710ff4597b3ee5cbc8d93c2247b4878f7996a9e",
+    "original_bytes": 14264,
+    "compressed_bytes": 2772
+  },
+  {
+    "path": "final/modify-attempt-2daf7684/unified-events.json",
+    "archive": "final/modify-attempt-2daf7684/unified-events.json.gz",
+    "sha256": "48bec02aa9354cb6828906496f2cb5b71c485df2bebba91f529bc6badb630ccb",
+    "original_bytes": 14217,
+    "compressed_bytes": 2496
+  },
+  {
+    "path": "final/modify-attempt-2daf7684/unified-events.sse",
+    "archive": "final/modify-attempt-2daf7684/unified-events.sse.gz",
+    "sha256": "a2bd81b1e14fcfacb763efd2a7454de053aaccb6e2101305d71377aead77b198",
+    "original_bytes": 9034,
+    "compressed_bytes": 2189
+  },
+  {
+    "path": "final/variables-attempt-70e6707a/unified-events.json",
+    "archive": "final/variables-attempt-70e6707a/unified-events.json.gz",
+    "sha256": "2a62dde9256285b9baa68a60fcd18aac49d14da3ade41220ca26cc99894a356e",
+    "original_bytes": 19445,
+    "compressed_bytes": 2938
+  },
+  {
+    "path": "final/variables-attempt-70e6707a/unified-events.sse",
+    "archive": "final/variables-attempt-70e6707a/unified-events.sse.gz",
+    "sha256": "30f6072839ad2906765e6e45a2f66be93810c05e126441396368776f4ec16fb1",
+    "original_bytes": 11311,
+    "compressed_bytes": 2467
+  },
+  {
+    "path": "final/variables-attempt-0761212a/unified-events.json",
+    "archive": "final/variables-attempt-0761212a/unified-events.json.gz",
+    "sha256": "a45754872c3eda89588631eac237dd056f8281f9c3d2c5b5beda6e8705a60cec",
+    "original_bytes": 16689,
+    "compressed_bytes": 2494
+  },
+  {
+    "path": "final/variables-attempt-0761212a/unified-events.sse",
+    "archive": "final/variables-attempt-0761212a/unified-events.sse.gz",
+    "sha256": "46a00f249797ee334e415254b5bb816f978e652a6ce8267e9289a3825f70f602",
+    "original_bytes": 10703,
+    "compressed_bytes": 2254
+  },
+  {
+    "path": "final/rewrite/unified-events.json",
+    "archive": "final/rewrite/unified-events.json.gz",
+    "sha256": "0f2a77c5dbf4cd69234ca3a93f0e248a9ea83abd9db171544cd1b377a02401ff",
+    "original_bytes": 803,
+    "compressed_bytes": 345
+  },
+  {
+    "path": "final/rewrite/unified-events.sse",
+    "archive": "final/rewrite/unified-events.sse.gz",
+    "sha256": "e6dea2c9f50bdfd36153798964352cca92cbfae6d318b8d8dfc905983d6730e0",
+    "original_bytes": 552,
+    "compressed_bytes": 313
+  },
+  {
+    "path": "final/modify-attempt-29d5fb20/unified-events.json",
+    "archive": "final/modify-attempt-29d5fb20/unified-events.json.gz",
+    "sha256": "c01ddd43933629fdb443ac300d4a997a71e4931c53f829ec95dec65d13b97c17",
+    "original_bytes": 2196,
+    "compressed_bytes": 572
+  },
+  {
+    "path": "final/modify-attempt-29d5fb20/unified-events.sse",
+    "archive": "final/modify-attempt-29d5fb20/unified-events.sse.gz",
+    "sha256": "d5edc581f83579ed8760038ae80c3f85844e5b175db030c67c97139dcfeeaee8",
+    "original_bytes": 1495,
+    "compressed_bytes": 527
+  },
+  {
+    "path": "final/keyboard-attempt-67923930/unified-events.json",
+    "archive": "final/keyboard-attempt-67923930/unified-events.json.gz",
+    "sha256": "969a8581ab97b20f1a975b8da1a9bcf5a309ced9a14273fa2d70adf0092db014",
+    "original_bytes": 19422,
+    "compressed_bytes": 2814
+  },
+  {
+    "path": "final/keyboard-attempt-67923930/unified-events.sse",
+    "archive": "final/keyboard-attempt-67923930/unified-events.sse.gz",
+    "sha256": "660a62b2466b55c0ee4ec9a4e6a30b79bc73dc7d99b337fcfbf0533bda13e04f",
+    "original_bytes": 10638,
+    "compressed_bytes": 2305
+  },
+  {
+    "path": "final/keyboard/unified-events.json",
+    "archive": "final/keyboard/unified-events.json.gz",
+    "sha256": "f319314b1e072a2e29bab2ab4b8583428272cb6c8d7118d9613140dff91a195b",
+    "original_bytes": 10538,
+    "compressed_bytes": 2134
+  },
+  {
+    "path": "final/keyboard/unified-events.sse",
+    "archive": "final/keyboard/unified-events.sse.gz",
+    "sha256": "9975c4f37fb08d2c23645e28ecbbb19c768fbbbab1691b9067a1fd2db65ce12e",
+    "original_bytes": 6708,
+    "compressed_bytes": 1929
+  },
+  {
+    "path": "final/broadcast/unified-events.json",
+    "archive": "final/broadcast/unified-events.json.gz",
+    "sha256": "11e6f09ccd382415320a66632a7fb0903541eb556fb6f1f3b476dd8f614953da",
+    "original_bytes": 803,
+    "compressed_bytes": 345
+  },
+  {
+    "path": "final/broadcast/unified-events.sse",
+    "archive": "final/broadcast/unified-events.sse.gz",
+    "sha256": "c66c2419c0031cbac89b5b713e745d31bc45a6bddee92df5815f61810de41fd4",
+    "original_bytes": 552,
+    "compressed_bytes": 313
+  },
+  {
+    "path": "final/modify/unified-events.json",
+    "archive": "final/modify/unified-events.json.gz",
+    "sha256": "4989cda08ee3a2b451e5a01cf370e8c292c9e2b102672678c555423e0d1399fb",
+    "original_bytes": 803,
+    "compressed_bytes": 342
+  },
+  {
+    "path": "final/modify/unified-events.sse",
+    "archive": "final/modify/unified-events.sse.gz",
+    "sha256": "b632c568db5ce0815812d54d69cdbd2ddfc31105888d2021512ce70f7bd0b6ea",
+    "original_bytes": 552,
+    "compressed_bytes": 309
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/target-1-events.json",
+    "archive": "final/broadcast-attempt-437e72d4/target-1-events.json.gz",
+    "sha256": "380ed771ce54e6b9713030231bc5cba9afa0cc4f2ceeeea1a5e3db7971e4857c",
+    "original_bytes": 3149,
+    "compressed_bytes": 724
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/target-0-events.json",
+    "archive": "final/broadcast-attempt-437e72d4/target-0-events.json.gz",
+    "sha256": "b4dbf8551d346ea4eb078897beed85c923196e4fff7863c293db4b7b40cbb1ec",
+    "original_bytes": 6699,
+    "compressed_bytes": 1120
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/target-0-events.sse",
+    "archive": "final/broadcast-attempt-437e72d4/target-0-events.sse.gz",
+    "sha256": "bc8cbda9f54cced4b097a8b84b5aef5f4dd03a1ae092aa081c78b9dd231c9f88",
+    "original_bytes": 3906,
+    "compressed_bytes": 931
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/unified-events.json",
+    "archive": "final/broadcast-attempt-437e72d4/unified-events.json.gz",
+    "sha256": "098b819574ac6983e6725b72103bc14a82b6b00b4c4e8df76d07320ddc10ec78",
+    "original_bytes": 19841,
+    "compressed_bytes": 2656
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/target-1-events.sse",
+    "archive": "final/broadcast-attempt-437e72d4/target-1-events.sse.gz",
+    "sha256": "db78a37dd7aea50a3c0711efc2d30248357014274d430d33dce36abe73631e4b",
+    "original_bytes": 2133,
+    "compressed_bytes": 672
+  },
+  {
+    "path": "final/broadcast-attempt-437e72d4/unified-events.sse",
+    "archive": "final/broadcast-attempt-437e72d4/unified-events.sse.gz",
+    "sha256": "782a96426c6fa28172ae3b047fd5fd88ef8b04a3c877fd40088eb95b0843875e",
+    "original_bytes": 11205,
+    "compressed_bytes": 2339
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/target-1-events.json",
+    "archive": "final/broadcast-attempt-38a1c39a/target-1-events.json.gz",
+    "sha256": "8e410b7880a1a245d9932d0198aa0392c40db6f273ee5ea000fec02e4abf245a",
+    "original_bytes": 4670,
+    "compressed_bytes": 867
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/target-0-events.json",
+    "archive": "final/broadcast-attempt-38a1c39a/target-0-events.json.gz",
+    "sha256": "444572fd522aa5ca1cdcbc57ee09c6ef118099ba63900453234114f39b306921",
+    "original_bytes": 5304,
+    "compressed_bytes": 953
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/target-0-events.sse",
+    "archive": "final/broadcast-attempt-38a1c39a/target-0-events.sse.gz",
+    "sha256": "6909658ceb50206c973087d9d13bebd313116d6a70e6bc5ad348ea6db85efd8b",
+    "original_bytes": 2961,
+    "compressed_bytes": 769
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/unified-events.json",
+    "archive": "final/broadcast-attempt-38a1c39a/unified-events.json.gz",
+    "sha256": "3994e2c523556d58b06f90aaaa972390833e58491e989d707115a5c85bac3547",
+    "original_bytes": 22296,
+    "compressed_bytes": 2856
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/target-1-events.sse",
+    "archive": "final/broadcast-attempt-38a1c39a/target-1-events.sse.gz",
+    "sha256": "b0d3fdc1277f028d0e4d3ac26e72bc17cfb69aa72c1a71ad08d93ad122ec3615",
+    "original_bytes": 3182,
+    "compressed_bytes": 807
+  },
+  {
+    "path": "final/broadcast-attempt-38a1c39a/unified-events.sse",
+    "archive": "final/broadcast-attempt-38a1c39a/unified-events.sse.gz",
+    "sha256": "a4ad355e5e41584dfae2e4dd6abd83f9660bcc2eed21a290fb91a3e37698061a",
+    "original_bytes": 12882,
+    "compressed_bytes": 2555
+  },
+  {
+    "path": "final/rewrite-attempt-a0c305c7/unified-events.json",
+    "archive": "final/rewrite-attempt-a0c305c7/unified-events.json.gz",
+    "sha256": "acfdfbbd5ece1d43398d844d1ac2afb6f3c049c58cac308a95f42556dcf8c512",
+    "original_bytes": 803,
+    "compressed_bytes": 343
+  },
+  {
+    "path": "final/rewrite-attempt-a0c305c7/unified-events.sse",
+    "archive": "final/rewrite-attempt-a0c305c7/unified-events.sse.gz",
+    "sha256": "a9865818bd6f29692a69cf6a5e69cb066e56b066279685136fdab73b5d12b05f",
+    "original_bytes": 552,
+    "compressed_bytes": 311
+  },
+  {
+    "path": "final/motion/unified-events.json",
+    "archive": "final/motion/unified-events.json.gz",
+    "sha256": "67339e83b2f0eb838b6188975d318202db9470b629fb0d65a614ee87d06d71d2",
+    "original_bytes": 16563,
+    "compressed_bytes": 2694
+  },
+  {
+    "path": "final/motion/unified-events.sse",
+    "archive": "final/motion/unified-events.sse.gz",
+    "sha256": "4d752a595958016d436b61b05226a214063096ca4e474959adbb518c672715c9",
+    "original_bytes": 9544,
+    "compressed_bytes": 2271
+  },
+  {
+    "path": "final/variables/unified-events.json",
+    "archive": "final/variables/unified-events.json.gz",
+    "sha256": "9d458d8ece54b4fc56e2463b5b4ae7d9b6715267e9c9343b5480d680c227bf48",
+    "original_bytes": 16058,
+    "compressed_bytes": 2617
+  },
+  {
+    "path": "final/variables/unified-events.sse",
+    "archive": "final/variables/unified-events.sse.gz",
+    "sha256": "3a72f0fff346fbb5011691cdf9dceb620927dc557577e75fe46369adde70c63f",
+    "original_bytes": 10477,
+    "compressed_bytes": 2378
+  }
+]

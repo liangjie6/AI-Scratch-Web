@@ -1,0 +1,84 @@
+{
+  "case": "modify",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:55:11.593558+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/modify-attempt-2daf7684",
+  "request_id": "ba48799a-87b1-4c7e-b594-ac16003a038a",
+  "request_log_ref": "6a14a9a0dab016d8",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "FAIL",
+  "behavior": {
+    "status": "FAIL",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "modify preserves unrelated code/state",
+        "status": "FAIL",
+        "error": "script removal set differs from independently specified authorization\n+ actual - expected\n\n+ []\n- [\n-   'fixture_script_1_block_0'\n- ]\n",
+        "primitiveCalls": 0
+      }
+    ],
+    "roundTrip": {
+      "status": "SKIPPED",
+      "reason": "not requested"
+    }
+  },
+  "source_contract_hash": "d04b8626ec7f49e9e1075d009f3169ee5e70671a15d99ba3b1fae242567876f8",
+  "error": "script removal set differs from independently specified authorization\n+ actual - expected\n\n+ []\n- [\n-   'fixture_script_1_block_0'\n- ]\n",
+  "duration_seconds": 64.108,
+  "backend_request_seconds": [
+    61.481
+  ],
+  "tokens": {
+    "input_tokens": 7024,
+    "output_tokens": 285,
+    "reasoning_tokens": 0,
+    "total_tokens": 7309
+  },
+  "usage": [
+    {
+      "input_tokens": 2091,
+      "output_bytes": 960,
+      "output_tokens": 250,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 8175,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2341,
+      "usage": {
+        "input_tokens": 2091,
+        "output_tokens": 250,
+        "reasoning_tokens": 0,
+        "total_tokens": 2341
+      }
+    },
+    {
+      "input_tokens": 4933,
+      "output_bytes": 113,
+      "output_tokens": 35,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19586,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "script_1",
+      "total_tokens": 4968,
+      "usage": {
+        "input_tokens": 4933,
+        "output_tokens": 35,
+        "reasoning_tokens": 0,
+        "total_tokens": 4968
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 2,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

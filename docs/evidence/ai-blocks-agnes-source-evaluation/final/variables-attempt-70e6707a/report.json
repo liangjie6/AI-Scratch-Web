@@ -1,0 +1,139 @@
+{
+  "case": "variables",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/variables-attempt-70e6707a",
+  "request_id": "d6cd3d2e-c580-48ef-8361-64d05c5d9c87",
+  "request_log_ref": "9c8984a3ade60be6",
+  "catalog_hash": "a377553fbd30c0f52460fcf3f44582706d07931afa54e166561db2cba194e821",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "five counter increments",
+        "status": "PASS",
+        "ticks": 15,
+        "primitiveCalls": 12,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "variable:counter",
+            "status": "PASS",
+            "actual": 10,
+            "expected": 10
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1251,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "66e2d5729077de2097abf168e53e8d623dc5ab607a4cbb3a1fe5dac220825a74",
+  "duration_seconds": 101.762,
+  "model_request_seconds": [
+    99.151
+  ],
+  "tokens": {
+    "input_tokens": 13734,
+    "output_tokens": 997,
+    "reasoning_tokens": 0,
+    "total_tokens": 14731,
+    "cached_input_tokens": 5120
+  },
+  "usage": [
+    {
+      "input_tokens": 1438,
+      "output_bytes": 983,
+      "output_tokens": 258,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 6024,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1696,
+      "usage": {
+        "input_tokens": 1438,
+        "output_tokens": 258,
+        "reasoning_tokens": 0,
+        "total_tokens": 1696
+      }
+    },
+    {
+      "input_tokens": 1791,
+      "output_bytes": 1401,
+      "output_tokens": 444,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7384,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2235,
+      "usage": {
+        "input_tokens": 1791,
+        "output_tokens": 444,
+        "reasoning_tokens": 0,
+        "total_tokens": 2235
+      }
+    },
+    {
+      "input_tokens": 5166,
+      "output_bytes": 329,
+      "output_tokens": 85,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 20402,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "main",
+      "total_tokens": 5251,
+      "usage": {
+        "input_tokens": 5166,
+        "output_tokens": 85,
+        "reasoning_tokens": 0,
+        "total_tokens": 5251
+      }
+    },
+    {
+      "cached_input_tokens": 5120,
+      "input_tokens": 5339,
+      "output_bytes": 672,
+      "output_tokens": 210,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 21122,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "main",
+      "total_tokens": 5549,
+      "usage": {
+        "cached_input_tokens": 5120,
+        "input_tokens": 5339,
+        "output_tokens": 210,
+        "reasoning_tokens": 0,
+        "total_tokens": 5549
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 4,
+  "missing_usage_events": 0,
+  "repairs": 2
+}

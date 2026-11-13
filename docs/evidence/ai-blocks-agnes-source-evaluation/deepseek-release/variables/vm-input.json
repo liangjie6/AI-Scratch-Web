@@ -1,0 +1,121 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {
+                  "VARIABLE": "counter"
+                },
+                "inputs": {
+                  "VALUE": {
+                    "kind": "number",
+                    "value": 0
+                  }
+                },
+                "opcode": "data_setvariableto",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "TIMES": {
+                    "kind": "number",
+                    "value": 5
+                  }
+                },
+                "opcode": "control_repeat",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {
+                        "VARIABLE": "counter"
+                      },
+                      "inputs": {
+                        "VALUE": {
+                          "kind": "number",
+                          "value": 2
+                        }
+                      },
+                      "opcode": "data_changevariableby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_0d6e4079e36703eb",
+            "purpose": "点击绿旗后将 counter 设为 0，重复 5 次，每次增加 2；结束时 counter 必须为 10；不使用永远循环",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "绿旗重置counter并重复加2",
+        "variables": [
+          {
+            "name": "counter",
+            "scope": "global",
+            "value": 42
+          }
+        ]
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "variables": [
+      {
+        "name": "counter",
+        "scope": "global",
+        "value": 42
+      }
+    ],
+    "states": [
+      {
+        "ref_id": "state_8aa61c6635a22a30",
+        "kind": "variable",
+        "name": "counter",
+        "scope": "global",
+        "value": 42
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "five counter increments",
+      "maxTicks": 15,
+      "expect": {
+        "variables": {
+          "counter": 10
+        },
+        "x": 0
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

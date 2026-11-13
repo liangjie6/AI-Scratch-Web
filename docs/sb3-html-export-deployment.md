@@ -1,6 +1,6 @@
 # SB3 导出 HTML 部署记录
 
-2026-10-11 已更新正式站点：https://kfcv50.icu:9966/ 。前端发布到 `/var/www/ai-scratch-web`，由现有系统 nginx 托管；Go 后端健康检查正常。
+2026-10-11 已更新正式站点：https://scratch.example.com:9966/ 。前端发布到 `/var/www/ai-scratch-web`，由现有系统 nginx 托管；Go 后端健康检查正常。
 
 ## 部署复验修复
 
@@ -24,7 +24,7 @@
 
 ## 研究目录可删除
 
-`/home/HwHiAiUser/Documents/scratch-converter-research-review/` 已不属于运行或构建依赖。导出代码位于本项目的 `frontend/src/scratch-export/`；VM、模板、许可证和声明位于 `frontend/public/assets/htmlifier/`，部署时一并复制为常规文件。
+`/path/to/scratch-converter-research-review/` 已不属于运行或构建依赖。导出代码位于本项目的 `frontend/src/scratch-export/`；VM、模板、许可证和声明位于 `frontend/public/assets/htmlifier/`，部署时一并复制为常规文件。
 
 项目全目录软链接检查没有发现指向研究目录的链接。代码、构建和部署配置中出现的研究项目名称仅用于来源及版权说明。方案、实施和验证文档也都已保存在本项目中。用户可以自行删除上述研究目录，不会影响导出功能。
 

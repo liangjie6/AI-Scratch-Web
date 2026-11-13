@@ -1,0 +1,33 @@
+{
+  "model_tier": "normal",
+  "session_id": "source-refactor-baseline",
+  "request_id": "e18d5d6e-5d49-4e86-9182-42914e16b3e2",
+  "messages": [
+    {
+      "role": "user",
+      "content": "点击绿旗后移动到x=0、y=0，然后重复3次，每次将x增加10。只修改当前角色，不添加资源。"
+    }
+  ],
+  "target": {
+    "name": "Probe",
+    "is_stage": false,
+    "has_scripts": false,
+    "mode": "append",
+    "costumes": [
+      "costume1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Probe"
+    ],
+    "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+  },
+  "thinking": {
+    "enabled": false,
+    "strength": "low"
+  },
+  "scope": "single_sprite",
+  "asset_policy": "existing_only",
+  "proceed_with_defaults": true,
+  "permitted_extensions": []
+}

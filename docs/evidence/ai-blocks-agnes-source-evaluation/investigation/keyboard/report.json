@@ -1,0 +1,188 @@
+{
+  "case": "keyboard",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "no key means no motion",
+        "status": "PASS",
+        "ticks": 5,
+        "primitiveCalls": 19192,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      },
+      {
+        "name": "held key produces repeated movement",
+        "status": "PASS",
+        "ticks": 8,
+        "primitiveCalls": 44954,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 21104,
+            "expected": {
+              "min": 10,
+              "max": 10000000
+            }
+          },
+          {
+            "name": "key:right arrow",
+            "status": "PASS",
+            "actual": true,
+            "expected": true
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1200,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "0f5bf660b0a79cc437d848457331a332dc105e3cbafb81801506824072d90515",
+  "duration_seconds": 38.675,
+  "model_request_seconds": [
+    34.064
+  ],
+  "tokens": {
+    "input_tokens": 16180,
+    "output_tokens": 1177,
+    "reasoning_tokens": 0,
+    "total_tokens": 17357,
+    "cached_input_tokens": 4608
+  },
+  "usage": [
+    {
+      "input_tokens": 1368,
+      "output_bytes": 1082,
+      "output_tokens": 254,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 5768,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1622,
+      "usage": {
+        "input_tokens": 1368,
+        "output_tokens": 254,
+        "reasoning_tokens": 0,
+        "total_tokens": 1622
+      }
+    },
+    {
+      "input_tokens": 1677,
+      "output_bytes": 1082,
+      "output_tokens": 254,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7064,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1931,
+      "usage": {
+        "input_tokens": 1677,
+        "output_tokens": 254,
+        "reasoning_tokens": 0,
+        "total_tokens": 1931
+      }
+    },
+    {
+      "input_tokens": 1677,
+      "output_bytes": 1078,
+      "output_tokens": 254,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7064,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1931,
+      "usage": {
+        "input_tokens": 1677,
+        "output_tokens": 254,
+        "reasoning_tokens": 0,
+        "total_tokens": 1931
+      }
+    },
+    {
+      "input_tokens": 1677,
+      "output_bytes": 899,
+      "output_tokens": 220,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7060,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1897,
+      "usage": {
+        "input_tokens": 1677,
+        "output_tokens": 220,
+        "reasoning_tokens": 0,
+        "total_tokens": 1897
+      }
+    },
+    {
+      "input_tokens": 4816,
+      "output_bytes": 389,
+      "output_tokens": 101,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19098,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "main",
+      "total_tokens": 4917,
+      "usage": {
+        "input_tokens": 4816,
+        "output_tokens": 101,
+        "reasoning_tokens": 0,
+        "total_tokens": 4917
+      }
+    },
+    {
+      "cached_input_tokens": 4608,
+      "input_tokens": 4965,
+      "output_bytes": 350,
+      "output_tokens": 94,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19678,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "main",
+      "total_tokens": 5059,
+      "usage": {
+        "cached_input_tokens": 4608,
+        "input_tokens": 4965,
+        "output_tokens": 94,
+        "reasoning_tokens": 0,
+        "total_tokens": 5059
+      }
+    }
+  ],
+  "model_calls": 6,
+  "repairs": 4
+}

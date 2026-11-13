@@ -17,14 +17,14 @@ echo "== ports =="
 ss -tlnp 2>/dev/null | grep -E ":$PORT|:$BACKEND_PORT" || echo "  nothing listening on $PORT / $BACKEND_PORT"
 
 echo "== backend =="
-if curl -fsS "http://127.0.0.1:$BACKEND_PORT/health" 2>/dev/null; then
+if curl -fsS "http://127.0.0.1:$BACKEND_PORT/healthz" 2>/dev/null; then
   echo
 else
-  echo "  backend is not answering http://127.0.0.1:$BACKEND_PORT/health"
+  echo "  backend is not answering http://127.0.0.1:$BACKEND_PORT/healthz"
 fi
 
 echo "== nginx =="
-for url in "$SCHEME://127.0.0.1:$PORT/" "$SCHEME://[::1]:$PORT/" "$SCHEME://127.0.0.1:$PORT/health"; do
+for url in "$SCHEME://127.0.0.1:$PORT/" "$SCHEME://[::1]:$PORT/" "$SCHEME://127.0.0.1:$PORT/healthz"; do
   printf '  %-44s %s\n' "$url" "$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null)"
 done
 

@@ -723,6 +723,7 @@ func (m *ProjectProgramResponse) Validate() error {
 
 // UnifiedGenerationRequest ports UnifiedGenerationRequest.
 type UnifiedGenerationRequest struct {
+	PipelineVersion     string           `json:"pipeline_version,omitempty"`
 	ModelTier           ModelTier        `json:"model_tier" default:"normal"`
 	SessionID           string           `json:"session_id"`
 	RequestID           string           `json:"request_id"`
@@ -750,6 +751,9 @@ func (m *UnifiedGenerationRequest) requiredJSONFields() []string {
 
 // Validate ports UnifiedGenerationRequest validation.
 func (m *UnifiedGenerationRequest) Validate() error {
+	if m.PipelineVersion != "" && m.PipelineVersion != "scratch-source/1" {
+		return errors.New("unsupported pipeline_version")
+	}
 	base := AIBlocksRequestBase{
 		ModelTier: m.ModelTier, SessionID: m.SessionID, RequestID: m.RequestID,
 		Messages: m.Messages, Target: m.Target, Thinking: m.Thinking,
@@ -807,6 +811,7 @@ func validateUnifiedGenerationAfter(scope string, projectContext *ProjectContext
 
 // ProjectManifestGenerationRequest ports ProjectManifestGenerationRequest.
 type ProjectManifestGenerationRequest struct {
+	PipelineVersion     string           `json:"pipeline_version,omitempty"`
 	ModelTier           ModelTier        `json:"model_tier" default:"normal"`
 	SessionID           string           `json:"session_id"`
 	RequestID           string           `json:"request_id"`
@@ -827,6 +832,9 @@ func (m *ProjectManifestGenerationRequest) requiredJSONFields() []string {
 
 // Validate ports ProjectManifestGenerationRequest validation.
 func (m *ProjectManifestGenerationRequest) Validate() error {
+	if m.PipelineVersion != "" && m.PipelineVersion != "scratch-source/1" {
+		return errors.New("unsupported pipeline_version")
+	}
 	base := AIBlocksRequestBase{
 		ModelTier: m.ModelTier, SessionID: m.SessionID, RequestID: m.RequestID,
 		Messages: m.Messages, Target: m.Target, Thinking: m.Thinking,
@@ -1028,6 +1036,7 @@ func (m *UnifiedGenerationRequest) AsUnifiedGenerationRequest() *UnifiedGenerati
 // UnifiedGenerationRequest fields (the Python base-class view).
 func (m *ProjectManifestGenerationRequest) AsUnifiedGenerationRequest() *UnifiedGenerationRequest {
 	return &UnifiedGenerationRequest{
+		PipelineVersion:     m.PipelineVersion,
 		OutputContract:      m.OutputContract,
 		ModelTier:           m.ModelTier,
 		SessionID:           m.SessionID,

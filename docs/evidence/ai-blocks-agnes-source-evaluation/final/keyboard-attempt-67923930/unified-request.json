@@ -1,0 +1,37 @@
+{
+  "pipeline_version": "scratch-source/1",
+  "model_tier": "normal",
+  "session_id": "agnes-source-eval-keyboard",
+  "request_id": "0a057288-4dd8-4b7d-993f-688174cb8b46",
+  "thinking": {
+    "enabled": false,
+    "strength": "low"
+  },
+  "scope": "single_sprite",
+  "asset_policy": "existing_only",
+  "proceed_with_defaults": true,
+  "permitted_extensions": [],
+  "target": {
+    "name": "Probe",
+    "is_stage": false,
+    "has_scripts": false,
+    "mode": "append",
+    "costumes": [
+      "costume1"
+    ],
+    "backdrops": [
+      "backdrop1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Probe"
+    ],
+    "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "点击绿旗时将x设为0，然后在同一个绿旗脚本里永远循环：如果右方向键被持续按住，就将x增加2；未按住时不移动。使用按键是否按下侦测积木，不要仅写一次按键事件。不添加资源。"
+    }
+  ]
+}

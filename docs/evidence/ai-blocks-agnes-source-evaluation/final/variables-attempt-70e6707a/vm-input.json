@@ -1,0 +1,121 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {
+                  "VARIABLE": "counter"
+                },
+                "inputs": {
+                  "VALUE": {
+                    "kind": "text",
+                    "value": "0"
+                  }
+                },
+                "opcode": "data_setvariableto",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "TIMES": {
+                    "kind": "number",
+                    "value": 5
+                  }
+                },
+                "opcode": "control_repeat",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {
+                        "VARIABLE": "counter"
+                      },
+                      "inputs": {
+                        "VALUE": {
+                          "kind": "number",
+                          "value": 2
+                        }
+                      },
+                      "opcode": "data_changevariableby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_0d6e4079e36703eb",
+            "purpose": "绿旗启动时将全局变量counter重置为0，然后精确重复5次，每次将counter增加2，最终counter值为10。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "计数器清零并累加到10",
+        "variables": [
+          {
+            "name": "counter",
+            "scope": "global",
+            "value": 42
+          }
+        ]
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "variables": [
+      {
+        "name": "counter",
+        "scope": "global",
+        "value": 42
+      }
+    ],
+    "states": [
+      {
+        "ref_id": "state_7b1ffe82921e783e",
+        "kind": "variable",
+        "name": "counter",
+        "scope": "global",
+        "value": 42
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "five counter increments",
+      "maxTicks": 15,
+      "expect": {
+        "variables": {
+          "counter": 10
+        },
+        "x": 0
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

@@ -1,0 +1,90 @@
+{
+  "program": {
+    "broadcasts": [],
+    "lists": [],
+    "procedures": [],
+    "remove_script_ids": [],
+    "schema_version": 1,
+    "scripts": [
+      {
+        "blocks": [
+          {
+            "argument_id": null,
+            "fields": {},
+            "inputs": {},
+            "opcode": "event_whenflagclicked",
+            "procedure_id": null,
+            "substacks": {}
+          },
+          {
+            "argument_id": null,
+            "fields": {},
+            "inputs": {
+              "X": {
+                "kind": "number",
+                "value": 0
+              }
+            },
+            "opcode": "motion_setx",
+            "procedure_id": null,
+            "substacks": {}
+          },
+          {
+            "argument_id": null,
+            "fields": {},
+            "inputs": {
+              "Y": {
+                "kind": "number",
+                "value": 0
+              }
+            },
+            "opcode": "motion_sety",
+            "procedure_id": null,
+            "substacks": {}
+          },
+          {
+            "argument_id": null,
+            "fields": {},
+            "inputs": {},
+            "opcode": "control_forever",
+            "procedure_id": null,
+            "substacks": {
+              "SUBSTACK": [
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {
+                    "DX": {
+                      "kind": "number",
+                      "value": 10
+                    }
+                  },
+                  "opcode": "motion_changexby",
+                  "procedure_id": null,
+                  "substacks": {}
+                }
+              ]
+            }
+          }
+        ],
+        "id": "script_581060e3b44d5ba7",
+        "purpose": "移动到原点并循环增加x坐标",
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "summary": "Move to center and loop 3 times",
+    "variables": []
+  },
+  "roundTrip": true,
+  "scenarios": [
+    {
+      "name": "repeat-exactly-three",
+      "maxTicks": 12,
+      "expect": {
+        "x": 30,
+        "y": 0
+      }
+    }
+  ]
+}

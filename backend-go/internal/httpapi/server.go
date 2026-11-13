@@ -165,6 +165,10 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 				originAllowed = true
 			}
 		}
+		if origin != "" && !originAllowed {
+			WriteError(writer, http.StatusForbidden, "INVALID_ORIGIN", "拒绝跨来源请求")
+			return
+		}
 		if originAllowed {
 			writer.Header().Set("Access-Control-Allow-Origin", origin)
 			writer.Header().Set("Vary", "Origin")

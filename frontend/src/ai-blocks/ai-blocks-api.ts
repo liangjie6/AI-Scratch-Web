@@ -1,6 +1,7 @@
 import type {ProgramIR, ScriptIR} from './program-ir';
 import type {ProjectManifest, AiBlocksScope, AssetPolicy} from './project-plan';
 import type {ProjectBlueprint, ScratchTaskSpec} from './project-contract';
+import type {FrozenSourceContract} from './source-contract';
 import {createSseParser} from '../ai/text-expansion-api';
 
 export type AiBlocksMode = 'modify' | 'append' | 'rewrite';
@@ -117,6 +118,8 @@ export interface AiBlocksChatRequest {
 }
 
 export interface UnifiedGenerationRequest {
+  /** Missing versions use the deployed legacy pipeline, including resumed runs. */
+  pipeline_version?: 'scratch-source/1';
   model_tier?: AiBlocksModelTier;
   session_id: string;
   request_id: string;
@@ -149,6 +152,13 @@ export interface ProjectProgramGenerationRequest extends UnifiedGenerationReques
   target_index: number;
 }
 
+export interface SourceProgramGenerationRequest {
+  request: UnifiedGenerationRequest;
+  source_contract: FrozenSourceContract;
+  target_index: number;
+  target: AiBlocksTargetContext;
+}
+
 export interface UnifiedGenerationEvent {
   type: UnifiedGenerationEventType;
   requestId: string;
@@ -167,6 +177,7 @@ export interface UnifiedProgramDraft {
 export interface UnifiedGenerationDraft {
   requirements: AiBlocksRequirements;
   taskSpec?: ScratchTaskSpec;
+  sourceContract?: FrozenSourceContract;
   blueprint?: ProjectBlueprint;
   plan: AiBlocksPlan;
   manifest?: ProjectManifest;
@@ -201,10 +212,11 @@ function asData(payload: Record<string, unknown>): Record<string, unknown> {
 
 async function streamGeneration(
   path: string,
-  request: UnifiedGenerationRequest,
+  request: UnifiedGenerationRequest | SourceProgramGenerationRequest,
   onEvent: (event: UnifiedGenerationEvent) => void,
   signal?: AbortSignal
 ): Promise<void> {
+  const requestId = 'request' in request ? request.request.request_id : request.request_id;
   const response = await fetch(path, {
     method: 'POST',
     headers: {Accept: 'text/event-stream', 'Content-Type': 'application/json'},
@@ -226,7 +238,7 @@ async function streamGeneration(
       throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '收到未知的统一生成事件：' + event);
     }
     const payload = asRecord(data, '统一生成事件数据无效');
-    if (payload.request_id !== request.request_id) {
+    if (payload.request_id !== requestId) {
       throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成事件 request_id 不匹配');
     }
     if (completed) throw new AiBlocksApiError('STREAM_PROTOCOL_ERROR', '统一生成流在完成后仍有输出');
@@ -288,6 +300,15 @@ export function streamProjectProgram(
   signal?: AbortSignal
 ): Promise<void> {
   return streamGeneration('/api/ai-blocks/generate', request, onEvent, signal);
+}
+
+export function streamSourceProgram(
+  request: SourceProgramGenerationRequest,
+  onEvent: (event: UnifiedGenerationEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (request.request.pipeline_version !== 'scratch-source/1') throw new AiBlocksApiError('SOURCE_VERSION_INVALID', '源码程序请求缺少有效流水线版本');
+  return streamGeneration('/api/ai-blocks/generate-source-program', request, onEvent, signal);
 }
 
 export async function streamAiBlocksChat(

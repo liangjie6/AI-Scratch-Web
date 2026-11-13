@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/ai-scratch-web/backend/internal/runmanager"
 	"github.com/ai-scratch-web/backend/internal/runstore"
@@ -11,10 +12,12 @@ import (
 // runDeps holds the lazily created durable-run singletons, mirroring the
 // functools.lru_cache(maxsize=1) providers in backend/app/routes/ai_runs.py.
 type runDeps struct {
-	once     sync.Once
-	store    *runstore.RunStore
-	storeErr error
-	manager  *runmanager.AiRunManager
+	once              sync.Once
+	store             *runstore.RunStore
+	storeErr          error
+	manager           *runmanager.AiRunManager
+	maintenanceCancel context.CancelFunc
+	maintenanceDone   chan struct{}
 }
 
 func (s *Server) runDeps() *runDeps {
@@ -24,6 +27,7 @@ func (s *Server) runDeps() *runDeps {
 			DatabasePath:        settings.AIRunsDatabasePath,
 			EventRetentionHours: settings.AIRunsEventRetentionHours,
 			RunRetentionDays:    settings.AIRunsRetentionDays,
+			MaxActiveRuns:       settings.AIRunsMaxActive, MaxActiveRunsPerOwner: settings.AIRunsMaxActivePerScope,
 		})
 		if err != nil {
 			s.runs.storeErr = err
@@ -64,12 +68,37 @@ func (s *Server) Startup() error {
 	if _, err := dependencies.store.PurgeExpired(); err != nil {
 		return err
 	}
+	if err := dependencies.manager.Maintain(time.Now()); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	dependencies.maintenanceCancel = cancel
+	dependencies.maintenanceDone = make(chan struct{})
+	go func() {
+		defer close(dependencies.maintenanceDone)
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				if err := dependencies.manager.Maintain(now); err != nil {
+					s.log().Error("ai_run_maintenance_failed", "error", err)
+				}
+			}
+		}
+	}()
 	return nil
 }
 
 // Shutdown mirrors the FastAPI lifespan shutdown hook.
 func (s *Server) Shutdown(ctx context.Context) {
 	dependencies := s.runDeps()
+	if dependencies.maintenanceCancel != nil {
+		dependencies.maintenanceCancel()
+		<-dependencies.maintenanceDone
+	}
 	if dependencies.manager != nil {
 		dependencies.manager.Shutdown(ctx)
 	}

@@ -109,6 +109,7 @@ type AiRunManager struct {
 	wakeups         map[string]*runWakeup
 	requests        map[string]*schema.UnifiedGenerationRequest
 	programContexts map[string]map[int]schema.TargetContext
+	waiters         map[string]int
 }
 
 // NewAiRunManager builds a run manager.
@@ -122,6 +123,7 @@ func NewAiRunManager(store *runstore.RunStore, settings *config.Settings) *AiRun
 		wakeups:         map[string]*runWakeup{},
 		requests:        map[string]*schema.UnifiedGenerationRequest{},
 		programContexts: map[string]map[int]schema.TargetContext{},
+		waiters:         map[string]int{},
 	}
 }
 
@@ -207,12 +209,27 @@ func (m *AiRunManager) WaitForEvents(runID string, timeoutSeconds float64) {
 
 // waitForEvents is WaitForEvents with a context so SSE streams stop promptly.
 func (m *AiRunManager) waitForEvents(ctx context.Context, runID string, timeout time.Duration) bool {
-	wakeup := m.wakeupFor(runID)
+	m.guard.Lock()
+	wakeup := m.wakeups[runID]
+	if wakeup == nil {
+		wakeup = newRunWakeup()
+		m.wakeups[runID] = wakeup
+	}
+	m.waiters[runID]++
+	m.guard.Unlock()
+	defer func() {
+		m.guard.Lock()
+		m.waiters[runID]--
+		if m.waiters[runID] == 0 {
+			delete(m.waiters, runID)
+		}
+		m.guard.Unlock()
+	}()
 	return wakeup.wait(ctx, timeout)
 }
 
 // wakeupFor returns the per-run asyncio.Event analogue, creating it on demand.
-// Python never removes _wakeups entries, so neither does this map.
+// Maintenance removes terminal entries only after their current waiters leave.
 func (m *AiRunManager) wakeupFor(runID string) *runWakeup {
 	m.guard.Lock()
 	defer m.guard.Unlock()

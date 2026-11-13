@@ -1,0 +1,17 @@
+{
+  "status": "FAIL",
+  "vmVersion": "15.1.1",
+  "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+  "scenarios": [
+    {
+      "name": "modify preserves unrelated code/state",
+      "status": "FAIL",
+      "error": "script removal set differs from independently specified authorization\n+ actual - expected\n\n+ []\n- [\n-   'fixture_script_1_block_0'\n- ]\n",
+      "primitiveCalls": 0
+    }
+  ],
+  "roundTrip": {
+    "status": "SKIPPED",
+    "reason": "not requested"
+  }
+}

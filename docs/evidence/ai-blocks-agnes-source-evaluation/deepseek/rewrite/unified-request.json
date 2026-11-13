@@ -1,0 +1,37 @@
+{
+  "pipeline_version": "scratch-source/1",
+  "model_tier": "advanced",
+  "session_id": "source-eval-advanced-rewrite",
+  "request_id": "efbbe740-5572-40c3-a831-ce7bcd0ba4e7",
+  "thinking": {
+    "enabled": false,
+    "strength": "low"
+  },
+  "scope": "single_sprite",
+  "asset_policy": "existing_only",
+  "proceed_with_defaults": true,
+  "permitted_extensions": [],
+  "target": {
+    "name": "Probe",
+    "is_stage": false,
+    "has_scripts": true,
+    "mode": "rewrite",
+    "costumes": [
+      "costume1"
+    ],
+    "backdrops": [
+      "backdrop1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Probe"
+    ],
+    "current_program": "{\"scripts\": [{\"id\": \"script_1\", \"protected\": false, \"comment\": \"旧x移动脚本\", \"code\": {\"opcode\": \"event_whenflagclicked\", \"fields\": {}, \"inputs\": {}, \"next\": {\"opcode\": \"motion_changexby\", \"fields\": {}, \"inputs\": {\"DX\": {\"opcode\": \"math_number\", \"fields\": {\"NUM\": 10}, \"inputs\": {}, \"next\": null}}, \"next\": null}}}, {\"id\": \"script_2\", \"protected\": true, \"comment\": \"禁止改动的扩展脚本\", \"code\": {\"opcode\": \"unsupported_fixture_hat\", \"fields\": {}, \"inputs\": {}, \"next\": null}}, {\"id\": \"script_3\", \"protected\": false, \"comment\": \"保留的y移动脚本\", \"code\": {\"opcode\": \"event_whenflagclicked\", \"fields\": {}, \"inputs\": {}, \"next\": {\"opcode\": \"motion_changeyby\", \"fields\": {}, \"inputs\": {\"DY\": {\"opcode\": \"math_number\", \"fields\": {\"NUM\": 3}, \"inputs\": {}, \"next\": null}}, \"next\": null}}}], \"local_variables\": [], \"global_variables\": [{\"id\": \"untouched\", \"name\": \"untouched\", \"type\": \"\", \"value\": 7}]}"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "重写当前角色所有可编辑脚本，只保留一个新脚本：绿旗时x增加20。原script_1和script_3都应移除；受保护script_2必须完整保留，untouched变量保持7，不要新资源。"
+    }
+  ]
+}

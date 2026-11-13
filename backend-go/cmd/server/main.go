@@ -18,6 +18,7 @@ import (
 
 	"github.com/ai-scratch-web/backend/internal/config"
 	"github.com/ai-scratch-web/backend/internal/httpapi"
+	"github.com/ai-scratch-web/backend/internal/privateaccess"
 )
 
 func main() {
@@ -37,6 +38,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	access, err := privateaccess.NewOnHost(*host, settings.AccessUser, settings.AccessPassword)
+	if err != nil {
+		logger.Error("private_access_invalid", "error", err.Error())
+		os.Exit(1)
+	}
 	server := httpapi.New(settings, logger)
 	if err := server.Startup(); err != nil {
 		logger.Error("startup_failed", "error", err.Error())
@@ -44,7 +50,7 @@ func main() {
 	}
 	httpServer := &http.Server{
 		Addr:              net.JoinHostPort(*host, *port),
-		Handler:           server.Handler(),
+		Handler:           access(server.Handler()),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 

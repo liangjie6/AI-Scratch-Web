@@ -18,6 +18,11 @@ if [ -e /etc/nginx/sites-enabled/ai-scratch-web-https.conf ]; then
   exit 1
 fi
 
+# Check private access and TLS before installing files or starting services.
+for required in /etc/ai-scratch-web/private.env /etc/nginx/ai-scratch-web.htpasswd /etc/nginx/ssl/scratch.example.com.pem /etc/nginx/ssl/scratch.example.com.key; do
+  test -s "$required" || { echo "[ERROR] Missing private deployment configuration: $required" >&2; exit 1; }
+done
+
 echo "[1/4] Building the Go backend"
 ( cd "$REPO_ROOT/backend-go" && sudo -u "$RUN_USER" go build -o "$REPO_ROOT/backend-go/bin/ai-scratch-web-backend" ./cmd/server )
 

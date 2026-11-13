@@ -1,0 +1,141 @@
+{
+  "duration_seconds": 11.45,
+  "terminal": {
+    "type": "complete",
+    "payload": {
+      "data": {
+        "pipeline_version": "scratch-source/1",
+        "program": {
+          "broadcasts": [],
+          "lists": [],
+          "procedures": [],
+          "remove_script_ids": [],
+          "schema_version": 1,
+          "scripts": [
+            {
+              "blocks": [
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {},
+                  "opcode": "event_whenflagclicked",
+                  "procedure_id": null,
+                  "substacks": {}
+                },
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {
+                    "X": {
+                      "kind": "number",
+                      "value": 0
+                    },
+                    "Y": {
+                      "kind": "number",
+                      "value": 0
+                    }
+                  },
+                  "opcode": "motion_gotoxy",
+                  "procedure_id": null,
+                  "substacks": {}
+                },
+                {
+                  "argument_id": null,
+                  "fields": {},
+                  "inputs": {
+                    "TIMES": {
+                      "kind": "number",
+                      "value": 3
+                    }
+                  },
+                  "opcode": "control_repeat",
+                  "procedure_id": null,
+                  "substacks": {
+                    "SUBSTACK": [
+                      {
+                        "argument_id": null,
+                        "fields": {},
+                        "inputs": {
+                          "DX": {
+                            "kind": "number",
+                            "value": 10
+                          }
+                        },
+                        "opcode": "motion_changexby",
+                        "procedure_id": null,
+                        "substacks": {}
+                      }
+                    ]
+                  }
+                }
+              ],
+              "id": "script_0d6e4079e36703eb",
+              "purpose": "移动到(0,0)然后重复3次每次x增加10",
+              "x": 0,
+              "y": 0
+            }
+          ],
+          "summary": "Move to center then repeat x+10 three times",
+          "variables": []
+        },
+        "program_count": 1,
+        "scope": "single_sprite",
+        "target_count": 1,
+        "target_index": 0,
+        "target_name": "Probe"
+      },
+      "request_id": "dacdbdda-d3fd-4d7c-b983-b721adb5072d"
+    }
+  },
+  "usage": [
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 1308,
+          "output_bytes": 782,
+          "output_tokens": 204,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 5529,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1512,
+          "usage": {
+            "input_tokens": 1308,
+            "output_tokens": 204,
+            "reasoning_tokens": 0,
+            "total_tokens": 1512
+          }
+        },
+        "phase": "requirements",
+        "request_id": "dacdbdda-d3fd-4d7c-b983-b721adb5072d"
+      }
+    },
+    {
+      "type": "usage",
+      "payload": {
+        "data": {
+          "input_tokens": 4771,
+          "output_bytes": 235,
+          "output_tokens": 71,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 18833,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "main",
+          "total_tokens": 4842,
+          "usage": {
+            "input_tokens": 4771,
+            "output_tokens": 71,
+            "reasoning_tokens": 0,
+            "total_tokens": 4842
+          }
+        },
+        "phase": "program",
+        "request_id": "dacdbdda-d3fd-4d7c-b983-b721adb5072d"
+      }
+    }
+  ],
+  "repairs": 0
+}

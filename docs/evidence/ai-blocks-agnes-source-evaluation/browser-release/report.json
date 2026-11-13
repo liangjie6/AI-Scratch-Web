@@ -1,0 +1,91 @@
+{
+  "provider": "agnes",
+  "modelTier": "normal",
+  "baseURL": "https://scratch.example.com:9966",
+  "startedAt": "2026-10-16T07:41:22.695Z",
+  "loadedScripts": [
+    "https://scratch.example.com:9966/assets/index-DGU_tyKe.js",
+    "https://scratch.example.com:9966/assets/scratch/scratch-gui-standalone.js"
+  ],
+  "committed": {
+    "id": "Ri}(Lv{/5G!kwoH%eak:",
+    "name": "角色1",
+    "isStage": false,
+    "scripts": 1,
+    "opcodes": [
+      "event_whenflagclicked",
+      "math_number",
+      "math_number",
+      "motion_gotoxy",
+      "math_number",
+      "control_repeat",
+      "math_number",
+      "motion_changexby"
+    ]
+  },
+  "actual": {
+    "x": 30,
+    "y": 0
+  },
+  "undo": {
+    "id": "~-oRB7)SvqU7Om_s1A,[",
+    "name": "角色1",
+    "isStage": false,
+    "remainingScripts": 0
+  },
+  "status": "PASS",
+  "durationSeconds": 70.985,
+  "pageErrors": [],
+  "targetTrace": [
+    {
+      "event": "beforeLoad",
+      "editingId": "Ri}(Lv{/5G!kwoH%eak:",
+      "targets": [
+        {
+          "id": "]t3lHVIGo.zSPqu.^IYT",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "Ri}(Lv{/5G!kwoH%eak:",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    },
+    {
+      "event": "afterLoad",
+      "editingId": "~-oRB7)SvqU7Om_s1A,[",
+      "targets": [
+        {
+          "id": "_jtZ_O1#%2ZwJn%S?0bI",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "~-oRB7)SvqU7Om_s1A,[",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    },
+    {
+      "event": "setEditingTarget",
+      "id": "~-oRB7)SvqU7Om_s1A,[",
+      "stack": "Error\n    at bridge.currentVm.setEditingTarget (eval at evaluate (:311:30), <anonymous>:12:79)\n    at Jf (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:227957)\n    at uk (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:240737)\n    at async pn (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:290229)",
+      "editingId": "~-oRB7)SvqU7Om_s1A,[",
+      "targets": [
+        {
+          "id": "_jtZ_O1#%2ZwJn%S?0bI",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "~-oRB7)SvqU7Om_s1A,[",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    }
+  ]
+}

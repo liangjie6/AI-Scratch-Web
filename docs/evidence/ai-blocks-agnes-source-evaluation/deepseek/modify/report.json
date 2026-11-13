@@ -1,0 +1,114 @@
+{
+  "case": "modify",
+  "model_tier": "advanced",
+  "provider": "DeepSeek",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:53:27.679759+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/deepseek/modify",
+  "request_id": "9c2761ac-3012-42c2-9761-ad906e6cd1c1",
+  "request_log_ref": "1fbe4ccf9f963164",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "modify preserves unrelated code/state",
+        "status": "PASS",
+        "ticks": 10,
+        "primitiveCalls": 2,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "PASS",
+            "actual": 20,
+            "expected": 20
+          },
+          {
+            "name": "y",
+            "status": "PASS",
+            "actual": 3,
+            "expected": 3
+          },
+          {
+            "name": "variable:untouched",
+            "status": "PASS",
+            "actual": 7,
+            "expected": 7
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "modify",
+          "removedScripts": 1,
+          "preservedBlocks": 4
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "SKIPPED",
+      "reason": "not requested"
+    }
+  },
+  "source_contract_hash": "e6afb28cf1c1ecac9eb62d2f739dbaf469eba38b818a181e7941e902372f6424",
+  "duration_seconds": 25.382,
+  "backend_request_seconds": [
+    22.393
+  ],
+  "tokens": {
+    "cached_input_tokens": 6016,
+    "input_tokens": 7948,
+    "output_tokens": 3651,
+    "reasoning_tokens": 3279,
+    "total_tokens": 11599
+  },
+  "usage": [
+    {
+      "cached_input_tokens": 896,
+      "input_tokens": 2121,
+      "output_bytes": 1202,
+      "output_tokens": 3563,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 8175,
+      "provider": "deepseek",
+      "reasoning_tokens": 3230,
+      "slot_id": "",
+      "total_tokens": 5684,
+      "usage": {
+        "cached_input_tokens": 896,
+        "input_tokens": 2121,
+        "output_tokens": 3563,
+        "reasoning_tokens": 3230,
+        "total_tokens": 5684
+      }
+    },
+    {
+      "cached_input_tokens": 5120,
+      "input_tokens": 5827,
+      "output_bytes": 121,
+      "output_tokens": 88,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19720,
+      "provider": "deepseek",
+      "reasoning_tokens": 49,
+      "slot_id": "replace_script_1",
+      "total_tokens": 5915,
+      "usage": {
+        "cached_input_tokens": 5120,
+        "input_tokens": 5827,
+        "output_tokens": 88,
+        "reasoning_tokens": 49,
+        "total_tokens": 5915
+      }
+    }
+  ],
+  "observed_providers": [
+    "deepseek"
+  ],
+  "model_calls": 2,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

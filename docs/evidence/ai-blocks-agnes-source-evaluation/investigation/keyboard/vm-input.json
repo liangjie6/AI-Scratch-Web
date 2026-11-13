@@ -1,0 +1,141 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "X": {
+                    "kind": "number",
+                    "value": 0
+                  }
+                },
+                "opcode": "motion_setx",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "control_forever",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {},
+                      "inputs": {
+                        "CONDITION": {
+                          "block": {
+                            "argument_id": null,
+                            "fields": {},
+                            "inputs": {
+                              "KEY_OPTION": {
+                                "kind": "text",
+                                "value": "right arrow"
+                              }
+                            },
+                            "opcode": "sensing_keypressed",
+                            "procedure_id": null,
+                            "substacks": {}
+                          },
+                          "kind": "block"
+                        }
+                      },
+                      "opcode": "control_if",
+                      "procedure_id": null,
+                      "substacks": {
+                        "SUBSTACK": [
+                          {
+                            "argument_id": null,
+                            "fields": {},
+                            "inputs": {
+                              "DX": {
+                                "kind": "number",
+                                "value": 2
+                              }
+                            },
+                            "opcode": "motion_changexby",
+                            "procedure_id": null,
+                            "substacks": {}
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_0d6e4079e36703eb",
+            "purpose": "Set x to 0 once, then forever check if right arrow is held and move by 2 each iteration while held",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "Green flag sets x to 0 and loops moving right on key hold",
+        "variables": []
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "states": []
+  },
+  "scenarios": [
+    {
+      "name": "no key means no motion",
+      "maxTicks": 5,
+      "expect": {
+        "x": 0
+      }
+    },
+    {
+      "name": "held key produces repeated movement",
+      "maxTicks": 8,
+      "events": [
+        {
+          "tick": 0,
+          "kind": "green_flag"
+        },
+        {
+          "tick": 1,
+          "kind": "key",
+          "key": "ArrowRight",
+          "isDown": true
+        }
+      ],
+      "expect": {
+        "x": {
+          "min": 10,
+          "max": 10000000
+        },
+        "keys": {
+          "right arrow": true
+        }
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

@@ -115,9 +115,11 @@ func (e *ToolResultConflictError) Unwrap() error { return ErrToolResultConflict 
 //
 // Python: RunStore(database_path, event_retention_hours=..., run_retention_days=...).
 type Config struct {
-	DatabasePath        string
-	EventRetentionHours int
-	RunRetentionDays    int
+	DatabasePath          string
+	EventRetentionHours   int
+	RunRetentionDays      int
+	MaxActiveRuns         int
+	MaxActiveRunsPerOwner int
 }
 
 // RunRecord is one durable run row.
@@ -245,9 +247,11 @@ func RequestHash(value any) (string, error) {
 // mutex, and the driver is opened with _txlock=immediate so every transaction
 // starts with BEGIN IMMEDIATE exactly like the Python _transaction helper.
 type RunStore struct {
-	databasePath     string
-	eventRetentionMs int64
-	runRetentionMs   int64
+	databasePath          string
+	eventRetentionMs      int64
+	runRetentionMs        int64
+	maxActiveRuns         int
+	maxActiveRunsPerOwner int
 
 	mu sync.Mutex
 	db *sql.DB
@@ -261,7 +265,14 @@ func NewStore(cfg Config) (*RunStore, error) {
 	if strings.TrimSpace(cfg.DatabasePath) == "" {
 		return nil, errors.New("runstore: DatabasePath is required")
 	}
+	if cfg.MaxActiveRuns <= 0 {
+		cfg.MaxActiveRuns = 32
+	}
+	if cfg.MaxActiveRunsPerOwner <= 0 {
+		cfg.MaxActiveRunsPerOwner = 8
+	}
 	return &RunStore{
+		maxActiveRuns: cfg.MaxActiveRuns, maxActiveRunsPerOwner: cfg.MaxActiveRunsPerOwner,
 		databasePath:     cfg.DatabasePath,
 		eventRetentionMs: int64(cfg.EventRetentionHours) * 60 * 60 * 1000,
 		runRetentionMs:   int64(cfg.RunRetentionDays) * 24 * 60 * 60 * 1000,
@@ -337,6 +348,13 @@ func (s *RunStore) CreateRun(params CreateRunParams) (RunRecord, error) {
 	}
 	err = s.transaction(func(tx *sql.Tx) error {
 		ctx := context.Background()
+		var active, owned int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(owner_scope_hash = ?), 0) FROM ai_runs WHERE status NOT IN ('READY_TO_COMMIT', 'CANCELLED', 'FAILED')`, params.OwnerScopeHash).Scan(&active, &owned); err != nil {
+			return err
+		}
+		if active >= s.maxActiveRuns || owned >= s.maxActiveRunsPerOwner {
+			return ErrRunCapacity
+		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO ai_runs(
 				run_id, owner_scope_hash, status, state_version, protocol_version, project_epoch,
@@ -1284,6 +1302,7 @@ func initializeSchema(db *sql.DB) error {
 			created_at INTEGER NOT NULL,
 			PRIMARY KEY (run_id, tool_call_id)
 		)`,
+		"CREATE INDEX IF NOT EXISTS ai_runs_active_idx ON ai_runs(status, owner_scope_hash)",
 		"CREATE INDEX IF NOT EXISTS ai_runs_expiry_idx ON ai_runs(expires_at)",
 		"CREATE INDEX IF NOT EXISTS ai_run_events_created_idx ON ai_run_events(created_at)",
 	}

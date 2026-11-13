@@ -1,0 +1,36 @@
+[
+  {
+    "path": "browser-release/generation.json.gz",
+    "original_sha256": "3799d2dfb0017bedcbcf531327a5a679f94c0c1d883196d8583209b3928ff2e3",
+    "original_bytes": 9764
+  },
+  {
+    "path": "browser-deployed/generation.json.gz",
+    "original_sha256": "008d75712db7cca211c8159deae98954a26b14d0077a7a6264700f6a66a797e3",
+    "original_bytes": 9743,
+    "sanitized_fields": [
+      "deployment_hostname"
+    ]
+  },
+  {
+    "path": "browser-trace/generation.json.gz",
+    "original_sha256": "ef0e56314e2613a0360571d0906039fa4051882af3fce6c0451d98a82d8792a1",
+    "original_bytes": 9713
+  },
+  {
+    "path": "request-count-assertion/generation.json.gz",
+    "original_sha256": "5f7fd23a21040990a3caf753e6f97c719268232961cbf1a9202b4f318237a029",
+    "original_bytes": 9700,
+    "sanitized_fields": [
+      "deployment_hostname"
+    ]
+  },
+  {
+    "path": "model-tier-assertion/generation.json.gz",
+    "original_sha256": "1012adc5c94ffcc541730ed68f07059bd2a802e2b9f71e472a1d735ed9b966cf",
+    "original_bytes": 21192,
+    "sanitized_fields": [
+      "deployment_hostname"
+    ]
+  }
+]

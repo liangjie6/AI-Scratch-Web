@@ -1,0 +1,313 @@
+{
+  "programs": [
+    {
+      "name": "Stage",
+      "targetKind": "stage",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 2,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {
+                  "VARIABLE": {
+                    "kind": "state_ref",
+                    "ref_id": "state_040aa8ff1d5d53f2",
+                    "state_kind": "variable"
+                  }
+                },
+                "inputs": {
+                  "VALUE": {
+                    "kind": "text",
+                    "value": "0"
+                  }
+                },
+                "opcode": "data_setvariableto",
+                "procedure_id": null,
+                "substacks": {}
+              }
+            ],
+            "id": "script_96317c3b6afd09a0",
+            "purpose": "绿旗时把全局变量rounds设为0。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "现有舞台广播移动",
+        "variables": []
+      }
+    },
+    {
+      "name": "Sender",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 2,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "BROADCAST_INPUT": {
+                    "kind": "text",
+                    "value": "go"
+                  }
+                },
+                "opcode": "event_broadcast",
+                "procedure_id": null,
+                "substacks": {}
+              }
+            ],
+            "id": "script_11548807c55b51b3",
+            "purpose": "绿旗时广播go一次。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "现有舞台广播移动",
+        "variables": []
+      }
+    },
+    {
+      "name": "Receiver",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 2,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {
+                  "BROADCAST_OPTION": {
+                    "kind": "state_ref",
+                    "ref_id": "state_9156b7978a1e009c",
+                    "state_kind": "broadcast"
+                  }
+                },
+                "inputs": {},
+                "opcode": "event_whenbroadcastreceived",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "X": {
+                    "kind": "number",
+                    "value": 0
+                  },
+                  "Y": {
+                    "kind": "number",
+                    "value": 0
+                  }
+                },
+                "opcode": "motion_gotoxy",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "TIMES": {
+                    "kind": "number",
+                    "value": 3
+                  }
+                },
+                "opcode": "control_repeat",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {},
+                      "inputs": {
+                        "DX": {
+                          "kind": "number",
+                          "value": 5
+                        }
+                      },
+                      "opcode": "motion_changexby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    },
+                    {
+                      "argument_id": null,
+                      "fields": {
+                        "VARIABLE": {
+                          "kind": "state_ref",
+                          "ref_id": "state_040aa8ff1d5d53f2",
+                          "state_kind": "variable"
+                        }
+                      },
+                      "inputs": {
+                        "VALUE": {
+                          "kind": "number",
+                          "value": 1
+                        }
+                      },
+                      "opcode": "data_changevariableby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_7b675586f2404f70",
+            "purpose": "收到go后，先移到x=0、y=0，再重复3次，每次x增加5并且rounds增加1；最终x=15、rounds=3。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "现有舞台广播移动",
+        "variables": []
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "states": [
+      {
+        "ref_id": "state_040aa8ff1d5d53f2",
+        "kind": "variable",
+        "name": "rounds",
+        "scope": "global",
+        "value": 0
+      },
+      {
+        "ref_id": "state_9156b7978a1e009c",
+        "kind": "broadcast",
+        "name": "go",
+        "scope": "global",
+        "value": null
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "name": "sender broadcast drives receiver",
+      "maxTicks": 20,
+      "expect": {
+        "targets": {
+          "Receiver": {
+            "x": 15,
+            "y": 0,
+            "variables": {
+              "rounds": 3
+            }
+          }
+        }
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000,
+  "manifest": {
+    "assumptions": [
+      "rounds为新建全局变量，go为新建全局广播，均无现有同名冲突。",
+      "不新建角色或素材，仅复用现有舞台Stage、Sender和Receiver。",
+      "Receiver的重复3次移动和计数是精确次数，不是永久循环。"
+    ],
+    "local_state": [],
+    "program_targets": [
+      {
+        "behavior_ids": [
+          "behavior_96317c3b6afd09a0"
+        ],
+        "intent": "绿旗时把全局变量rounds设为0。",
+        "job_id": "job_97b0560280ed60a5",
+        "mode": "append",
+        "owner_entity_id": "entity_97b0560280ed60a5",
+        "target": {
+          "kind": "current_target",
+          "name": null,
+          "op_id": null
+        }
+      },
+      {
+        "behavior_ids": [
+          "behavior_11548807c55b51b3"
+        ],
+        "intent": "绿旗时广播go一次。",
+        "job_id": "job_0a367b92cf0b037d",
+        "mode": "append",
+        "owner_entity_id": "entity_0a367b92cf0b037d",
+        "target": {
+          "kind": "existing_sprite",
+          "name": "Sender",
+          "op_id": null
+        }
+      },
+      {
+        "behavior_ids": [
+          "behavior_7b675586f2404f70"
+        ],
+        "intent": "收到go后，先移到x=0、y=0，再重复3次，每次x增加5并且rounds增加1；最终x=15、rounds=3。",
+        "job_id": "job_81bae876b70513c9",
+        "mode": "append",
+        "owner_entity_id": "entity_81bae876b70513c9",
+        "target": {
+          "kind": "existing_sprite",
+          "name": "Receiver",
+          "op_id": null
+        }
+      }
+    ],
+    "required_extensions": [],
+    "resource_ops": [],
+    "schema_version": 3,
+    "scope": "project",
+    "shared_state": {
+      "broadcasts": [
+        {
+          "name": "go",
+          "ref_id": "state_9156b7978a1e009c"
+        }
+      ],
+      "lists": [],
+      "variables": [
+        {
+          "name": "rounds",
+          "ref_id": "state_040aa8ff1d5d53f2",
+          "scope": "global",
+          "value": 0
+        }
+      ]
+    },
+    "summary": "现有舞台广播移动"
+  }
+}

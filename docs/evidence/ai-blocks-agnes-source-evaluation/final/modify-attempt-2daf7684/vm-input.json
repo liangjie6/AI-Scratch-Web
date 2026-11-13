@@ -1,0 +1,138 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "DX": {
+                    "kind": "number",
+                    "value": 20
+                  }
+                },
+                "opcode": "motion_changexby",
+                "procedure_id": null,
+                "substacks": {}
+              }
+            ],
+            "id": "script_3901463bf6262c7a",
+            "purpose": "绿旗时x增加20，完全替换原增加10的旧脚本。",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "替换x移动为20并保留其余脚本",
+        "variables": []
+      }
+    }
+  ],
+  "mode": "modify",
+  "fixture": {
+    "program": {
+      "schema_version": 1,
+      "summary": "independent preservation fixture",
+      "remove_script_ids": [],
+      "variables": [],
+      "lists": [],
+      "broadcasts": [],
+      "scripts": [
+        {
+          "id": "script_1",
+          "purpose": "script_1",
+          "x": 0,
+          "y": 0,
+          "blocks": [
+            {
+              "opcode": "event_whenflagclicked"
+            },
+            {
+              "opcode": "motion_changexby",
+              "inputs": {
+                "DX": {
+                  "kind": "number",
+                  "value": 10
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "script_3",
+          "purpose": "script_3",
+          "x": 0,
+          "y": 0,
+          "blocks": [
+            {
+              "opcode": "event_whenflagclicked"
+            },
+            {
+              "opcode": "motion_changeyby",
+              "inputs": {
+                "DY": {
+                  "kind": "number",
+                  "value": 3
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "protectedScripts": [
+      {
+        "id": "script_2",
+        "opcode": "unsupported_fixture_hat"
+      }
+    ],
+    "variables": [
+      {
+        "name": "untouched",
+        "scope": "global",
+        "value": 7
+      }
+    ],
+    "expectedPreservedScriptIds": [
+      "script_2",
+      "script_3"
+    ],
+    "expectedRemovedScriptIds": [
+      "script_1"
+    ],
+    "states": []
+  },
+  "scenarios": [
+    {
+      "name": "modify preserves unrelated code/state",
+      "maxTicks": 10,
+      "expect": {
+        "x": 20,
+        "y": 3,
+        "variables": {
+          "untouched": 7
+        }
+      }
+    }
+  ],
+  "roundTrip": false,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

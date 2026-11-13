@@ -1,0 +1,321 @@
+{
+  "request": {
+    "pipeline_version": "scratch-source/1",
+    "model_tier": "normal",
+    "session_id": "source-eval-normal-broadcast",
+    "request_id": "54c0aa14-a800-4725-a10b-98ec0d28b353",
+    "thinking": {
+      "enabled": false,
+      "strength": "low"
+    },
+    "scope": "project",
+    "asset_policy": "existing_only",
+    "proceed_with_defaults": true,
+    "permitted_extensions": [],
+    "target": {
+      "name": "Stage",
+      "is_stage": true,
+      "has_scripts": false,
+      "mode": "append",
+      "costumes": [
+        "backdrop1"
+      ],
+      "backdrops": [
+        "backdrop1"
+      ],
+      "sounds": [],
+      "sprite_names": [
+        "Sender",
+        "Receiver"
+      ],
+      "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+    },
+    "project_context": {
+      "project_id": "isolated-agnes-broadcast-fixture",
+      "version": 1,
+      "targets": [
+        {
+          "name": "Stage",
+          "is_stage": true,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "backdrop1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+          "target_id": "stage",
+          "revision": 1
+        },
+        {
+          "name": "Sender",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "costume1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+          "target_id": "sender",
+          "revision": 1
+        },
+        {
+          "name": "Receiver",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "costume1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}",
+          "target_id": "receiver",
+          "revision": 1
+        }
+      ],
+      "shared_state": {
+        "variables": [],
+        "lists": [],
+        "broadcasts": []
+      }
+    },
+    "messages": [
+      {
+        "role": "user",
+        "content": "只使用现有舞台Stage和现有角色Sender、Receiver。绿旗时舞台把全局变量rounds设为0。Sender绿旗时广播go一次。Receiver收到go后，先移到x=0、y=0，再重复3次，每次x增加5并且rounds增加1。最后Receiver x=15，rounds=3。不要新建角色或素材，广播go在Sender发送并在Receiver接收。"
+      }
+    ]
+  },
+  "source_contract": {
+    "pipeline_version": "scratch-source/1",
+    "normalizer_version": "compact-v1",
+    "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+    "scope": "project",
+    "mode": "append",
+    "base_snapshot_hash": "faafd7f25af20ce49bf91a68fffa857e3b1e136449fdaa9290e807dcaa4c44bf",
+    "interface_version": 1,
+    "hash": "52b77e0f6f67623253c89afc5d25d737861b08dfef17e2484fe7b65f637cf01f",
+    "title": "收发器协作移动演示",
+    "goal": "在现有舞台、Sender和Receiver上使用现有素材，实现绿旗初始化全局变量rounds为0，Sender广播go，Receiver收到go后移到原点并重复3次每次x+5且rounds+1，最终Receiver x=15、rounds=3。",
+    "targets": [
+      {
+        "handle": "current",
+        "entity_id": "entity_97b0560280ed60a5",
+        "name": "Stage",
+        "kind": "stage",
+        "disposition": "current",
+        "ref": {
+          "kind": "current_target",
+          "name": null,
+          "op_id": null
+        },
+        "context": {
+          "name": "Stage",
+          "is_stage": true,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "backdrop1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+        },
+        "mode": "append"
+      },
+      {
+        "handle": "sender",
+        "entity_id": "entity_0a367b92cf0b037d",
+        "name": "Sender",
+        "kind": "sprite",
+        "disposition": "existing",
+        "ref": {
+          "kind": "existing_sprite",
+          "name": "Sender",
+          "op_id": null
+        },
+        "context": {
+          "name": "Sender",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "costume1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+        },
+        "mode": "append"
+      },
+      {
+        "handle": "receiver",
+        "entity_id": "entity_81bae876b70513c9",
+        "name": "Receiver",
+        "kind": "sprite",
+        "disposition": "existing",
+        "ref": {
+          "kind": "existing_sprite",
+          "name": "Receiver",
+          "op_id": null
+        },
+        "context": {
+          "name": "Receiver",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "costume1"
+          ],
+          "backdrops": [
+            "backdrop1"
+          ],
+          "sounds": [],
+          "sprite_names": [
+            "Sender",
+            "Receiver"
+          ],
+          "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+        },
+        "mode": "append"
+      }
+    ],
+    "states": [
+      {
+        "handle": "rounds",
+        "ref_id": "state_040aa8ff1d5d53f2",
+        "name": "回合数",
+        "kind": "variable",
+        "scope": "global",
+        "disposition": "new",
+        "value": 0
+      },
+      {
+        "handle": "go_broadcast",
+        "ref_id": "state_35fad7ceef3f2a6f",
+        "name": "开始移动",
+        "kind": "broadcast",
+        "scope": "global",
+        "disposition": "new",
+        "value": null
+      }
+    ],
+    "assets": [],
+    "script_slots": [
+      {
+        "key": "stage_init",
+        "owner": "current",
+        "trigger": {
+          "kind": "green_flag"
+        },
+        "purpose": "绿旗时把全局变量rounds初始化为0",
+        "reads": [],
+        "writes": [
+          "rounds"
+        ],
+        "emits": [],
+        "receives": [],
+        "assets": [],
+        "script_id": "script_96317c3b6afd09a0"
+      },
+      {
+        "key": "sender_broad",
+        "owner": "sender",
+        "trigger": {
+          "kind": "green_flag"
+        },
+        "purpose": "Sender绿旗时广播go启动流程",
+        "reads": [],
+        "writes": [],
+        "emits": [
+          "go_broadcast"
+        ],
+        "receives": [],
+        "assets": [],
+        "script_id": "script_3f1d5933ac95b9d6"
+      },
+      {
+        "key": "receiver_move",
+        "owner": "receiver",
+        "trigger": {
+          "kind": "broadcast_received",
+          "state": "go_broadcast"
+        },
+        "purpose": "Receiver收到go后移回原点，再重复3次每次x增5且rounds增1",
+        "reads": [
+          "rounds"
+        ],
+        "writes": [
+          "rounds"
+        ],
+        "emits": [],
+        "receives": [
+          "go_broadcast"
+        ],
+        "assets": [],
+        "script_id": "script_7b675586f2404f70"
+      }
+    ],
+    "required_extensions": [],
+    "assumptions": [
+      "绿旗重置rounds为0，确保每轮计数从零开始。Receiver复用现有角色，无需新建。"
+    ],
+    "success_criteria": [
+      "绿旗后rounds为0，Sender广播go，Receiver移到原点后x为15且rounds为3。"
+    ],
+    "asset_intents": []
+  },
+  "target_index": 1,
+  "target": {
+    "name": "Sender",
+    "is_stage": false,
+    "has_scripts": false,
+    "mode": "append",
+    "costumes": [
+      "costume1"
+    ],
+    "backdrops": [
+      "backdrop1"
+    ],
+    "sounds": [],
+    "sprite_names": [
+      "Sender",
+      "Receiver"
+    ],
+    "current_program": "{\"scripts\": [], \"local_variables\": [], \"global_variables\": []}"
+  }
+}

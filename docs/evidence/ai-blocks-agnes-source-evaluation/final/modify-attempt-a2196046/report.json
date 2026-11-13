@@ -1,0 +1,158 @@
+{
+  "case": "modify",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/modify-attempt-a2196046",
+  "request_id": "d24b272e-ce88-4944-b6ea-f4b036e166b1",
+  "request_log_ref": "3edca6fb82581f78",
+  "catalog_hash": "a377553fbd30c0f52460fcf3f44582706d07931afa54e166561db2cba194e821",
+  "status": "FAIL",
+  "behavior": {
+    "status": "FAIL",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "modify preserves unrelated code/state",
+        "status": "FAIL",
+        "ticks": 10,
+        "primitiveCalls": 237468,
+        "assertions": [
+          {
+            "name": "x",
+            "status": "FAIL",
+            "actual": 1187340,
+            "expected": 20
+          },
+          {
+            "name": "y",
+            "status": "FAIL",
+            "actual": 178101,
+            "expected": 3
+          },
+          {
+            "name": "variable:untouched",
+            "status": "PASS",
+            "actual": 7,
+            "expected": 7
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "modify",
+          "removedScripts": 2,
+          "preservedBlocks": 1
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "SKIPPED",
+      "reason": "not requested"
+    }
+  },
+  "source_contract_hash": "66bf9e16ce85becfb8d9de0a565c6d71f058a521ce1c0f53bacf6d61eaa08f8f",
+  "duration_seconds": 55.551,
+  "model_request_seconds": [
+    53.061
+  ],
+  "tokens": {
+    "input_tokens": 17267,
+    "output_tokens": 2020,
+    "reasoning_tokens": 0,
+    "total_tokens": 19287
+  },
+  "usage": [
+    {
+      "input_tokens": 1985,
+      "output_bytes": 1757,
+      "output_tokens": 570,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7590,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2555,
+      "usage": {
+        "input_tokens": 1985,
+        "output_tokens": 570,
+        "reasoning_tokens": 0,
+        "total_tokens": 2555
+      }
+    },
+    {
+      "input_tokens": 2637,
+      "output_bytes": 2186,
+      "output_tokens": 772,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 9729,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 3409,
+      "usage": {
+        "input_tokens": 2637,
+        "output_tokens": 772,
+        "reasoning_tokens": 0,
+        "total_tokens": 3409
+      }
+    },
+    {
+      "input_tokens": 2847,
+      "output_bytes": 1760,
+      "output_tokens": 572,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 10185,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 3419,
+      "usage": {
+        "input_tokens": 2847,
+        "output_tokens": 572,
+        "reasoning_tokens": 0,
+        "total_tokens": 3419
+      }
+    },
+    {
+      "input_tokens": 4897,
+      "output_bytes": 176,
+      "output_tokens": 52,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19430,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "script_1_x_move",
+      "total_tokens": 4949,
+      "usage": {
+        "input_tokens": 4897,
+        "output_tokens": 52,
+        "reasoning_tokens": 0,
+        "total_tokens": 4949
+      }
+    },
+    {
+      "input_tokens": 4901,
+      "output_bytes": 187,
+      "output_tokens": 54,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19450,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "script_3_y_move",
+      "total_tokens": 4955,
+      "usage": {
+        "input_tokens": 4901,
+        "output_tokens": 54,
+        "reasoning_tokens": 0,
+        "total_tokens": 4955
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 5,
+  "missing_usage_events": 0,
+  "repairs": 2
+}

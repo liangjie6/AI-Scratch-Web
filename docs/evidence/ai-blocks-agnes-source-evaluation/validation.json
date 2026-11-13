@@ -1,0 +1,52 @@
+{
+  "checked_at_utc": "2026-10-16T07:46:57.476393+00:00",
+  "checks": [
+    {
+      "command": "npm --prefix frontend run test:unit",
+      "status": "PASS",
+      "suites": 36,
+      "tests": 299
+    },
+    {
+      "command": "go -C backend-go test ./...",
+      "status": "PASS"
+    },
+    {
+      "command": "go -C backend-go vet ./...",
+      "status": "PASS"
+    },
+    {
+      "command": "npm run check:scratch-capabilities",
+      "status": "PASS",
+      "opcodes": 138,
+      "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f"
+    },
+    {
+      "command": "npm run test:scratch-capabilities",
+      "status": "PASS",
+      "tests": 3
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    {
+      "command": "npm --prefix frontend run build",
+      "status": "PASS",
+      "includes": "vue-tsc -b and Vite production build",
+      "frontend_entry": "/assets/index-DGU_tyKe.js"
+    },
+    {
+      "command": "node scripts/test-ai-blocks-browser.mjs --live-model-calls --model-tier normal --base-url https://scratch.example.com:9966 --local-deployment",
+      "status": "PASS",
+      "artifact": "browser-release/report.json",
+      "actual_provider_verified": "agnes"
+    },
+    {
+      "command": "node frontend/scripts/verify-ai-program.mjs --input docs/evidence/ai-blocks-agnes-source-evaluation/browser-release/vm-input.json --output docs/evidence/ai-blocks-agnes-source-evaluation/browser-release/vm-result.json",
+      "status": "PASS",
+      "artifact": "browser-release/vm-result.json",
+      "scope": "same browser-generated output, independent final-position and SB3 reload"
+    }
+  ]
+}

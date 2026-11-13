@@ -70,6 +70,11 @@ func ownerScope(writer http.ResponseWriter, request *http.Request) (string, bool
 
 // httpErrorFromRun maps store/orchestration errors onto the FastAPI status codes.
 func httpErrorFromRun(writer http.ResponseWriter, err error) {
+	if errors.Is(err, runstore.ErrRunCapacity) {
+		writer.Header().Set("Retry-After", "30")
+		WriteError(writer, http.StatusTooManyRequests, "AI_RUN_CAPACITY", "未结束任务已达上限，请完成或取消现有任务后重试")
+		return
+	}
 	var notFound *runstore.RunNotFoundError
 	if errors.As(err, &notFound) {
 		WriteError(writer, http.StatusNotFound, "RUN_NOT_FOUND", "未找到该生成任务")

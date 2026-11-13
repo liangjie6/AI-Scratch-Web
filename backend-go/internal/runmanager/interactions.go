@@ -230,7 +230,11 @@ func (m *AiRunManager) startProgramsIfReady(
 	}
 	request := m.requests[runID]
 	if request == nil {
-		return nil, runstore.NewRunTransitionError("the server no longer has the active request for this run")
+		request, err = m.restoreSourceRequest(&record)
+		if err != nil {
+			return nil, err
+		}
+		m.requests[runID] = request
 	}
 	transitioned, err := m.store.Transition(runstore.TransitionParams{
 		RunID:          runID,

@@ -1,0 +1,158 @@
+{
+  "case": "broadcast",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:56:15.702229+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/broadcast-attempt-38a1c39a",
+  "request_id": "54c0aa14-a800-4725-a10b-98ec0d28b353",
+  "request_log_ref": "a5c5aa078acbff98",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"CONTRACT_REVISION_REQUIRED\", \"detail\": \"slot requested a separately authorized contract revision\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/revision\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"sender_broad\"}, \"phase\": \"program\", \"request_id\": \"54c0aa14-a800-4725-a10b-98ec0d28b353\"}}",
+  "duration_seconds": 85.634,
+  "backend_request_seconds": [
+    78.57,
+    1.616,
+    5.438
+  ],
+  "tokens": {
+    "input_tokens": 26726,
+    "output_tokens": 2577,
+    "reasoning_tokens": 0,
+    "total_tokens": 29303,
+    "cached_input_tokens": 9728
+  },
+  "usage": [
+    {
+      "input_tokens": 1896,
+      "output_bytes": 1955,
+      "output_tokens": 497,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7793,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2393,
+      "usage": {
+        "input_tokens": 1896,
+        "output_tokens": 497,
+        "reasoning_tokens": 0,
+        "total_tokens": 2393
+      }
+    },
+    {
+      "input_tokens": 2473,
+      "output_bytes": 2916,
+      "output_tokens": 926,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 10105,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 3399,
+      "usage": {
+        "input_tokens": 2473,
+        "output_tokens": 926,
+        "reasoning_tokens": 0,
+        "total_tokens": 3399
+      }
+    },
+    {
+      "input_tokens": 2909,
+      "output_bytes": 2723,
+      "output_tokens": 869,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 11092,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 3778,
+      "usage": {
+        "input_tokens": 2909,
+        "output_tokens": 869,
+        "reasoning_tokens": 0,
+        "total_tokens": 3778
+      }
+    },
+    {
+      "input_tokens": 4110,
+      "output_bytes": 160,
+      "output_tokens": 43,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 16118,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "stage_init",
+      "total_tokens": 4153,
+      "usage": {
+        "input_tokens": 4110,
+        "output_tokens": 43,
+        "reasoning_tokens": 0,
+        "total_tokens": 4153
+      }
+    },
+    {
+      "input_tokens": 5014,
+      "output_bytes": 188,
+      "output_tokens": 45,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19979,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "sender_broad",
+      "total_tokens": 5059,
+      "usage": {
+        "input_tokens": 5014,
+        "output_tokens": 45,
+        "reasoning_tokens": 0,
+        "total_tokens": 5059
+      }
+    },
+    {
+      "cached_input_tokens": 4864,
+      "input_tokens": 5154,
+      "output_bytes": 204,
+      "output_tokens": 73,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 20609,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "sender_broad",
+      "total_tokens": 5227,
+      "usage": {
+        "cached_input_tokens": 4864,
+        "input_tokens": 5154,
+        "output_tokens": 73,
+        "reasoning_tokens": 0,
+        "total_tokens": 5227
+      }
+    },
+    {
+      "cached_input_tokens": 4864,
+      "input_tokens": 5170,
+      "output_bytes": 478,
+      "output_tokens": 124,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 20563,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "sender_broad",
+      "total_tokens": 5294,
+      "usage": {
+        "cached_input_tokens": 4864,
+        "input_tokens": 5170,
+        "output_tokens": 124,
+        "reasoning_tokens": 0,
+        "total_tokens": 5294
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 7,
+  "missing_usage_events": 0,
+  "repairs": 4
+}

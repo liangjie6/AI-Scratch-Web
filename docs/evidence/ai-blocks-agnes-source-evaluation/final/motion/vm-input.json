@@ -1,0 +1,98 @@
+{
+  "programs": [
+    {
+      "name": "Probe",
+      "targetKind": "sprite",
+      "program": {
+        "broadcasts": [],
+        "lists": [],
+        "procedures": [],
+        "remove_script_ids": [],
+        "schema_version": 1,
+        "scripts": [
+          {
+            "blocks": [
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {},
+                "opcode": "event_whenflagclicked",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "X": {
+                    "kind": "number",
+                    "value": 0
+                  },
+                  "Y": {
+                    "kind": "number",
+                    "value": 0
+                  }
+                },
+                "opcode": "motion_gotoxy",
+                "procedure_id": null,
+                "substacks": {}
+              },
+              {
+                "argument_id": null,
+                "fields": {},
+                "inputs": {
+                  "TIMES": {
+                    "kind": "number",
+                    "value": 3
+                  }
+                },
+                "opcode": "control_repeat",
+                "procedure_id": null,
+                "substacks": {
+                  "SUBSTACK": [
+                    {
+                      "argument_id": null,
+                      "fields": {},
+                      "inputs": {
+                        "DX": {
+                          "kind": "number",
+                          "value": 10
+                        }
+                      },
+                      "opcode": "motion_changexby",
+                      "procedure_id": null,
+                      "substacks": {}
+                    }
+                  ]
+                }
+              }
+            ],
+            "id": "script_6e2c4d823d7322c8",
+            "purpose": "设置起始位置，然后执行固定3次的循环每次增加x坐标",
+            "x": 0,
+            "y": 0
+          }
+        ],
+        "summary": "初始定位后重复移动",
+        "variables": []
+      }
+    }
+  ],
+  "mode": "append",
+  "fixture": {
+    "states": []
+  },
+  "scenarios": [
+    {
+      "name": "exactly three moves",
+      "maxTicks": 12,
+      "expect": {
+        "x": 30,
+        "y": 0
+      }
+    }
+  ],
+  "roundTrip": true,
+  "maxPrimitiveCalls": 10000000,
+  "timeoutMs": 30000
+}

@@ -1,0 +1,46 @@
+{
+  "case": "modify",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/modify-attempt-29d5fb20",
+  "request_id": "0703b7d4-4874-4e3f-a539-2844ab09f387",
+  "request_log_ref": "149abe80d3d9c738",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"0703b7d4-4874-4e3f-a539-2844ab09f387\"}}",
+  "duration_seconds": 6.793,
+  "model_request_seconds": [
+    6.791
+  ],
+  "tokens": {
+    "input_tokens": 1985,
+    "output_tokens": 608,
+    "reasoning_tokens": 0,
+    "total_tokens": 2593
+  },
+  "usage": [
+    {
+      "input_tokens": 1985,
+      "output_bytes": 1821,
+      "output_tokens": 608,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7590,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2593,
+      "usage": {
+        "input_tokens": 1985,
+        "output_tokens": 608,
+        "reasoning_tokens": 0,
+        "total_tokens": 2593
+      }
+    }
+  ],
+  "observed_providers": [
+    "agnes"
+  ],
+  "model_calls": 2,
+  "missing_usage_events": 1,
+  "repairs": 1
+}

@@ -1,0 +1,156 @@
+{
+  "case": "broadcast",
+  "model_tier": "advanced",
+  "provider": "DeepSeek",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T07:16:12.763811+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/deepseek-release/broadcast",
+  "request_id": "7819bab1-628b-44d9-8d44-0a765edbc442",
+  "request_log_ref": "a11fd9c58f64543f",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "sender broadcast drives receiver",
+        "status": "PASS",
+        "ticks": 20,
+        "primitiveCalls": 13,
+        "assertions": [
+          {
+            "name": "Receiver:x",
+            "status": "PASS",
+            "actual": 15,
+            "expected": 15
+          },
+          {
+            "name": "Receiver:y",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "Receiver:variable:rounds",
+            "status": "PASS",
+            "actual": 3,
+            "expected": 3
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1563,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "184ac5b7948d00166a3997d3835a590a7997525655d07760acea9d022c74cdbe",
+  "duration_seconds": 25.041,
+  "backend_request_seconds": [
+    14.383,
+    1.877,
+    3.186,
+    2.797
+  ],
+  "tokens": {
+    "cached_input_tokens": 16000,
+    "input_tokens": 18671,
+    "output_tokens": 3046,
+    "reasoning_tokens": 2279,
+    "total_tokens": 21717
+  },
+  "usage": [
+    {
+      "cached_input_tokens": 1792,
+      "input_tokens": 1967,
+      "output_bytes": 2017,
+      "output_tokens": 2349,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7793,
+      "provider": "deepseek",
+      "reasoning_tokens": 1788,
+      "slot_id": "",
+      "total_tokens": 4316,
+      "usage": {
+        "cached_input_tokens": 1792,
+        "input_tokens": 1967,
+        "output_tokens": 2349,
+        "reasoning_tokens": 1788,
+        "total_tokens": 4316
+      }
+    },
+    {
+      "cached_input_tokens": 3840,
+      "input_tokens": 4635,
+      "output_bytes": 162,
+      "output_tokens": 118,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 16077,
+      "provider": "deepseek",
+      "reasoning_tokens": 68,
+      "slot_id": "stage_init",
+      "total_tokens": 4753,
+      "usage": {
+        "cached_input_tokens": 3840,
+        "input_tokens": 4635,
+        "output_tokens": 118,
+        "reasoning_tokens": 68,
+        "total_tokens": 4753
+      }
+    },
+    {
+      "cached_input_tokens": 5120,
+      "input_tokens": 5861,
+      "output_bytes": 138,
+      "output_tokens": 274,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19883,
+      "provider": "deepseek",
+      "reasoning_tokens": 230,
+      "slot_id": "sender_go",
+      "total_tokens": 6135,
+      "usage": {
+        "cached_input_tokens": 5120,
+        "input_tokens": 5861,
+        "output_tokens": 274,
+        "reasoning_tokens": 230,
+        "total_tokens": 6135
+      }
+    },
+    {
+      "cached_input_tokens": 5248,
+      "input_tokens": 6208,
+      "output_bytes": 340,
+      "output_tokens": 305,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 21071,
+      "provider": "deepseek",
+      "reasoning_tokens": 193,
+      "slot_id": "receiver_move",
+      "total_tokens": 6513,
+      "usage": {
+        "cached_input_tokens": 5248,
+        "input_tokens": 6208,
+        "output_tokens": 305,
+        "reasoning_tokens": 193,
+        "total_tokens": 6513
+      }
+    }
+  ],
+  "observed_providers": [
+    "deepseek"
+  ],
+  "model_calls": 4,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

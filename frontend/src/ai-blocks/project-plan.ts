@@ -52,16 +52,18 @@ export function normalizeProjectManifestTargets(value: ProjectManifest): Project
   const normalizeTarget = (raw: unknown): unknown => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
     const target = raw as Record<string, unknown>;
-    if (target.kind === 'stage' || target.kind === 'current_target') return {kind: target.kind};
-    if (target.kind === 'existing_sprite') return {kind: 'existing_sprite', name: target.name};
-    if (target.kind === 'created_sprite') return {kind: 'created_sprite', op_id: target.op_id};
-    return raw;
+    const normalized = {...target};
+    // Go's optional pointer fields serialize as null. Remove only these known
+    // absent fields; keep every unexpected non-null field for strict validation.
+    if (target.kind !== 'existing_sprite' && target.name === null) delete normalized.name;
+    if (target.kind !== 'created_sprite' && target.op_id === null) delete normalized.op_id;
+    return normalized;
   };
   const resourceOps = value.resource_ops.map(operation => {
     const raw = operation as unknown as Record<string, unknown>;
     if (!raw || typeof raw !== 'object' || !('target' in raw)) return operation;
     const target = normalizeTarget(raw.target);
-    if (raw.op === 'add_backdrop' && target && typeof target === 'object' && !Array.isArray(target) && (target as Record<string, unknown>).kind === 'stage') {
+    if (raw.op === 'add_backdrop' && target && typeof target === 'object' && !Array.isArray(target) && (target as Record<string, unknown>).kind === 'stage' && Object.keys(target).length === 1) {
       const withoutTarget = {...raw};
       delete withoutTarget.target;
       return withoutTarget as unknown as ResourceOp;
@@ -74,7 +76,8 @@ export function normalizeProjectManifestTargets(value: ProjectManifest): Project
     program_targets: value.program_targets.map(item => {
       const target = normalizeTarget(item.target);
       return target && typeof target === 'object' && !Array.isArray(target) ? {...item, target: target as TargetRef} : item;
-    })
+    }),
+    local_state: value.local_state?.map(item => ({...item, target: normalizeTarget(item.target) as ProjectLocalState['target']})),
   };
 }
 export type ScratchLibrarySource = {

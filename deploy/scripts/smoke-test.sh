@@ -7,7 +7,7 @@
 # test the backend directly.
 set -uo pipefail
 
-BASE="${1:-${AI_SCRATCH_BASE_URL:-http://127.0.0.1:9966}}"
+BASE="${1:-${AI_SCRATCH_BASE_URL:-https://127.0.0.1:9966}}"
 PASS=0
 FAIL=0
 
@@ -22,7 +22,19 @@ check() {
   fi
 }
 
-status() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$@"; }
+CURL_AUTH=()
+if [ -n "${AI_SCRATCH_NETRC_FILE:-}" ]; then
+  CURL_AUTH=(--netrc-file "$AI_SCRATCH_NETRC_FILE")
+fi
+status() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${CURL_AUTH[@]}" "$@"; }
+if [ -z "${AI_SCRATCH_NETRC_FILE:-}" ]; then
+  echo "== anonymous private-access boundary only =="
+  check "GET / requires login" 401 "$(status "$BASE/")"
+  check "GET /api/capabilities requires login" 401 "$(status "$BASE/api/capabilities")"
+  check "POST /api/image/generate requires login" 401 "$(status -X POST -d '{}' "$BASE/api/image/generate")"
+  echo "For functional checks, provide a chmod-600 AI_SCRATCH_NETRC_FILE."
+  [ "$FAIL" -eq 0 ]; exit $?
+fi
 
 echo "== static frontend =="
 check "GET /" 200 "$(status "$BASE/")"
@@ -52,7 +64,7 @@ else
 fi
 
 echo "== manifest validation round trip =="
-VALIDATION="$(curl -s --max-time 20 -X POST -H 'Content-Type: application/json' \
+VALIDATION="$(curl -s "${CURL_AUTH[@]}" --max-time 20 -X POST -H 'Content-Type: application/json' \
   -d '{"kind":"program","payload":{"schema_version":1,"summary":"smoke","scripts":[{"id":"script_smoke","purpose":"smoke","x":0,"y":0,"blocks":[{"opcode":"event_whenflagclicked"}]}]},"target_kind":"sprite","mode":"append"}' \
   "$BASE/api/ai-blocks/validate")"
 case "$VALIDATION" in

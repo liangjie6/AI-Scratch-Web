@@ -56,9 +56,11 @@ http {
         # Dual-stack listener: IPv4 on every interface and IPv6 (including the
         # host's global address) on the same port. HTTPS is enabled with
         # AI_SCRATCH_TLS=1.
-        listen      __PORT__ __TLS_LISTEN_SUFFIX__default_server;
-        listen      [::]:__PORT__ __TLS_LISTEN_SUFFIX__default_server;
+        listen      __LISTEN_IPV4__:__PORT__ __TLS_LISTEN_SUFFIX__default_server;
+        listen      __LISTEN_IPV6__:__PORT__ __TLS_LISTEN_SUFFIX__default_server;
         server_name _;
+        auth_basic "AI Scratch private";
+        auth_basic_user_file __AUTH_FILE__;
 
         client_max_body_size 8m;
 
@@ -81,7 +83,7 @@ http {
         location /api/ {
             proxy_pass         http://ai_scratch_backend;
             proxy_http_version 1.1;
-            proxy_set_header   Host              $host;
+            proxy_set_header   Host              $http_host;
             proxy_set_header   X-Real-IP         $remote_addr;
             proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
             proxy_set_header   X-Forwarded-Proto $scheme;
@@ -96,10 +98,16 @@ http {
             chunked_transfer_encoding on;
         }
 
+    location = /healthz {
+        auth_basic off;
+        proxy_pass http://ai_scratch_backend;
+        proxy_set_header Host $http_host;
+    }
+
         location = /health {
             proxy_pass         http://ai_scratch_backend;
             proxy_http_version 1.1;
-            proxy_set_header   Host $host;
+            proxy_set_header   Host $http_host;
             proxy_buffering    off;
         }
 

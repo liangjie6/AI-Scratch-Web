@@ -1,5 +1,5 @@
 {
-  "origin": "https://kfcv50.icu:9966/",
+  "origin": "https://scratch.example.com:9966/",
   "connection": "Production HTTPS nginx endpoint; local DNS override to 127.0.0.1; certificate verification enabled",
   "checks": {
     "page": {

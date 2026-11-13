@@ -1,0 +1,93 @@
+{
+  "provider": "deepseek",
+  "modelTier": "advanced",
+  "baseURL": "https://scratch.example.com:9966",
+  "startedAt": "2026-10-16T07:39:09.312Z",
+  "loadedScripts": [
+    "https://scratch.example.com:9966/assets/index-DGU_tyKe.js",
+    "https://scratch.example.com:9966/assets/scratch/scratch-gui-standalone.js"
+  ],
+  "committed": {
+    "id": "(WUpb4iE]/[g@u|A#8Bx",
+    "name": "角色1",
+    "isStage": false,
+    "scripts": 1,
+    "opcodes": [
+      "event_whenflagclicked",
+      "math_number",
+      "math_number",
+      "motion_gotoxy",
+      "math_number",
+      "control_repeat",
+      "math_number",
+      "motion_changexby"
+    ]
+  },
+  "actual": {
+    "x": 30,
+    "y": 0
+  },
+  "undo": {
+    "id": "H`k3`ZIPITGQBdZBQbc(",
+    "name": "角色1",
+    "isStage": false,
+    "remainingScripts": 0
+  },
+  "status": "FAIL",
+  "durationSeconds": 63.073,
+  "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'normal'\n- 'advanced'\n",
+  "pageErrors": [],
+  "visibleText": "AI 写积木\n角色1\n生成范围\n当前角色\n整个项目\n写入模式\n修改当前代码\n旁路新增\n清空重写\n素材策略\n内置素材优先\n仅已有素材\n允许生图\n已撤销本次 AI 生成。\n\n角色“角色1”已就绪。告诉我想实现的效果，我会一次完成需求整理、规划和积木生成。\n\n你\n\n点击绿旗后移动到x=0、y=0，然后重复3次，每次将x增加10。只修改当前角色，不添加资源。\n\n已完成统一生成并写入 1 个目标。\n\n计划大纲\n已完成\n\n已撤销本次 AI 生成（1 个目标），项目恢复原状。\n\n模型档位\n普通\n高级\n超级\n思考\n关\n6,913\ntokens",
+  "targetTrace": [
+    {
+      "event": "beforeLoad",
+      "editingId": "(WUpb4iE]/[g@u|A#8Bx",
+      "targets": [
+        {
+          "id": "BoZWV/z/@G%S/:k35.3-",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "(WUpb4iE]/[g@u|A#8Bx",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    },
+    {
+      "event": "afterLoad",
+      "editingId": "H`k3`ZIPITGQBdZBQbc(",
+      "targets": [
+        {
+          "id": "r|7vI(?i}#,tnV3!;;MN",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "H`k3`ZIPITGQBdZBQbc(",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    },
+    {
+      "event": "setEditingTarget",
+      "id": "H`k3`ZIPITGQBdZBQbc(",
+      "stack": "Error\n    at bridge.currentVm.setEditingTarget (eval at evaluate (:311:30), <anonymous>:12:79)\n    at Jf (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:227957)\n    at uk (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:240737)\n    at async pn (https://scratch.example.com:9966/assets/index-DGU_tyKe.js:471:290229)",
+      "editingId": "H`k3`ZIPITGQBdZBQbc(",
+      "targets": [
+        {
+          "id": "r|7vI(?i}#,tnV3!;;MN",
+          "name": "Stage",
+          "stage": true
+        },
+        {
+          "id": "H`k3`ZIPITGQBdZBQbc(",
+          "name": "角色1",
+          "stage": false
+        }
+      ]
+    }
+  ]
+}

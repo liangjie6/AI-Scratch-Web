@@ -1,0 +1,770 @@
+{
+  "blueprint": {
+    "schema_version": 2,
+    "task_spec_hash": "5d72e77e0497597f813c5d1242a44d2daf13cf19a26dddb965ee419d7c1a56a9",
+    "asset_needs": [
+      {
+        "need_id": "need_5ffbffeba0850c83",
+        "kind": "sprite",
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "purpose": "下落物",
+        "search_terms": [
+          "Apple"
+        ],
+        "tags": [],
+        "fallback_order": [
+          "project_asset",
+          "scratch_library"
+        ],
+        "constraints": {}
+      },
+      {
+        "need_id": "need_619a2ccf126ce837",
+        "kind": "backdrop",
+        "owner_entity_id": "entity_c7ff6dcd94d7161e",
+        "purpose": "游戏背景",
+        "search_terms": [
+          "Forest"
+        ],
+        "tags": [],
+        "fallback_order": [
+          "project_asset",
+          "scratch_library"
+        ],
+        "constraints": {}
+      }
+    ],
+    "entity_bindings": [
+      {
+        "entity_id": "entity_77af778b51abd4a3",
+        "resolution": {
+          "kind": "existing_target",
+          "target_ref": {
+            "kind": "current_target",
+            "name": null
+          },
+          "need_id": null
+        }
+      },
+      {
+        "entity_id": "entity_c7ff6dcd94d7161e",
+        "resolution": {
+          "kind": "existing_target",
+          "target_ref": {
+            "kind": "stage",
+            "name": null
+          },
+          "need_id": null
+        }
+      },
+      {
+        "entity_id": "entity_3a7bd3e2360a3d29",
+        "resolution": {
+          "kind": "new_sprite",
+          "target_ref": null,
+          "need_id": "need_5ffbffeba0850c83"
+        }
+      }
+    ],
+    "state_plan": [
+      {
+        "ref_id": "state_96467dad2b49e3f3",
+        "kind": "variable",
+        "scope": "global",
+        "owner_entity_id": null,
+        "name": "得分",
+        "initial_value": 0
+      },
+      {
+        "ref_id": "state_0a0a17fcf6a12289",
+        "kind": "broadcast",
+        "scope": "global",
+        "owner_entity_id": null,
+        "name": "接到",
+        "initial_value": null
+      },
+      {
+        "ref_id": "state_79bd201482e7c427",
+        "kind": "variable",
+        "scope": "local",
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "name": "速度",
+        "initial_value": 5
+      }
+    ],
+    "behavior_graph": [
+      {
+        "behavior_id": "behavior_7e344f212250acdd",
+        "owner_entity_id": "entity_77af778b51abd4a3",
+        "depends_on": [],
+        "produces_broadcasts": [],
+        "consumes_broadcasts": []
+      },
+      {
+        "behavior_id": "behavior_61d7f0fae7603b3b",
+        "owner_entity_id": "entity_77af778b51abd4a3",
+        "depends_on": [],
+        "produces_broadcasts": [],
+        "consumes_broadcasts": [
+          "state_0a0a17fcf6a12289"
+        ]
+      },
+      {
+        "behavior_id": "behavior_119d8476805a8f30",
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "depends_on": [],
+        "produces_broadcasts": [
+          "state_0a0a17fcf6a12289"
+        ],
+        "consumes_broadcasts": []
+      }
+    ],
+    "program_jobs": [
+      {
+        "job_id": "job_77af778b51abd4a3",
+        "owner_entity_id": "entity_77af778b51abd4a3",
+        "mode": "append",
+        "behavior_ids": [
+          "behavior_7e344f212250acdd",
+          "behavior_61d7f0fae7603b3b"
+        ]
+      },
+      {
+        "job_id": "job_3a7bd3e2360a3d29",
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "mode": "append",
+        "behavior_ids": [
+          "behavior_119d8476805a8f30"
+        ]
+      }
+    ],
+    "acceptance_tests": []
+  },
+  "blueprint_hash": "a3f18316e06098a6c456251ccb560c49908e93e9bbae44246fda6a7a04e517af",
+  "manifest": {
+    "schema_version": 3,
+    "scope": "project",
+    "summary": "接苹果",
+    "assumptions": [],
+    "required_extensions": [],
+    "resource_ops": [
+      {
+        "include_costumes": "all",
+        "include_sounds": "all",
+        "name": "苹果",
+        "op": "add_builtin_sprite",
+        "op_id": "op_bd12a817c55fab8c",
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "size": 100,
+        "source": {
+          "asset_type": "sprite",
+          "kind": "scratch_library",
+          "search_terms": [
+            "Apple"
+          ]
+        },
+        "source_need_id": "need_5ffbffeba0850c83",
+        "tags": [],
+        "x": 0,
+        "y": 0
+      },
+      {
+        "name": "森林",
+        "op": "add_backdrop",
+        "op_id": "op_7fb2aa65e98a3b34",
+        "select_after": false,
+        "source": {
+          "asset_type": "backdrop",
+          "kind": "scratch_library",
+          "search_terms": [
+            "Forest"
+          ]
+        },
+        "source_need_id": "need_619a2ccf126ce837",
+        "tags": []
+      }
+    ],
+    "local_state": [
+      {
+        "ref_id": "state_79bd201482e7c427",
+        "kind": "variable",
+        "target": {
+          "kind": "created_sprite",
+          "name": null,
+          "op_id": "op_bd12a817c55fab8c"
+        },
+        "name": "速度",
+        "value": 5
+      }
+    ],
+    "program_targets": [
+      {
+        "job_id": "job_77af778b51abd4a3",
+        "behavior_ids": [
+          "behavior_7e344f212250acdd",
+          "behavior_61d7f0fae7603b3b"
+        ],
+        "owner_entity_id": "entity_77af778b51abd4a3",
+        "target": {
+          "kind": "current_target",
+          "name": null,
+          "op_id": null
+        },
+        "mode": "append",
+        "intent": "初始化得分；接苹果得分"
+      },
+      {
+        "job_id": "job_3a7bd3e2360a3d29",
+        "behavior_ids": [
+          "behavior_119d8476805a8f30"
+        ],
+        "owner_entity_id": "entity_3a7bd3e2360a3d29",
+        "target": {
+          "kind": "created_sprite",
+          "name": null,
+          "op_id": "op_bd12a817c55fab8c"
+        },
+        "mode": "append",
+        "intent": "苹果下落并广播接到"
+      }
+    ],
+    "shared_state": {
+      "variables": [
+        {
+          "ref_id": "state_96467dad2b49e3f3",
+          "name": "得分",
+          "value": 0,
+          "scope": "global"
+        }
+      ],
+      "lists": [],
+      "broadcasts": [
+        {
+          "ref_id": "state_0a0a17fcf6a12289",
+          "name": "接到"
+        }
+      ]
+    }
+  },
+  "programs": [
+    {
+      "schema_version": 2,
+      "summary": "接苹果",
+      "remove_script_ids": [],
+      "variables": [],
+      "lists": [],
+      "broadcasts": [],
+      "procedures": [],
+      "scripts": [
+        {
+          "id": "script_7e344f212250acdd",
+          "purpose": "初始化得分",
+          "x": 0,
+          "y": 0,
+          "blocks": [
+            {
+              "opcode": "event_whenflagclicked",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {},
+              "inputs": {},
+              "substacks": {}
+            },
+            {
+              "opcode": "data_setvariableto",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {
+                "VARIABLE": {
+                  "kind": "state_ref",
+                  "ref_id": "state_96467dad2b49e3f3",
+                  "state_kind": "variable"
+                }
+              },
+              "inputs": {
+                "VALUE": {
+                  "kind": "text",
+                  "value": "0"
+                }
+              },
+              "substacks": {}
+            }
+          ]
+        },
+        {
+          "id": "script_61d7f0fae7603b3b",
+          "purpose": "接苹果得分",
+          "x": 400,
+          "y": 0,
+          "blocks": [
+            {
+              "opcode": "event_whenbroadcastreceived",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {
+                "BROADCAST_OPTION": {
+                  "kind": "state_ref",
+                  "ref_id": "state_0a0a17fcf6a12289",
+                  "state_kind": "broadcast"
+                }
+              },
+              "inputs": {},
+              "substacks": {}
+            },
+            {
+              "opcode": "data_changevariableby",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {
+                "VARIABLE": {
+                  "kind": "state_ref",
+                  "ref_id": "state_96467dad2b49e3f3",
+                  "state_kind": "variable"
+                }
+              },
+              "inputs": {
+                "VALUE": {
+                  "kind": "number",
+                  "value": 1
+                }
+              },
+              "substacks": {}
+            },
+            {
+              "opcode": "sound_play",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {},
+              "inputs": {
+                "SOUND_MENU": {
+                  "asset_type": "sound",
+                  "kind": "existing_asset_ref",
+                  "name": "pop"
+                }
+              },
+              "substacks": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "schema_version": 2,
+      "summary": "接苹果",
+      "remove_script_ids": [],
+      "variables": [],
+      "lists": [],
+      "broadcasts": [],
+      "procedures": [],
+      "scripts": [
+        {
+          "id": "script_119d8476805a8f30",
+          "purpose": "苹果下落并广播接到",
+          "x": 0,
+          "y": 0,
+          "blocks": [
+            {
+              "opcode": "event_whenflagclicked",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {},
+              "inputs": {},
+              "substacks": {}
+            },
+            {
+              "opcode": "motion_changeyby",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {},
+              "inputs": {
+                "DY": {
+                  "block": {
+                    "opcode": "operator_subtract",
+                    "procedure_id": null,
+                    "argument_id": null,
+                    "fields": {},
+                    "inputs": {
+                      "NUM1": {
+                        "kind": "number",
+                        "value": 0
+                      },
+                      "NUM2": {
+                        "block": {
+                          "opcode": "data_variable",
+                          "procedure_id": null,
+                          "argument_id": null,
+                          "fields": {
+                            "VARIABLE": {
+                              "kind": "state_ref",
+                              "ref_id": "state_79bd201482e7c427",
+                              "state_kind": "variable"
+                            }
+                          },
+                          "inputs": {},
+                          "substacks": {}
+                        },
+                        "kind": "block"
+                      }
+                    },
+                    "substacks": {}
+                  },
+                  "kind": "block"
+                }
+              },
+              "substacks": {}
+            },
+            {
+              "opcode": "event_broadcast",
+              "procedure_id": null,
+              "argument_id": null,
+              "fields": {},
+              "inputs": {
+                "BROADCAST_INPUT": {
+                  "kind": "text",
+                  "value": "接到"
+                }
+              },
+              "substacks": {}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "request": {
+    "pipeline_version": "scratch-source/1",
+    "model_tier": "",
+    "session_id": "source-project-session",
+    "request_id": "8e2a8474-3a2a-4bc1-970f-824c4c62e908",
+    "messages": null,
+    "target": {
+      "name": "猫",
+      "is_stage": false,
+      "has_scripts": false,
+      "mode": "append",
+      "costumes": [
+        "cat"
+      ],
+      "backdrops": [
+        "白背景"
+      ],
+      "sounds": [
+        "pop"
+      ],
+      "sprite_names": [
+        "猫"
+      ],
+      "current_program": "{}"
+    },
+    "thinking": {
+      "enabled": false,
+      "strength": ""
+    },
+    "scope": "project",
+    "asset_policy": "builtin_first",
+    "project_context": {
+      "project_id": "project",
+      "version": 3,
+      "targets": [
+        {
+          "name": "舞台",
+          "is_stage": true,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "白背景"
+          ],
+          "backdrops": [
+            "白背景"
+          ],
+          "sounds": null,
+          "sprite_names": null,
+          "current_program": "{}",
+          "target_id": "stage",
+          "revision": 3
+        },
+        {
+          "name": "猫",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "cat"
+          ],
+          "backdrops": null,
+          "sounds": [
+            "pop"
+          ],
+          "sprite_names": null,
+          "current_program": "{}",
+          "target_id": "current_target",
+          "revision": 3
+        }
+      ],
+      "shared_state": null
+    },
+    "proceed_with_defaults": false,
+    "permitted_extensions": null
+  },
+  "source_contract": {
+    "pipeline_version": "scratch-source/1",
+    "normalizer_version": "compact-v1",
+    "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+    "scope": "project",
+    "mode": "append",
+    "base_snapshot_hash": "c33de7bf404948dd2957b128787a246e0384217ce1de29d0283ebc38b6391419",
+    "request_binding_hash": "f564efc322ab906c26df3a3864837580f94e8df03cb48f8292462b15fa4784be",
+    "expires_at_unix": 1792136204,
+    "interface_version": 1,
+    "hash": "5d72e77e0497597f813c5d1242a44d2daf13cf19a26dddb965ee419d7c1a56a9",
+    "title": "接苹果",
+    "goal": "苹果下落，接到后计分",
+    "targets": [
+      {
+        "handle": "cat",
+        "entity_id": "entity_77af778b51abd4a3",
+        "name": "猫",
+        "kind": "sprite",
+        "disposition": "current",
+        "ref": {
+          "kind": "current_target",
+          "name": null,
+          "op_id": null
+        },
+        "context": {
+          "name": "猫",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "cat"
+          ],
+          "backdrops": [
+            "白背景"
+          ],
+          "sounds": [
+            "pop"
+          ],
+          "sprite_names": [
+            "猫"
+          ],
+          "current_program": "{}"
+        },
+        "mode": "append"
+      },
+      {
+        "handle": "stage",
+        "entity_id": "entity_c7ff6dcd94d7161e",
+        "name": "舞台",
+        "kind": "stage",
+        "disposition": "existing",
+        "ref": {
+          "kind": "stage",
+          "name": null,
+          "op_id": null
+        },
+        "context": {
+          "name": "舞台",
+          "is_stage": true,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [
+            "白背景"
+          ],
+          "backdrops": [
+            "白背景"
+          ],
+          "sounds": null,
+          "sprite_names": null,
+          "current_program": "{}"
+        },
+        "mode": "append"
+      },
+      {
+        "handle": "apple",
+        "entity_id": "entity_3a7bd3e2360a3d29",
+        "name": "苹果",
+        "kind": "sprite",
+        "disposition": "new",
+        "ref": {
+          "kind": "created_sprite",
+          "name": null,
+          "op_id": "op_bd12a817c55fab8c"
+        },
+        "context": {
+          "name": "苹果",
+          "is_stage": false,
+          "has_scripts": false,
+          "mode": "append",
+          "costumes": [],
+          "backdrops": [],
+          "sounds": [],
+          "sprite_names": [],
+          "current_program": "{}"
+        },
+        "mode": "append"
+      }
+    ],
+    "states": [
+      {
+        "handle": "score",
+        "ref_id": "state_96467dad2b49e3f3",
+        "name": "得分",
+        "kind": "variable",
+        "scope": "global",
+        "disposition": "new",
+        "value": 0
+      },
+      {
+        "handle": "hit",
+        "ref_id": "state_0a0a17fcf6a12289",
+        "name": "接到",
+        "kind": "broadcast",
+        "scope": "global",
+        "disposition": "new",
+        "value": null
+      },
+      {
+        "handle": "speed",
+        "ref_id": "state_79bd201482e7c427",
+        "name": "速度",
+        "kind": "variable",
+        "scope": "local",
+        "owner": "apple",
+        "disposition": "new",
+        "value": 5
+      }
+    ],
+    "assets": [
+      {
+        "handle": "apple_sprite",
+        "owner": "apple",
+        "kind": "sprite",
+        "name": "苹果",
+        "disposition": "new",
+        "op_id": "op_bd12a817c55fab8c",
+        "need_id": "need_5ffbffeba0850c83"
+      },
+      {
+        "handle": "forest",
+        "owner": "stage",
+        "kind": "backdrop",
+        "name": "森林",
+        "disposition": "new",
+        "op_id": "op_7fb2aa65e98a3b34",
+        "need_id": "need_619a2ccf126ce837"
+      },
+      {
+        "handle": "pop",
+        "owner": "cat",
+        "kind": "sound",
+        "name": "pop",
+        "disposition": "reuse"
+      }
+    ],
+    "script_slots": [
+      {
+        "key": "cat_init",
+        "owner": "cat",
+        "trigger": {
+          "kind": "green_flag"
+        },
+        "purpose": "初始化得分",
+        "reads": [],
+        "writes": [
+          "score"
+        ],
+        "emits": [],
+        "receives": [],
+        "assets": [],
+        "script_id": "script_7e344f212250acdd"
+      },
+      {
+        "key": "cat_hit",
+        "owner": "cat",
+        "trigger": {
+          "kind": "broadcast_received",
+          "state": "hit"
+        },
+        "purpose": "接苹果得分",
+        "reads": [
+          "score"
+        ],
+        "writes": [
+          "score"
+        ],
+        "emits": [],
+        "receives": [
+          "hit"
+        ],
+        "assets": [
+          "pop"
+        ],
+        "script_id": "script_61d7f0fae7603b3b"
+      },
+      {
+        "key": "apple_fall",
+        "owner": "apple",
+        "trigger": {
+          "kind": "green_flag"
+        },
+        "purpose": "苹果下落并广播接到",
+        "reads": [
+          "speed"
+        ],
+        "writes": [],
+        "emits": [
+          "hit"
+        ],
+        "receives": [],
+        "assets": [
+          "cat"
+        ],
+        "script_id": "script_119d8476805a8f30"
+      }
+    ],
+    "required_extensions": [],
+    "assumptions": [],
+    "success_criteria": [
+      "接到苹果增加得分"
+    ],
+    "asset_intents": [
+      {
+        "key": "apple_sprite",
+        "owner": "apple",
+        "kind": "sprite",
+        "name": "苹果",
+        "purpose": "下落物",
+        "disposition": "new",
+        "search_terms": [
+          "Apple"
+        ]
+      },
+      {
+        "key": "forest",
+        "owner": "stage",
+        "kind": "backdrop",
+        "name": "森林",
+        "purpose": "游戏背景",
+        "disposition": "new",
+        "search_terms": [
+          "Forest"
+        ]
+      },
+      {
+        "key": "pop",
+        "owner": "cat",
+        "kind": "sound",
+        "name": "pop",
+        "purpose": "得分音效",
+        "disposition": "reuse",
+        "search_terms": null
+      }
+    ]
+  },
+  "source_contract_hash": "eb1f2ef81146c7121de7cc02834887e39b7ce395a0327d8b4585a3f4616f4e3e",
+  "steps": [
+    "猫：初始化得分；接苹果得分",
+    "苹果：苹果下落并广播接到"
+  ]
+}

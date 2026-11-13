@@ -26,7 +26,7 @@ describe('AI target snapshot', () => {
     expect(() => assertSnapshotIsCurrent(bridge, snapshot)).toThrow('当前目标内容发生了变化');
   });
 
-  it('exposes native script refs but protects custom and extension scripts', () => {
+  it('exposes native script refs but protects custom and unsupported extension scripts', () => {
     const records: Record<string, ScratchBlockLike> = {
       native: block('native', 'event_whenflagclicked', {topLevel: true, x: 10, next: 'move'}),
       move: block('move', 'motion_movesteps', {parent: 'native', inputs: {
@@ -36,7 +36,7 @@ describe('AI target snapshot', () => {
         NUM: {name: 'NUM', value: 10}
       }}),
       custom: block('custom', 'procedures_definition', {topLevel: true, x: 400}),
-      extension: block('extension', 'pen_clear', {topLevel: true, x: 800})
+      extension: block('extension', 'unsupported_extension_hat', {topLevel: true, x: 800})
     };
     const blocks = {
       _blocks: records, _scripts: ['native', 'custom', 'extension'],

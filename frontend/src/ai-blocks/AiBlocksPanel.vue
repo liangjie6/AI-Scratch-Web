@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue';
-import {AlertTriangle, Blocks, Bot, BrainCircuit, CircleStop, Coins, History, ListOrdered, LoaderCircle, MessageSquare, Play, Plus, Send, Sparkles, Trash2} from 'lucide-vue-next';
+import {AlertTriangle, Blocks, Bot, BrainCircuit, CircleStop, Coins, History, ListOrdered, LoaderCircle, MessageSquare, Play, Plus, Send, Sparkles, Trash2, Undo2} from 'lucide-vue-next';
 import type {ScratchGuiBridge} from '../scratch/scratch-gui-bridge';
 import {probeScratchEditorPort} from '../scratch/scratch-editor-port';
 import {
   AI_BLOCKS_MODEL_OPTIONS,
   AI_BLOCKS_THINKING_OPTIONS,
   streamProjectProgram,
+  streamSourceProgram,
   type AiBlocksMessage,
   type AiBlocksMode,
   type AiBlocksModelTier,
@@ -14,6 +15,7 @@ import {
   type AiBlocksThinkingStrength,
   type AiBlocksTargetContext,
   type ProjectProgramGenerationRequest,
+  type SourceProgramGenerationRequest,
   type UnifiedGenerationEvent,
   type UnifiedGenerationRequest,
   type UnifiedProgramDraft
@@ -44,6 +46,7 @@ import {frontendEnabledBuiltinExtensions, type AiBlocksScope, type AssetPolicy, 
 import {prepareProjectResources} from './project-resource-preparer';
 import {createProjectResourceExecutor} from './project-resource-executor';
 import {projectProgramGenerationLayers} from './project-contract';
+import {SOURCE_PIPELINE_VERSION} from './source-contract';
 import type {PreparedResource} from './project-resource-runner';
 import type {CanvasInput} from '../canvas/model/canvas-types';
 import type {CanvasPreparedAsset} from '../canvas/CanvasWorkspace.vue';
@@ -168,6 +171,7 @@ const requirements = ref<{title: string; goal: string; behavior_steps: string[];
 const projectManifest = ref<ProjectManifest | null>(null);
 const preparedResources = ref(new Map<string, PreparedResource>());
 const generationResult = ref<UnifiedCommitResult | null>(null);
+const isUndoing = ref(false);
 const generationDraft = ref<Awaited<ReturnType<UnifiedGenerationRunner['prepare']>> | null>(null);
 const progress = ref<AiGenerationProgress>({current: 0, total: 0, label: ''});
 const errorMessage = ref('');
@@ -187,7 +191,7 @@ let saveTimer: ReturnType<typeof setTimeout> | undefined;
 let durableRunResumeAttempted = false;
 let isRestoringConversation = false;
 
-const isBusy = computed(() => ['streaming', 'preparing', 'committing'].includes(state.value));
+const isBusy = computed(() => isUndoing.value || ['streaming', 'preparing', 'committing'].includes(state.value));
 const enabledBuiltinExtensions = computed<ReadonlySet<BuiltinAiExtension>>(() => {
   const frontendExtensions = frontendEnabledBuiltinExtensions();
   if (runtimeCapabilities.value === null || !props.bridge?.builtinExtensionLoaderAvailable) return new Set();
@@ -296,7 +300,8 @@ function attachBridge() {
   if (!props.bridge) return;
   refreshTarget();
   unsubscribeTargets = props.bridge.subscribeTargets(() => {
-    if (!isBusy.value) refreshTarget();
+    // VM.clear publishes a null selection before the new project is installed.
+    if (!isBusy.value && props.bridge?.currentVm?.editingTarget) refreshTarget();
   });
   void resumeDurableRunIfPresent();
 }
@@ -724,7 +729,9 @@ async function prepareProjectPrograms(
   const manifest = draftValue.manifest;
   const taskSpec = draftValue.taskSpec;
   const blueprint = draftValue.blueprint;
-  if (!bridge || !manifest || !taskSpec || !blueprint) return;
+  const sourceContract = draftValue.sourceContract;
+  const sourcePipeline = draftValue.request.pipeline_version === SOURCE_PIPELINE_VERSION;
+  if (!bridge || !manifest || !blueprint || (sourcePipeline ? !sourceContract : !taskSpec)) return;
   const {context: projectContext, targetByCreatedOp} = buildProjectedProjectContext(bridge, draftValue.snapshot, manifest);
   const generateTarget = async (targetIndex: number): Promise<UnifiedProgramDraft> => {
     const programTarget = manifest.program_targets[targetIndex];
@@ -742,40 +749,51 @@ async function prepareProjectPrograms(
       target = created ? projectContext.targets.find(item => item.target_id === 'logical_' + created.op_id) : undefined;
     }
     if (!target) throw new Error('投影项目上下文缺少程序目标：' + targetIndex);
-    const request: ProjectProgramGenerationRequest = {
-      ...draftValue.request,
-      messages: [...draftValue.request.messages],
-      scope: 'project',
-      target: {
+    const targetContext: AiBlocksTargetContext = {
         name: target.name,
         is_stage: target.is_stage,
         has_scripts: target.has_scripts,
-        mode: target.mode,
+        mode: programTarget.mode,
         costumes: target.costumes,
         backdrops: target.backdrops,
         sounds: target.sounds,
         sprite_names: target.sprite_names,
         current_program: fullProgramContextForTarget(bridge, draftValue.snapshot, programTarget.target, target.current_program)
-      },
-      project_context: projectContext,
-      output_contract: 'project_program',
-      requirements: draftValue.requirements,
-      task_spec: taskSpec,
-      blueprint,
-      plan: draftValue.plan,
-      manifest,
-      program_target: programTarget,
-      target_index: targetIndex,
-      request_id: createId()
     };
-    fitRequestWithinBudget(request);
     let program: ProgramIR | undefined;
-    await streamProjectProgram(request, event => {
+    const receive = (event: UnifiedGenerationEvent) => {
       onEvent?.(event);
-      if (event.type === 'complete' && event.data.program && typeof event.data.program === 'object' && !Array.isArray(event.data.program)) {
-        program = event.data.program as ProgramIR;
-      }
-    }, signal);
+      if (event.type === 'complete' && event.data.program && typeof event.data.program === 'object' && !Array.isArray(event.data.program)) program = event.data.program as ProgramIR;
+    };
+    if (sourcePipeline) {
+      const request: SourceProgramGenerationRequest = {
+        request: draftValue.request,
+        source_contract: sourceContract!,
+        target_index: targetIndex,
+        target: targetContext,
+      };
+      if (encodedSize(request) > PROJECT_REQUEST_BUDGET_BYTES) throw new Error('源码程序请求超过 64 KiB 软预算，请减少已有积木后重试');
+      await streamSourceProgram(request, receive, signal);
+    } else {
+      const request: ProjectProgramGenerationRequest = {
+        ...draftValue.request,
+        messages: [...draftValue.request.messages],
+        scope: 'project',
+        target: targetContext,
+        project_context: projectContext,
+        output_contract: 'project_program',
+        requirements: draftValue.requirements,
+        task_spec: taskSpec!,
+        blueprint,
+        plan: draftValue.plan,
+        manifest,
+        program_target: programTarget,
+        target_index: targetIndex,
+        request_id: createId()
+      };
+      fitRequestWithinBudget(request);
+      await streamProjectProgram(request, receive, signal);
+    }
     if (!program) throw new Error('项目目标未返回有效 ProgramIR：' + targetIndex);
     return {
       targetIndex,
@@ -791,7 +809,8 @@ async function prepareProjectPrograms(
     };
   };
   const programs = new Map<number, UnifiedProgramDraft>();
-  for (const layer of projectProgramGenerationLayers(blueprint, manifest)) {
+  const layers = sourcePipeline ? [manifest.program_targets.map((_, index) => index)] : projectProgramGenerationLayers(blueprint, manifest);
+  for (const layer of layers) {
     // A provider request is expensive; run only independent jobs, two at a time.
     for (let offset = 0; offset < layer.length; offset += 2) {
       const batch = await Promise.all(layer.slice(offset, offset + 2).map(generateTarget));
@@ -895,6 +914,7 @@ function requestMessages(text: string) {
 function buildRequest(text: string): UnifiedGenerationRequest {
   if (!props.bridge || !snapshot.value) throw new Error('Scratch 编辑器尚未就绪');
   const request: UnifiedGenerationRequest = {
+    ...(runtimeCapabilities.value?.sourcePipeline ? {pipeline_version: SOURCE_PIPELINE_VERSION} : {}),
     model_tier: modelTier.value,
     session_id: sessionId.value,
     request_id: createId(),
@@ -1288,6 +1308,7 @@ function cancel() {
 }
 async function undoGeneration() {
   if (!props.bridge || !generationResult.value || isBusy.value) return;
+  isUndoing.value = true;
   setBusy(true, '正在撤销 AI 生成');
   try {
     const undid = generationResult.value;
@@ -1300,6 +1321,7 @@ async function undoGeneration() {
   } catch (error: unknown) {
     errorMessage.value = error instanceof Error ? error.message : '撤销失败';
   } finally {
+    isUndoing.value = false;
     setBusy(false);
   }
 }

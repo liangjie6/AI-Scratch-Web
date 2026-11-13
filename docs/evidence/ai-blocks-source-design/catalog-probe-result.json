@@ -1,0 +1,431 @@
+{
+  "versions": {
+    "scratchBlocks": "2.1.19",
+    "scratchVm": "15.1.1",
+    "scratchGui": "15.1.1"
+  },
+  "runtimeBeforeExtension": {
+    "primitives": 139,
+    "motionPrimitive": "function",
+    "ifPrimitive": "function",
+    "blocksJSON": []
+  },
+  "runtimeAfterExtension": [
+    "probeExtension_ping"
+  ],
+  "blocklyVersion": "12.5.1",
+  "registeredBlockCount": 171,
+  "menuInitializerBeforeGui": "undefined",
+  "nativeBlocks": [
+    {
+      "type": "motion_movesteps",
+      "previous": true,
+      "next": true,
+      "output": null,
+      "inputs": [
+        {
+          "name": "STEPS",
+          "type": 1,
+          "check": null,
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "move"
+            }
+          ]
+        },
+        {
+          "name": "",
+          "type": 5,
+          "check": null,
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "steps"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "control_if_else",
+      "previous": true,
+      "next": true,
+      "output": null,
+      "inputs": [
+        {
+          "name": "CONDITION",
+          "type": 1,
+          "check": [
+            "Boolean"
+          ],
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "if"
+            }
+          ]
+        },
+        {
+          "name": "",
+          "type": 5,
+          "check": null,
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "then"
+            }
+          ]
+        },
+        {
+          "name": "SUBSTACK",
+          "type": 3,
+          "check": null,
+          "hasShadow": false,
+          "fields": []
+        },
+        {
+          "name": "",
+          "type": 5,
+          "check": null,
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "else"
+            }
+          ]
+        },
+        {
+          "name": "SUBSTACK2",
+          "type": 3,
+          "check": null,
+          "hasShadow": false,
+          "fields": []
+        }
+      ]
+    },
+    {
+      "type": "data_setvariableto",
+      "previous": true,
+      "next": true,
+      "output": null,
+      "inputs": [
+        {
+          "name": "VALUE",
+          "type": 1,
+          "check": null,
+          "hasShadow": false,
+          "fields": [
+            {
+              "name": null,
+              "value": "set"
+            },
+            {
+              "name": "VARIABLE",
+              "value": "fixture-score",
+              "options": [
+                [
+                  "i",
+                  "fixture-i"
+                ],
+                [
+                  "j",
+                  "BU*mmxbW2Z^sZ-/@=}?Q"
+                ],
+                [
+                  "得分",
+                  "fixture-score"
+                ],
+                [
+                  "Rename variable",
+                  "RENAME_VARIABLE_ID"
+                ],
+                [
+                  "Delete the \"得分\" variable",
+                  "DELETE_VARIABLE_ID"
+                ]
+              ]
+            },
+            {
+              "name": null,
+              "value": "to"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variableMenu": {
+    "raw": [
+      [
+        "i",
+        "fixture-i"
+      ],
+      [
+        "j",
+        "BU*mmxbW2Z^sZ-/@=}?Q"
+      ],
+      [
+        "得分",
+        "fixture-score"
+      ],
+      [
+        "Rename variable",
+        "RENAME_VARIABLE_ID"
+      ],
+      [
+        "Delete the \"得分\" variable",
+        "DELETE_VARIABLE_ID"
+      ]
+    ],
+    "actualVariables": [
+      [
+        "i",
+        "fixture-i"
+      ],
+      [
+        "j",
+        "BU*mmxbW2Z^sZ-/@=}?Q"
+      ],
+      [
+        "得分",
+        "fixture-score"
+      ]
+    ],
+    "excludedUiCommands": [
+      [
+        "Rename variable",
+        "RENAME_VARIABLE_ID"
+      ],
+      [
+        "Delete the \"得分\" variable",
+        "DELETE_VARIABLE_ID"
+      ]
+    ]
+  },
+  "stopVariants": [
+    {
+      "option": "all",
+      "previous": true,
+      "next": false
+    },
+    {
+      "option": "this script",
+      "previous": true,
+      "next": false
+    },
+    {
+      "option": "other scripts in sprite",
+      "previous": true,
+      "next": true
+    }
+  ],
+  "dynamicMenus": [
+    {
+      "editingTarget": "小猫",
+      "goTo": [
+        [
+          "random position",
+          "_random_"
+        ],
+        [
+          "mouse-pointer",
+          "_mouse_"
+        ],
+        [
+          "苹果",
+          "苹果"
+        ]
+      ],
+      "clone": [
+        [
+          "myself",
+          "_myself_"
+        ],
+        [
+          "苹果",
+          "苹果"
+        ]
+      ]
+    },
+    {
+      "editingTarget": "Stage",
+      "goTo": [
+        [
+          "random position",
+          "_random_"
+        ],
+        [
+          "mouse-pointer",
+          "_mouse_"
+        ],
+        [
+          "小猫",
+          "小猫"
+        ],
+        [
+          "苹果",
+          "苹果"
+        ]
+      ],
+      "clone": [
+        [
+          "小猫",
+          "小猫"
+        ],
+        [
+          "苹果",
+          "苹果"
+        ]
+      ]
+    }
+  ],
+  "toolbox": [
+    {
+      "isStage": false,
+      "movement": "<block type=\"motion_movesteps\">\n            <value name=\"STEPS\">\n                <shadow type=\"math_number\">\n                    <field name=\"NUM\">10</field>\n                </shadow>\n            </value>\n        </block>",
+      "repeat": "<block type=\"control_repeat\">\n            <value name=\"TIMES\">\n                <shadow type=\"math_whole_number\">\n                    <field name=\"NUM\">10</field>\n                </shadow>\n            </value>\n        </block>",
+      "ifElse": "<block type=\"control_if_else\"/>"
+    },
+    {
+      "isStage": true,
+      "movement": null,
+      "repeat": "<block type=\"control_repeat\">\n            <value name=\"TIMES\">\n                <shadow type=\"math_whole_number\">\n                    <field name=\"NUM\">10</field>\n                </shadow>\n            </value>\n        </block>",
+      "ifElse": "<block type=\"control_if_else\"/>"
+    }
+  ],
+  "variableToolbox": [
+    {
+      "type": "data_setvariableto",
+      "xml": "<block type=\"data_setvariableto\" gap=\"8\">\n          <field name=\"VARIABLE\" id=\"fixture-i\" variabletype=\"\">i</field>\n          \n    <value name=\"VALUE\">\n      <shadow type=\"text\">\n        <field name=\"TEXT\">0</field>\n      </shadow>\n    </value>\n          undefined\n        </block>"
+    },
+    {
+      "type": "data_changevariableby",
+      "xml": "<block type=\"data_changevariableby\" gap=\"8\">\n          <field name=\"VARIABLE\" id=\"fixture-i\" variabletype=\"\">i</field>\n          \n    <value name=\"VALUE\">\n      <shadow type=\"math_number\">\n        <field name=\"NUM\">1</field>\n      </shadow>\n    </value>\n          undefined\n        </block>"
+    }
+  ],
+  "jsonInitCaptures": [
+    {
+      "type": "motion_movesteps",
+      "json": {
+        "message0": "move %1 steps",
+        "args0": [
+          {
+            "type": "input_value",
+            "name": "STEPS"
+          }
+        ],
+        "extensions": [
+          "colours_motion",
+          "shape_statement"
+        ]
+      }
+    },
+    {
+      "type": "control_if_else",
+      "json": {
+        "type": "control_if_else",
+        "message0": "if %1 then",
+        "message1": "%1",
+        "message2": "else",
+        "message3": "%1",
+        "args0": [
+          {
+            "type": "input_value",
+            "name": "CONDITION",
+            "check": "Boolean"
+          }
+        ],
+        "args1": [
+          {
+            "type": "input_statement",
+            "name": "SUBSTACK"
+          }
+        ],
+        "args3": [
+          {
+            "type": "input_statement",
+            "name": "SUBSTACK2"
+          }
+        ],
+        "extensions": [
+          "colours_control",
+          "shape_statement"
+        ]
+      }
+    },
+    {
+      "type": "data_setvariableto",
+      "json": {
+        "message0": "set %1 to %2",
+        "args0": [
+          {
+            "type": "field_variable",
+            "name": "VARIABLE",
+            "variableTypes": [
+              ""
+            ],
+            "defaultType": ""
+          },
+          {
+            "type": "input_value",
+            "name": "VALUE"
+          }
+        ],
+        "extensions": [
+          "colours_data",
+          "shape_statement"
+        ]
+      }
+    },
+    {
+      "type": "motion_goto_menu",
+      "json": {
+        "message0": "%1",
+        "args0": [
+          {
+            "type": "field_dropdown",
+            "name": "TO",
+            "options": "[dynamic function]"
+          }
+        ],
+        "inputsInline": true,
+        "output": "String",
+        "outputShape": 2,
+        "extensions": [
+          "colours_motion"
+        ]
+      }
+    },
+    {
+      "type": "control_create_clone_of_menu",
+      "json": {
+        "message0": "%1",
+        "args0": [
+          {
+            "type": "field_dropdown",
+            "name": "CLONE_OPTION",
+            "options": "[dynamic function]"
+          }
+        ],
+        "inputsInline": true,
+        "output": "String",
+        "outputShape": 2,
+        "extensions": [
+          "colours_control"
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "No installed package or project file changed.",
+    "Variable dropdown UI action entries are excluded by membership in the variable model, not accepted as data.",
+    "Connection check null is an unconstrained Scratch connection; numeric defaults are obtained from toolbox shadows separately.",
+    "Fixture menu choices are examples; production dynamic menus must resolve against the actual target and project."
+  ]
+}

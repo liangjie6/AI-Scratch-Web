@@ -32,12 +32,14 @@ func (s *Server) handleCapabilities(writer http.ResponseWriter, request *http.Re
 		durableRunsAvailable = settings.DurableRunsEnabledForScope(scope)
 	}
 	WriteJSON(writer, http.StatusOK, map[string]any{
-		"ai_blocks_protocol": []int{2, 3},
-		"ai_runs_protocol":   "ai-scratch-run/1",
-		"project_manifest":   []int{2, 3},
-		"program_ir":         []int{1, 2},
+		"ai_blocks_protocol":      []int{2, 3},
+		"ai_runs_protocol":        "ai-scratch-run/1",
+		"source_pipeline_version": "scratch-source/1",
+		"project_manifest":        []int{2, 3},
+		"program_ir":              []int{1, 2},
 		"features": map[string]any{
 			"ai_commit":                   settings.AIBlocksCommitEnabled,
+			"source_pipeline":             settings.AIBlocksSourcePipelineEnabled,
 			"project_assets":              settings.AIProjectAssetsEnabled,
 			"sound_assets":                settings.AISoundAssetsEnabled,
 			"audio_generation":            settings.AIAudioGenerationEnabled,
@@ -195,36 +197,18 @@ func (s *Server) handleTextExpand(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 	received := false
-	for {
-		select {
-		case <-request.Context().Done():
-			return
-		case delta, open := <-stream:
-			if !open {
-				if !received {
-					sse.Event("message_error", map[string]any{
-						"code":    "AGNES_STREAM_ERROR",
-						"message": "AI 扩写暂时不可用，请稍后重试",
-					})
-					return
-				}
-				sse.Event("message_complete", map[string]any{})
-				return
-			}
-			if delta.Kind == provider.DeltaContent && delta.Text != "" {
-				received = true
-				sse.Event("content_delta", map[string]any{"text": delta.Text})
-			}
-		case err, open := <-streamErr:
-			if !open {
-				continue
-			}
-			_ = err
-			sse.Event("message_error", map[string]any{
-				"code":    "AGNES_STREAM_ERROR",
-				"message": "AI 扩写暂时不可用，请稍后重试",
-			})
-			return
+	err := consumeTextStream(request.Context(), stream, streamErr, func(delta provider.StreamDelta) {
+		if delta.Kind == provider.DeltaContent && delta.Text != "" {
+			received = true
+			sse.Event("content_delta", map[string]any{"text": delta.Text})
 		}
+	})
+	if request.Context().Err() != nil {
+		return
 	}
+	if err != nil || !received {
+		sse.Event("message_error", map[string]any{"code": "AGNES_STREAM_ERROR", "message": "AI 扩写暂时不可用，请稍后重试"})
+		return
+	}
+	sse.Event("message_complete", map[string]any{})
 }

@@ -1,0 +1,478 @@
+{
+  "pipeline_version": "scratch-source/1",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "cases": [
+    {
+      "case": "motion",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "catalog_hash": "a377553fbd30c0f52460fcf3f44582706d07931afa54e166561db2cba194e821",
+      "status": "PASS",
+      "behavior": {
+        "status": "PASS",
+        "vmVersion": "15.1.1",
+        "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+        "scenarios": [
+          {
+            "name": "exactly three moves",
+            "status": "PASS",
+            "ticks": 12,
+            "primitiveCalls": 8,
+            "assertions": [
+              {
+                "name": "x",
+                "status": "PASS",
+                "actual": 30,
+                "expected": 30
+              },
+              {
+                "name": "y",
+                "status": "PASS",
+                "actual": 0,
+                "expected": 0
+              }
+            ],
+            "preservation": {
+              "status": "PASS",
+              "mode": "append",
+              "removedScripts": 0,
+              "preservedBlocks": 0
+            }
+          }
+        ],
+        "roundTrip": {
+          "status": "PASS",
+          "bytes": 1138,
+          "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+        }
+      },
+      "source_contract_hash": "b5833065a21a535d011e0b5a5ba4cc2f8b2c617e98c525132a47c40a23d5882e",
+      "duration_seconds": 19.32,
+      "model_request_seconds": [
+        15.8
+      ],
+      "tokens": {
+        "input_tokens": 7854,
+        "output_tokens": 669,
+        "reasoning_tokens": 0,
+        "total_tokens": 8523
+      },
+      "usage": [
+        {
+          "input_tokens": 1390,
+          "output_bytes": 930,
+          "output_tokens": 220,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 5864,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1610,
+          "usage": {
+            "input_tokens": 1390,
+            "output_tokens": 220,
+            "reasoning_tokens": 0,
+            "total_tokens": 1610
+          }
+        },
+        {
+          "input_tokens": 1656,
+          "output_bytes": 1381,
+          "output_tokens": 372,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 6985,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 2028,
+          "usage": {
+            "input_tokens": 1656,
+            "output_tokens": 372,
+            "reasoning_tokens": 0,
+            "total_tokens": 2028
+          }
+        },
+        {
+          "input_tokens": 4808,
+          "output_bytes": 254,
+          "output_tokens": 77,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 19041,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "move_script",
+          "total_tokens": 4885,
+          "usage": {
+            "input_tokens": 4808,
+            "output_tokens": 77,
+            "reasoning_tokens": 0,
+            "total_tokens": 4885
+          }
+        }
+      ],
+      "model_calls": 3,
+      "repairs": 1
+    },
+    {
+      "case": "variables",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/variables-attempt-0761212a",
+      "status": "FAIL",
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"JSON_SYNTAX\", \"detail\": \"invalid character ']' after object key:value pair\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/body/1/substacks/SUBSTACK/0\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"\"}, \"phase\": \"program\", \"request_id\": \"86f6c407-a187-4ecf-9422-27ee24f0d0e3\"}}",
+      "duration_seconds": 22.113,
+      "model_request_seconds": [
+        22.109
+      ],
+      "tokens": {
+        "input_tokens": 23450,
+        "output_tokens": 1243,
+        "reasoning_tokens": 0,
+        "total_tokens": 24693,
+        "cached_input_tokens": 14592
+      },
+      "usage": [
+        {
+          "input_tokens": 1438,
+          "output_bytes": 1461,
+          "output_tokens": 447,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 6024,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1885,
+          "usage": {
+            "input_tokens": 1438,
+            "output_tokens": 447,
+            "reasoning_tokens": 0,
+            "total_tokens": 1885
+          }
+        },
+        {
+          "input_tokens": 1931,
+          "output_bytes": 1484,
+          "output_tokens": 456,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 7676,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 2387,
+          "usage": {
+            "input_tokens": 1931,
+            "output_tokens": 456,
+            "reasoning_tokens": 0,
+            "total_tokens": 2387
+          }
+        },
+        {
+          "input_tokens": 4913,
+          "output_bytes": 328,
+          "output_tokens": 85,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 19526,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "main",
+          "total_tokens": 4998,
+          "usage": {
+            "input_tokens": 4913,
+            "output_tokens": 85,
+            "reasoning_tokens": 0,
+            "total_tokens": 4998
+          }
+        },
+        {
+          "cached_input_tokens": 4864,
+          "input_tokens": 5056,
+          "output_bytes": 328,
+          "output_tokens": 85,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 20076,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "main",
+          "total_tokens": 5141,
+          "usage": {
+            "cached_input_tokens": 4864,
+            "input_tokens": 5056,
+            "output_tokens": 85,
+            "reasoning_tokens": 0,
+            "total_tokens": 5141
+          }
+        },
+        {
+          "cached_input_tokens": 4864,
+          "input_tokens": 5056,
+          "output_bytes": 328,
+          "output_tokens": 85,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 20076,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "main",
+          "total_tokens": 5141,
+          "usage": {
+            "cached_input_tokens": 4864,
+            "input_tokens": 5056,
+            "output_tokens": 85,
+            "reasoning_tokens": 0,
+            "total_tokens": 5141
+          }
+        },
+        {
+          "cached_input_tokens": 4864,
+          "input_tokens": 5056,
+          "output_bytes": 328,
+          "output_tokens": 85,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 20076,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "main",
+          "total_tokens": 5141,
+          "usage": {
+            "cached_input_tokens": 4864,
+            "input_tokens": 5056,
+            "output_tokens": 85,
+            "reasoning_tokens": 0,
+            "total_tokens": 5141
+          }
+        }
+      ],
+      "observed_providers": [
+        "agnes"
+      ],
+      "model_calls": 6,
+      "missing_usage_events": 0,
+      "repairs": 4
+    },
+    {
+      "case": "keyboard",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "status": "FAIL",
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"program\", \"request_id\": \"3a2bd0d8-a248-4983-b826-49f0fb5db430\"}}",
+      "duration_seconds": 11.629,
+      "model_request_seconds": [
+        11.623
+      ],
+      "tokens": {
+        "input_tokens": 6223,
+        "output_tokens": 347,
+        "reasoning_tokens": 0,
+        "total_tokens": 6570
+      },
+      "usage": [
+        {
+          "input_tokens": 1401,
+          "output_bytes": 972,
+          "output_tokens": 232,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 5941,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "",
+          "total_tokens": 1633,
+          "usage": {
+            "input_tokens": 1401,
+            "output_tokens": 232,
+            "reasoning_tokens": 0,
+            "total_tokens": 1633
+          }
+        },
+        {
+          "input_tokens": 4822,
+          "output_bytes": 443,
+          "output_tokens": 115,
+          "pipeline_version": "scratch-source/1",
+          "prompt_bytes": 19160,
+          "provider": "agnes",
+          "reasoning_tokens": 0,
+          "slot_id": "move_right",
+          "total_tokens": 4937,
+          "usage": {
+            "input_tokens": 4822,
+            "output_tokens": 115,
+            "reasoning_tokens": 0,
+            "total_tokens": 4937
+          }
+        }
+      ],
+      "model_calls": 3,
+      "repairs": 1
+    },
+    {
+      "case": "broadcast",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "status": "FAIL",
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"7576c2f1-d427-404d-9c51-f0b8781d520f\"}}",
+      "duration_seconds": 0.404,
+      "model_request_seconds": [
+        0.401
+      ],
+      "tokens": {},
+      "usage": [],
+      "model_calls": 1,
+      "repairs": 0
+    },
+    {
+      "case": "modify",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "status": "FAIL",
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"e5759b83-bde7-470d-b807-08e088f7be6c\"}}",
+      "duration_seconds": 0.581,
+      "model_request_seconds": [
+        0.579
+      ],
+      "tokens": {},
+      "usage": [],
+      "model_calls": 1,
+      "repairs": 0
+    },
+    {
+      "case": "rewrite",
+      "model_tier": "normal",
+      "provider": "Agnes",
+      "pipeline_version": "scratch-source/1",
+      "status": "FAIL",
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"896bc792-9ff0-4752-8f1e-2e78e00488b5\"}}",
+      "duration_seconds": 0.587,
+      "model_request_seconds": [
+        0.585
+      ],
+      "tokens": {},
+      "usage": [],
+      "model_calls": 1,
+      "repairs": 0
+    }
+  ],
+  "this_invocation": [],
+  "passed": 1,
+  "total": 6,
+  "attempt_count": 7,
+  "reported_tokens_across_all_attempts": {
+    "input_tokens": 60691,
+    "output_tokens": 3464,
+    "reasoning_tokens": 0,
+    "total_tokens": 64155,
+    "cached_input_tokens": 28672
+  },
+  "attempts": [
+    {
+      "case": "motion",
+      "status": "PASS",
+      "artifact_directory": null,
+      "duration_seconds": 19.32,
+      "tokens": {
+        "input_tokens": 7854,
+        "output_tokens": 669,
+        "reasoning_tokens": 0,
+        "total_tokens": 8523
+      },
+      "model_calls": 3,
+      "missing_usage_events": null,
+      "repairs": 1,
+      "error": null
+    },
+    {
+      "case": "keyboard",
+      "status": "FAIL",
+      "artifact_directory": null,
+      "duration_seconds": 11.629,
+      "tokens": {
+        "input_tokens": 6223,
+        "output_tokens": 347,
+        "reasoning_tokens": 0,
+        "total_tokens": 6570
+      },
+      "model_calls": 3,
+      "missing_usage_events": null,
+      "repairs": 1,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"program\", \"request_id\": \"3a2bd0d8-a248-4983-b826-49f0fb5db430\"}}"
+    },
+    {
+      "case": "broadcast",
+      "status": "FAIL",
+      "artifact_directory": null,
+      "duration_seconds": 0.404,
+      "tokens": {},
+      "model_calls": 1,
+      "missing_usage_events": null,
+      "repairs": 0,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"7576c2f1-d427-404d-9c51-f0b8781d520f\"}}"
+    },
+    {
+      "case": "modify",
+      "status": "FAIL",
+      "artifact_directory": null,
+      "duration_seconds": 0.581,
+      "tokens": {},
+      "model_calls": 1,
+      "missing_usage_events": null,
+      "repairs": 0,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"e5759b83-bde7-470d-b807-08e088f7be6c\"}}"
+    },
+    {
+      "case": "variables",
+      "status": "FAIL",
+      "artifact_directory": null,
+      "duration_seconds": 32.377,
+      "tokens": {
+        "input_tokens": 23164,
+        "output_tokens": 1205,
+        "reasoning_tokens": 0,
+        "total_tokens": 24369,
+        "cached_input_tokens": 14080
+      },
+      "model_calls": 6,
+      "missing_usage_events": null,
+      "repairs": 4,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"UNKNOWN_OPCODE\", \"detail\": \"opcode is outside the supported compiler catalog\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/body/0/opcode\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"main\"}, \"phase\": \"program\", \"request_id\": \"3c262838-6a02-44a4-ab56-0a4711116409\"}}"
+    },
+    {
+      "case": "rewrite",
+      "status": "FAIL",
+      "artifact_directory": null,
+      "duration_seconds": 0.587,
+      "tokens": {},
+      "model_calls": 1,
+      "missing_usage_events": null,
+      "repairs": 0,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"AI_PROVIDER_ERROR\", \"message\": \"AI 服务输出未完成，请稍后重试\", \"pipeline_version\": \"scratch-source/1\"}, \"phase\": \"requirements\", \"request_id\": \"896bc792-9ff0-4752-8f1e-2e78e00488b5\"}}"
+    },
+    {
+      "case": "variables",
+      "status": "FAIL",
+      "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/final/variables-attempt-0761212a",
+      "duration_seconds": 22.113,
+      "tokens": {
+        "input_tokens": 23450,
+        "output_tokens": 1243,
+        "reasoning_tokens": 0,
+        "total_tokens": 24693,
+        "cached_input_tokens": 14592
+      },
+      "model_calls": 6,
+      "missing_usage_events": 0,
+      "repairs": 4,
+      "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"JSON_SYNTAX\", \"detail\": \"invalid character ']' after object key:value pair\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/body/1/substacks/SUBSTACK/0\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"\"}, \"phase\": \"program\", \"request_id\": \"86f6c407-a187-4ecf-9422-27ee24f0d0e3\"}}"
+    }
+  ],
+  "limitations": [
+    "One sample per case, not a statistical quality estimate",
+    "No renderer: no collision or visual correctness claim",
+    "Legacy baseline did not complete, so no fair token reduction percentage",
+    "Failed calls without usage do not imply zero billing",
+    "Source pipeline currently uses provider JSON transport or validated plain JSON, not an asserted strict-schema guarantee"
+  ]
+}

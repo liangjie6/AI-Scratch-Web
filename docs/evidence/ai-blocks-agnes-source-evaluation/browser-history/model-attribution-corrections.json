@@ -1,0 +1,52 @@
+[
+  {
+    "directory": "browser-release",
+    "requested_cli_tier": "advanced",
+    "actual_request_tiers": [
+      "normal",
+      "normal"
+    ],
+    "actual_provider": "Agnes",
+    "original_report_attribution_incorrect": true
+  },
+  {
+    "directory": "browser-deployed",
+    "requested_cli_tier": "advanced",
+    "actual_request_tiers": [
+      "normal",
+      "normal"
+    ],
+    "actual_provider": "Agnes",
+    "original_report_attribution_incorrect": true
+  },
+  {
+    "directory": "request-count-assertion",
+    "requested_cli_tier": "advanced",
+    "actual_request_tiers": [
+      "normal",
+      "normal"
+    ],
+    "actual_provider": "Agnes",
+    "original_report_attribution_incorrect": true
+  },
+  {
+    "directory": "browser-trace",
+    "requested_cli_tier": "advanced",
+    "actual_request_tiers": [
+      "normal",
+      "normal"
+    ],
+    "actual_provider": "Agnes",
+    "original_report_attribution_incorrect": true
+  },
+  {
+    "directory": "model-tier-assertion",
+    "requested_cli_tier": "advanced",
+    "actual_request_tiers": [
+      "normal",
+      "normal"
+    ],
+    "actual_provider": "Agnes",
+    "original_report_attribution_incorrect": true
+  }
+]

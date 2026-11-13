@@ -1,7 +1,7 @@
 # AI Scratch Web — 部署说明（nginx + Go 后端）
 
 本目录包含把 AI Scratch Web 部署到本机 **9966** 端口所需的全部内容。
-当前公网入口是 `https://kfcv50.icu:9966/`：系统 nginx 托管已发布到
+当前公网入口是 `https://scratch.example.com:9966/`：系统 nginx 托管已发布到
 `/var/www/ai-scratch-web` 的前端，`/api/` 与 `/health` 反向代理到由 systemd
 管理的 Go 后端（`127.0.0.1:8000`）。
 
@@ -16,71 +16,33 @@
 | `scripts/status.sh` | 查看端口、健康检查、防火墙与日志位置 |
 | `system/ai-scratch-web-https.conf` | 当前公网 HTTPS 站点配置，复用已有的 Let's Encrypt 证书 |
 | `system/publish-frontend.sh` | 将构建产物发布到系统 nginx 可读取的目录 |
-| `system/ai-scratch-web.conf` | 旧的系统级 HTTP 站点配置 |
+| `system/ai-scratch-web.conf` | 使用仓库 dist 路径的系统 HTTPS 站点配置 |
 | `system/ai-scratch-web-backend.service` | systemd 单元（开机自启） |
-| `system/install-system.sh` | 旧版 HTTP 系统部署脚本；当前 HTTPS 站点启用时会拒绝执行 |
+| `system/install-system.sh` | 全新环境 HTTPS 安装脚本；当前站点启用时拒绝执行 |
 | `system/open-firewall.sh` | 放行 9966/TCP（IPv4 + IPv6，需要 root） |
 
-## 独立 HTTP 部署（9966 空闲时，无需 root）
+## 私人访问与独立部署
 
-当前机器的 9966 已由系统 nginx 使用；更新当前站点请按下面的“公网域名”一节
-发布前端，后端由 systemd 管理。以下步骤用于尚未占用 9966 的环境。
+先完成[口令与 HTTPS 配置](../docs/private-access.md)。后端缺少 `AI_SCRATCH_ACCESS_PASSWORD` 会拒绝启动；Nginx 缺少密码文件会拒绝启动。默认使用 HTTPS；本机测试显式 `AI_SCRATCH_TLS=0` 时只监听回环地址，不再提供公开明文入口。
 
 ```bash
-# 1) 构建前端
 npm --prefix frontend install
 npm --prefix frontend run build
-
-# 2) 启动 Go 后端（读取 backend-go/.env）
+# 先在 backend-go/.env 填入随机访问口令，再以相同口令创建 deploy/nginx/private.htpasswd
 bash deploy/scripts/start-backend.sh
-
-# 3) 启动 nginx
+# 先准备受信任证书；隔离环境可用下方自签证书脚本
 bash deploy/scripts/start-nginx.sh
-
-# 4) 查看状态
 bash deploy/scripts/status.sh
 ```
 
-访问：
-
-- IPv4：http://127.0.0.1:9966/
-- IPv6：http://[::1]:9966/
-- 局域网：http://<本机 IP>:9966/
-
-## 通过非 localhost 地址打开（独立 HTTP 部署）
-
-浏览器只在**安全上下文**（HTTPS、\`localhost\`、\`127.0.0.1\`、\`[::1]\`）里提供
-\`crypto.subtle\`。用 \`http://192.168.x.x:9966/\` 或 \`http://[240e:...]:9966/\` 打开时
-\`crypto.subtle\` 是 \`undefined\`，直接调用会抛：
-
-\`\`\`
-Cannot read properties of undefined (reading 'digest')
-\`\`\`
-
-项目对契约、检查点和 Scratch 编辑器产物做 SHA-256 完整性校验，原先直接调用
-\`crypto.subtle.digest\`，因此在非安全上下文里整页打不开。现在统一走
-\`frontend/src/shared/sha256.ts\`：优先用 WebCrypto，缺失时退回内置的纯 JS SHA-256，
-所以 **HTTP 下任意主机名/IP 都能正常打开**，摘要结果与后端一致。
-
-> 如果你更希望页面运行在安全上下文里（例如将来需要 service worker、Clipboard API
-> 等只在安全上下文可用的能力），可以启用 HTTPS：见下一节。
-
-用真实浏览器复验：
-
-\`\`\`bash
-node deploy/scripts/probe-page.mjs http://192.168.10.235:9966/
-node deploy/scripts/probe-page.mjs "http://[240e:379:3b1e:a200::e83]:9966/"
-\`\`\`
-
-输出里 \`secureContext:false\` / \`subtleCrypto:false\` 就是会触发上述问题的环境，
-\`ok:true\` 表示页面与编辑器都正常、且没有任何 console/page error。
+访问 `https://127.0.0.1:9966/`（证书必须包含访问地址并已被设备信任）。匿名入口应为 401；浏览器输入共享口令后访问。现有 9966 若被系统 nginx 占用，不启动另一实例。
 
 ## HTTPS 部署
 
-### 公网域名 `kfcv50.icu`
+### 公网域名 `scratch.example.com`
 
-当前公网入口 `https://kfcv50.icu:9966/` 由系统 nginx 托管，复用
-`/etc/nginx/ssl/kfcv50.icu.pem` 和 `.key` 的 Let's Encrypt 证书。
+当前公网入口 `https://scratch.example.com:9966/` 由系统 nginx 托管，复用
+`/etc/nginx/ssl/scratch.example.com.pem` 和 `.key` 的 Let's Encrypt 证书。
 `deploy/system/ai-scratch-web-https.conf` 是已安装站点配置，前端文件发布到
 `/var/www/ai-scratch-web`。每次重新构建前端后执行：
 
@@ -105,7 +67,7 @@ HTTPS 地址。
 \`\`\`bash
 bash deploy/scripts/make-self-signed-cert.sh      # 生成含本机 IPv4/IPv6 SAN 的自签证书
 AI_SCRATCH_TLS=1 bash deploy/scripts/start-nginx.sh
-# 换回 HTTP：
+# 仅本机回环 HTTP 调试：
 AI_SCRATCH_TLS=0 bash deploy/scripts/start-nginx.sh
 \`\`\`
 
@@ -119,8 +81,8 @@ nginx 同时监听 `0.0.0.0:9966` 与 `[::]:9966`（双栈），无需额外配�
 链路本地、ULA 以及运营商分配的全局 IPv6 地址访问。验证：
 
 ```bash
-curl -6 -I https://kfcv50.icu:9966/
-curl -6 -I http://kfcv50.icu:9966/   # 301 跳转到 HTTPS
+curl -6 -I https://scratch.example.com:9966/
+curl -6 -I http://scratch.example.com:9966/   # 301 跳转到 HTTPS
 ```
 
 ## 防火墙
@@ -142,14 +104,9 @@ sudo ufw status verbose
 
 当前主机可用 `sudo ufw status numbered` 检查 9966/TCP 规则。
 
-## 旧版系统级 HTTP 安装（仅全新环境）
+## 全新环境系统安装
 
-以下旧脚本只适用于尚未安装当前 HTTPS 站点的环境：
-
-```bash
-sudo bash deploy/system/install-system.sh   # 安装并启用服务，同时停掉用户级实例
-sudo bash deploy/system/open-firewall.sh    # 放行 9966
-```
+准备好 private.env、htpasswd 与证书后才可运行 `sudo bash deploy/system/install-system.sh`。安装脚本会更改 systemd 和 Nginx，须先确认端口归属并备份；已有系统 HTTPS 站点时只更新对应配置，不重复安装。此轮修复没有运行安装、开放端口或重启服务。
 
 ## 环境变量
 

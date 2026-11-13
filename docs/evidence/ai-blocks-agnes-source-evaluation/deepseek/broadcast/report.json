@@ -1,0 +1,156 @@
+{
+  "case": "broadcast",
+  "model_tier": "advanced",
+  "provider": "DeepSeek",
+  "pipeline_version": "scratch-source/1",
+  "started_at": "2026-10-16T06:52:55.285542+00:00",
+  "backend": "http://127.0.0.1:18000",
+  "artifact_directory": "docs/evidence/ai-blocks-agnes-source-evaluation/deepseek/broadcast",
+  "request_id": "35958cd2-1e09-4c94-9796-5d1210a9389e",
+  "request_log_ref": "03de005c2c108e92",
+  "catalog_hash": "da4c6cc52db7f5471a7fa7fb3ac69a49ea2beb2375b7f8974f898f626a08ce3f",
+  "status": "PASS",
+  "behavior": {
+    "status": "PASS",
+    "vmVersion": "15.1.1",
+    "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+    "scenarios": [
+      {
+        "name": "sender broadcast drives receiver",
+        "status": "PASS",
+        "ticks": 20,
+        "primitiveCalls": 13,
+        "assertions": [
+          {
+            "name": "Receiver:x",
+            "status": "PASS",
+            "actual": 15,
+            "expected": 15
+          },
+          {
+            "name": "Receiver:y",
+            "status": "PASS",
+            "actual": 0,
+            "expected": 0
+          },
+          {
+            "name": "Receiver:variable:rounds",
+            "status": "PASS",
+            "actual": 3,
+            "expected": 3
+          }
+        ],
+        "preservation": {
+          "status": "PASS",
+          "mode": "append",
+          "removedScripts": 0,
+          "preservedBlocks": 0
+        }
+      }
+    ],
+    "roundTrip": {
+      "status": "PASS",
+      "bytes": 1570,
+      "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+    }
+  },
+  "source_contract_hash": "2ec5563849e12b94c8e29683a6bedbc146f8ca025640e4e4cf1258da0827892b",
+  "duration_seconds": 32.389,
+  "backend_request_seconds": [
+    22.402,
+    2.218,
+    2.529,
+    2.351
+  ],
+  "tokens": {
+    "cached_input_tokens": 11904,
+    "input_tokens": 18756,
+    "output_tokens": 4322,
+    "reasoning_tokens": 3502,
+    "total_tokens": 23078
+  },
+  "usage": [
+    {
+      "cached_input_tokens": 896,
+      "input_tokens": 1967,
+      "output_bytes": 2097,
+      "output_tokens": 3822,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7793,
+      "provider": "deepseek",
+      "reasoning_tokens": 3217,
+      "slot_id": "",
+      "total_tokens": 5789,
+      "usage": {
+        "cached_input_tokens": 896,
+        "input_tokens": 1967,
+        "output_tokens": 3822,
+        "reasoning_tokens": 3217,
+        "total_tokens": 5789
+      }
+    },
+    {
+      "cached_input_tokens": 640,
+      "input_tokens": 4662,
+      "output_bytes": 170,
+      "output_tokens": 150,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 16119,
+      "provider": "deepseek",
+      "reasoning_tokens": 96,
+      "slot_id": "stage_reset_rounds",
+      "total_tokens": 4812,
+      "usage": {
+        "cached_input_tokens": 640,
+        "input_tokens": 4662,
+        "output_tokens": 150,
+        "reasoning_tokens": 96,
+        "total_tokens": 4812
+      }
+    },
+    {
+      "cached_input_tokens": 5120,
+      "input_tokens": 5894,
+      "output_bytes": 148,
+      "output_tokens": 153,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 19921,
+      "provider": "deepseek",
+      "reasoning_tokens": 106,
+      "slot_id": "sender_broadcast_go",
+      "total_tokens": 6047,
+      "usage": {
+        "cached_input_tokens": 5120,
+        "input_tokens": 5894,
+        "output_tokens": 153,
+        "reasoning_tokens": 106,
+        "total_tokens": 6047
+      }
+    },
+    {
+      "cached_input_tokens": 5248,
+      "input_tokens": 6233,
+      "output_bytes": 350,
+      "output_tokens": 197,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 21107,
+      "provider": "deepseek",
+      "reasoning_tokens": 83,
+      "slot_id": "receiver_move_increment",
+      "total_tokens": 6430,
+      "usage": {
+        "cached_input_tokens": 5248,
+        "input_tokens": 6233,
+        "output_tokens": 197,
+        "reasoning_tokens": 83,
+        "total_tokens": 6430
+      }
+    }
+  ],
+  "observed_providers": [
+    "deepseek"
+  ],
+  "model_calls": 4,
+  "missing_usage_events": 0,
+  "repairs": 0
+}

@@ -161,9 +161,30 @@ describe('validateProgramIR', () => {
     expectInvalid(program([{opcode: 'event_whenflagclicked'}, {opcode: 'motion_movesteps', inputs: {STEPS: num(10)}}]), 'stage', 'not valid for stage');
   });
 
-  it('rejects unknown, extension, and procedure opcodes', () => {
-    expectInvalid(program([{opcode: 'pen_penDown'}]), 'sprite', 'unknown or extension opcode');
-    expectInvalid(program([{opcode: 'procedures_call'}]), 'sprite', 'procedure opcodes are forbidden');
+  it('rejects unknown opcodes, undeclared extensions, and undeclared procedures', () => {
+    expectInvalid(program([{opcode: 'unknown_block'}]), 'sprite', 'unknown or extension opcode');
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, {opcode: 'pen_penDown'}]), 'sprite', 'extension pen is not declared');
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, {opcode: 'procedures_call'}]), 'sprite', 'must reference a declared procedure');
+  });
+
+  it('requires a hat first and rejects hats inside stacks or substacks', () => {
+    expectInvalid(program([{opcode: 'looks_show'}]), 'sprite', 'script must start with an event hat block');
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, {opcode: 'event_whenkeypressed', fields: {KEY_OPTION: 'space'}}]), 'sprite', 'event hat block cannot appear here');
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, {
+      opcode: 'control_repeat', inputs: {TIMES: num(1)},
+      substacks: {SUBSTACK: [{opcode: 'control_start_as_clone'}]}
+    }]), 'sprite', 'event hat block cannot appear here');
+    expect(validateProgramIR(program([{opcode: 'control_start_as_clone'}, {opcode: 'looks_show'}])).valid).toBe(true);
+  });
+
+  it('requires caps to end their main stack and every substack', () => {
+    const stop: BlockIR = {opcode: 'control_stop', fields: {STOP_OPTION: 'all'}};
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, stop, {opcode: 'looks_show'}]), 'sprite', 'cap block must be the last block');
+    expectInvalid(program([{opcode: 'event_whenflagclicked'}, {
+      opcode: 'control_repeat', inputs: {TIMES: num(1)},
+      substacks: {SUBSTACK: [stop, {opcode: 'looks_show'}]}
+    }]), 'sprite', 'cap block must be the last block');
+    expect(validateProgramIR(program([{opcode: 'event_whenflagclicked'}, stop])).valid).toBe(true);
   });
 
   it('rejects unknown, missing, and incorrectly typed inputs', () => {

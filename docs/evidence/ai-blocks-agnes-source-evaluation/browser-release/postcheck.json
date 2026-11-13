@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "observed_providers": [
+    "agnes"
+  ],
+  "reported_total_tokens": 6916,
+  "streams": [
+    {
+      "url": "https://scratch.example.com:9966/api/ai-blocks/generate",
+      "status": 200,
+      "last_event": "complete"
+    },
+    {
+      "url": "https://scratch.example.com:9966/api/ai-blocks/generate-source-program",
+      "status": 200,
+      "last_event": "complete"
+    }
+  ],
+  "no_forever_block": true,
+  "checks": "independent recorded SSE provider/error/terminal validation; see vm-result.json for final position and SB3 reload"
+}

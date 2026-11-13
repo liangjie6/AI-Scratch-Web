@@ -684,6 +684,8 @@ type GenerationOrchestrator struct {
 	promptBuilder   *prompt.PromptBuilder
 	maxRepairRounds int
 	maxConcurrency  int
+	sourceMu        sync.Mutex
+	sourceBudgets   map[string]*sourceBudget
 }
 
 // NewGenerationOrchestrator ports GenerationOrchestrator.__init__.
@@ -761,6 +763,12 @@ func (o *GenerationOrchestrator) GenerateUnified(
 	view := viewOfUnified(request)
 	p := textProviderAdapter{provider: textProvider}
 	return streamEvents(ctx, func(emit emitFunc) error {
+		if request.PipelineVersion == "scratch-source/1" {
+			if textProvider == nil || textProvider.Settings == nil || !textProvider.Settings.AIBlocksSourcePipelineEnabled {
+				return sourceFailure(emit, request, "requirements", errors.New("source pipeline disabled"))
+			}
+			return o.generateSourceUnified(ctx, request, textProviderAdapter{provider: textProvider.ForSourceAuthoring()}, emit)
+		}
 		return o.generateUnified(ctx, view, p, emit)
 	})
 }

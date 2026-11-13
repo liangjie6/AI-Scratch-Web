@@ -1,0 +1,88 @@
+{
+  "case": "variables",
+  "model_tier": "normal",
+  "provider": "Agnes",
+  "pipeline_version": "scratch-source/1",
+  "status": "FAIL",
+  "error": "generation did not complete: {\"type\": \"error\", \"payload\": {\"data\": {\"code\": \"SHAPE\", \"detail\": \"a non-empty string of at most 120 characters is required\", \"message\": \"积木生成未通过校验，请调整需求后重试\", \"path\": \"/script_slots/0/purpose\", \"pipeline_version\": \"scratch-source/1\", \"slot_id\": \"\"}, \"phase\": \"requirements\", \"request_id\": \"c72ef01c-b921-4855-b5fa-12460fb32166\"}}",
+  "duration_seconds": 36.942,
+  "model_request_seconds": [],
+  "tokens": {
+    "input_tokens": 7048,
+    "output_tokens": 1559,
+    "reasoning_tokens": 0,
+    "total_tokens": 8607
+  },
+  "usage": [
+    {
+      "input_tokens": 1405,
+      "output_bytes": 1388,
+      "output_tokens": 432,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 5851,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 1837,
+      "usage": {
+        "input_tokens": 1405,
+        "output_tokens": 432,
+        "reasoning_tokens": 0,
+        "total_tokens": 1837
+      }
+    },
+    {
+      "input_tokens": 1883,
+      "output_bytes": 1388,
+      "output_tokens": 432,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7436,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2315,
+      "usage": {
+        "input_tokens": 1883,
+        "output_tokens": 432,
+        "reasoning_tokens": 0,
+        "total_tokens": 2315
+      }
+    },
+    {
+      "input_tokens": 1883,
+      "output_bytes": 1372,
+      "output_tokens": 426,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7436,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2309,
+      "usage": {
+        "input_tokens": 1883,
+        "output_tokens": 426,
+        "reasoning_tokens": 0,
+        "total_tokens": 2309
+      }
+    },
+    {
+      "input_tokens": 1877,
+      "output_bytes": 1086,
+      "output_tokens": 269,
+      "pipeline_version": "scratch-source/1",
+      "prompt_bytes": 7420,
+      "provider": "agnes",
+      "reasoning_tokens": 0,
+      "slot_id": "",
+      "total_tokens": 2146,
+      "usage": {
+        "input_tokens": 1877,
+        "output_tokens": 269,
+        "reasoning_tokens": 0,
+        "total_tokens": 2146
+      }
+    }
+  ],
+  "model_calls": 4,
+  "repairs": 3
+}

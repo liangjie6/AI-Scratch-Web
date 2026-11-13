@@ -1,0 +1,38 @@
+{
+  "status": "PASS",
+  "vmVersion": "15.1.1",
+  "scope": "real Scratch source VM, production compiler and graph writer; isolated fixture, no renderer or production transaction",
+  "scenarios": [
+    {
+      "name": "finite movement final position",
+      "status": "PASS",
+      "ticks": 20,
+      "primitiveCalls": 8,
+      "assertions": [
+        {
+          "name": "x",
+          "status": "PASS",
+          "actual": 30,
+          "expected": 30
+        },
+        {
+          "name": "y",
+          "status": "PASS",
+          "actual": 0,
+          "expected": 0
+        }
+      ],
+      "preservation": {
+        "status": "PASS",
+        "mode": "append",
+        "removedScripts": 0,
+        "preservedBlocks": 0
+      }
+    }
+  ],
+  "roundTrip": {
+    "status": "PASS",
+    "bytes": 1163,
+    "scope": "real Node source VM candidate load/export/new-VM load; normalized graph, state and costume reference comparison"
+  }
+}

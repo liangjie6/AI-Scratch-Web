@@ -2,6 +2,7 @@ import {createSseParser} from '../ai/text-expansion-api';
 import {createId} from '../shared/create-id';
 import type {AiBlocksTargetContext, UnifiedGenerationRequest} from './ai-blocks-api';
 import type {BuiltinAiExtension} from './block-catalog';
+import {SOURCE_PIPELINE_VERSION} from './source-contract';
 
 export const AI_RUN_PROTOCOL_VERSION = 'ai-scratch-run/1';
 
@@ -123,6 +124,7 @@ const RUN_EVENT_TYPES = new Set([
 
 /** Deployment capabilities are limited to feature flags and cached per session scope. */
 export interface AiRuntimeCapabilities {
+  sourcePipeline: boolean;
   commitEnabled: boolean;
   crashCheckpoint: boolean;
   durableRuns: boolean;
@@ -160,6 +162,7 @@ async function loadRuntimeCapabilities(): Promise<AiRuntimeCapabilities | undefi
     if (features.music_extension === true) builtinExtensions.add('music');
     if (features.text_to_speech_extension === true) builtinExtensions.add('text2speech');
     return {
+      sourcePipeline: features.source_pipeline === true && value.source_pipeline_version === SOURCE_PIPELINE_VERSION,
       commitEnabled: features.ai_commit === true,
       // Older deployments predate the flag; preserve the fail-safe default so
       // an unavailable capability endpoint never disables local recovery.
